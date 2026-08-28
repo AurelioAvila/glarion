@@ -5,7 +5,7 @@
 // rebuilds its subtree rather than patching it, which is fast enough for a
 // handful of screens and removes a whole class of stale-DOM bugs.
 
-import { api, ApiError, session } from "./api.js";
+import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type { ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
 import { append, byId, clear, copyableValue, detailRow, el, on } from "./dom.js";
 
@@ -72,37 +72,41 @@ async function withPending<T>(
   }
 }
 
-// --- sign in / sign up -----------------------------------------------------
+// --- sign in ---------------------------------------------------------------
 
-function renderAuth(mode: "signin" | "signup"): void {
-  const isSignUp = mode === "signup";
+function renderSignIn(): void {
   const container = root();
   clear(container);
 
   const message = el("div");
-  const email = el("input", { type: "email", name: "email", required: true, autocomplete: "email" });
+  const saved = rememberedEmail.get();
+
+  const email = el("input", {
+    type: "email",
+    name: "email",
+    required: true,
+    autocomplete: "email",
+    value: saved ?? "",
+  });
   const password = el("input", {
     type: "password",
     name: "password",
     required: true,
-    autocomplete: isSignUp ? "new-password" : "current-password",
-    minlength: isSignUp ? 12 : 1,
+    autocomplete: "current-password",
   });
+  const remember = el("input", { type: "checkbox", checked: saved !== null });
+  const button = submitButton("Sign in");
 
-  const button = submitButton(isSignUp ? "Create account" : "Sign in");
   const form = el("form", { class: "card auth-card" }, [
-    el("h1", { text: isSignUp ? "Create your account" : "Sign in" }),
+    el("h1", { text: "Sign in" }),
     message,
     el("label", {}, ["Email", email]),
-    el("label", {}, [
-      "Password",
-      password,
-      isSignUp ? el("span", { class: "hint", text: "At least 12 characters." }) : null,
-    ]),
+    el("label", {}, ["Password", password]),
+    el("label", { class: "checkbox" }, [remember, "Remember my email on this device"]),
     button,
     el("p", { class: "switch" }, [
-      isSignUp ? "Already have an account? " : "No account yet? ",
-      el("a", { href: isSignUp ? "#/signin" : "#/signup", text: isSignUp ? "Sign in" : "Create one" }),
+      "No account yet? ",
+      el("a", { href: "#/signup", text: "Create one" }),
     ]),
   ]);
 
@@ -110,13 +114,134 @@ function renderAuth(mode: "signin" | "signup"): void {
     event.preventDefault();
     clear(message);
 
-    void withPending(button, "Working…", async () => {
+    void withPending(button, "Signing in\u2026", async () => {
       try {
-        const result = isSignUp
-          ? await api.signup(email.value, password.value)
-          : await api.login(email.value, password.value);
+        const result = await api.login(email.value, password.value);
+        rememberedEmail.set(remember.checked ? email.value.trim() : null);
         session.set(result.token);
         window.location.hash = "#/targets";
+      } catch (error) {
+        // An unconfirmed address is not a dead end: offer the way out
+        // rather than only naming the problem.
+        if (error instanceof ApiError && error.code === "email_not_verified") {
+          message.replaceChildren(unconfirmedNotice(email.value));
+          return;
+        }
+        message.replaceChildren(banner("error", describeError(error)));
+      }
+    });
+  });
+
+  container.append(form);
+  // Focus whichever field still needs filling in.
+  (saved ? password : email).focus();
+}
+
+/// Shown when the password was right but the address was never confirmed.
+function unconfirmedNotice(email: string): HTMLElement {
+  const wrapper = el("div");
+  const resend = el("button", { class: "linklike", type: "button", text: "Send it again" });
+
+  on(resend, "click", () => {
+    void withPending(resend, "Sending\u2026", async () => {
+      try {
+        const result = await api.resendVerification(email);
+        wrapper.replaceChildren(banner("ok", result.message));
+      } catch (error) {
+        wrapper.replaceChildren(banner("error", describeError(error)));
+      }
+    });
+  });
+
+  wrapper.append(
+    banner("info", "Confirm your email address before signing in. Check your inbox."),
+    resend,
+  );
+  return wrapper;
+}
+
+// --- sign up ---------------------------------------------------------------
+
+function renderSignUp(): void {
+  const container = root();
+  clear(container);
+
+  const message = el("div");
+  const firstName = el("input", { type: "text", required: true, autocomplete: "given-name" });
+  const lastName = el("input", { type: "text", required: true, autocomplete: "family-name" });
+  const dateOfBirth = el("input", { type: "date", required: true, autocomplete: "bday" });
+  const email = el("input", { type: "email", required: true, autocomplete: "email" });
+  const password = el("input", {
+    type: "password",
+    required: true,
+    autocomplete: "new-password",
+    minlength: 12,
+  });
+  const confirmation = el("input", {
+    type: "password",
+    required: true,
+    autocomplete: "new-password",
+  });
+  const button = submitButton("Create account");
+
+  // Checked as the user types rather than only on submit, so a mismatch is
+  // caught before the form is sent and everything has to be retyped.
+  const mismatch = el("span", { class: "hint hint-error", hidden: true });
+  const checkMatch = (): void => {
+    const differ = confirmation.value !== "" && confirmation.value !== password.value;
+    mismatch.hidden = !differ;
+    mismatch.textContent = differ ? "The passwords do not match." : "";
+  };
+  on(password, "input", checkMatch);
+  on(confirmation, "input", checkMatch);
+
+  const form = el("form", { class: "card auth-card" }, [
+    el("h1", { text: "Create your account" }),
+    message,
+    el("div", { class: "field-pair" }, [
+      el("label", {}, ["First name", firstName]),
+      el("label", {}, ["Last name", lastName]),
+    ]),
+    el("label", {}, [
+      "Date of birth",
+      dateOfBirth,
+      el("span", { class: "hint", text: "You must be 18 or over to open an account." }),
+    ]),
+    el("label", {}, ["Email", email]),
+    el("label", {}, [
+      "Password",
+      password,
+      el("span", { class: "hint", text: "At least 12 characters." }),
+    ]),
+    el("label", {}, ["Repeat password", confirmation, mismatch]),
+    button,
+    el("p", { class: "switch" }, [
+      "Already have an account? ",
+      el("a", { href: "#/signin", text: "Sign in" }),
+    ]),
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+
+    if (password.value !== confirmation.value) {
+      checkMatch();
+      confirmation.focus();
+      return;
+    }
+
+    void withPending(button, "Creating\u2026", async () => {
+      try {
+        const result = await api.signup({
+          firstName: firstName.value,
+          lastName: lastName.value,
+          dateOfBirth: dateOfBirth.value,
+          email: email.value,
+          password: password.value,
+          passwordConfirmation: confirmation.value,
+        });
+        renderCheckYourEmail(result.email);
       } catch (error) {
         message.replaceChildren(banner("error", describeError(error)));
       }
@@ -124,6 +249,72 @@ function renderAuth(mode: "signin" | "signup"): void {
   });
 
   container.append(form);
+  firstName.focus();
+}
+
+/// The screen after signing up.
+///
+/// The account exists but cannot be used yet, so this says what happened
+/// and what to do about it rather than dropping the user back at a sign-in
+/// form that would refuse them.
+function renderCheckYourEmail(email: string): void {
+  const container = root();
+  clear(container);
+
+  const message = el("div");
+  const resend = el("button", { class: "linklike", type: "button", text: "Send it again" });
+
+  on(resend, "click", () => {
+    clear(message);
+    void withPending(resend, "Sending\u2026", async () => {
+      try {
+        const result = await api.resendVerification(email);
+        message.replaceChildren(banner("ok", result.message));
+      } catch (error) {
+        message.replaceChildren(banner("error", describeError(error)));
+      }
+    });
+  });
+
+  container.append(
+    el("div", { class: "card auth-card" }, [
+      el("h1", { text: "Confirm your email" }),
+      el("p", {
+        class: "blurb",
+        text: `We sent a link to ${email}. Open it to finish setting up your account.`,
+      }),
+      message,
+      el("p", { class: "switch" }, ["Nothing arrived? ", resend]),
+    ]),
+  );
+}
+
+/// Landing page for the link in the confirmation email.
+async function renderVerify(token: string): Promise<void> {
+  const container = root();
+  clear(container);
+  container.append(el("p", { class: "loading", text: "Confirming\u2026" }));
+
+  try {
+    const result = await api.verifyEmail(token);
+    // Signed in straight away: they have just proved they control the
+    // address, so asking for the password again adds nothing.
+    session.set(result.token);
+    window.location.hash = "#/targets";
+  } catch (error) {
+    clear(container);
+    container.append(
+      el("div", { class: "card auth-card" }, [
+        el("h1", { text: "That link did not work" }),
+        banner("error", describeError(error)),
+        el("p", { class: "switch" }, [
+          "You can ",
+          el("a", { href: "#/signin", text: "sign in" }),
+          " to request a new one.",
+        ]),
+      ]),
+    );
+  }
 }
 
 // --- targets ---------------------------------------------------------------
@@ -677,8 +868,16 @@ function route(): void {
   const hash = window.location.hash.replace(/^#/, "") || "/";
   const parts = hash.split("/").filter(Boolean);
 
+  // Confirmation links get followed while signed out, and sometimes while
+  // signed in as somebody else. The token decides, not the session.
+  if (parts[0] === "verify" && parts[1]) {
+    void renderVerify(parts[1]);
+    return;
+  }
+
   if (!session.isSignedIn) {
-    renderAuth(parts[0] === "signup" ? "signup" : "signin");
+    if (parts[0] === "signup") renderSignUp();
+    else renderSignIn();
     return;
   }
 

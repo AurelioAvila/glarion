@@ -4,6 +4,15 @@
 // written out rather than inferred so a backend change that alters a field
 // shows up as a type error in the views instead of as `undefined` on screen.
 
+export interface SignupDetails {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  email: string;
+  password: string;
+  passwordConfirmation: string;
+}
+
 export interface Profile {
   agency_name: string | null;
   agency_logo_url: string | null;
@@ -96,6 +105,31 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = "glarion.token";
+const REMEMBERED_EMAIL_KEY = "glarion.email";
+
+/// The address to prefill on the sign-in form.
+///
+/// Opt-in, and only ever the address — never the password. On a shared
+/// computer this does reveal who has been signing in, which is why it is a
+/// choice rather than the default.
+export const rememberedEmail = {
+  get(): string | null {
+    try {
+      return localStorage.getItem(REMEMBERED_EMAIL_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  set(email: string | null): void {
+    try {
+      if (email) localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+      else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+    } catch {
+      // Storage unavailable; the box simply will not be remembered.
+    }
+  },
+};
 
 // The bearer token lives in localStorage so a refresh does not sign the
 // user out. That trades off against script injection: anything able to run
@@ -204,11 +238,23 @@ async function request<T>(
 }
 
 export const api = {
-  signup(email: string, password: string) {
-    return request<{ token: string; user_id: string }>("POST", "/api/auth/signup", {
-      email,
-      password,
+  signup(details: SignupDetails) {
+    return request<{ email: string; message: string }>("POST", "/api/auth/signup", {
+      first_name: details.firstName,
+      last_name: details.lastName,
+      date_of_birth: details.dateOfBirth,
+      email: details.email,
+      password: details.password,
+      password_confirmation: details.passwordConfirmation,
     });
+  },
+
+  verifyEmail(token: string) {
+    return request<{ token: string; user_id: string }>("POST", "/api/auth/verify", { token });
+  },
+
+  resendVerification(email: string) {
+    return request<{ message: string }>("POST", "/api/auth/resend-verification", { email });
   },
 
   login(email: string, password: string) {

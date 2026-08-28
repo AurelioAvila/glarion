@@ -39,6 +39,12 @@ pub enum ApiError {
     #[error("too many requests — try again later")]
     TooManyRequests,
 
+    /// The password was right but the address has never been confirmed.
+    /// Its own variant so the dashboard can offer to resend the link
+    /// instead of showing a dead end.
+    #[error("confirm your email address to sign in")]
+    EmailNotVerified,
+
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -70,6 +76,11 @@ impl IntoResponse for ApiError {
             ApiError::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",
+                self.to_string(),
+            ),
+            ApiError::EmailNotVerified => (
+                StatusCode::FORBIDDEN,
+                "email_not_verified",
                 self.to_string(),
             ),
             ApiError::Internal(err) => {
