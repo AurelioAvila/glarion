@@ -31,6 +31,19 @@ fi
 # The development database, not the test one. The integration tests
 # truncate every table, so running the app against that database means a
 # test run wipes the accounts and scan history you were working with.
+# Local secrets, if there are any.
+#
+# Kept in a gitignored file rather than typed into a terminal each time:
+# an API key pasted onto a command line ends up in shell history, and one
+# committed to a repository ends up somewhere much worse. See .env.local.example.
+if [ -f .env.local ]; then
+    echo "Loading .env.local"
+    set -a
+    # shellcheck disable=SC1091
+    . ./.env.local
+    set +a
+fi
+
 DATABASE_URL="$(bash scripts/dev-db.sh url dev)"
 JWT_SECRET="$(cat "$SECRET_FILE")"
 

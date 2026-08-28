@@ -207,11 +207,13 @@ without the other, and the one that drifts is the one enforcing a paid
 limit.
 
 Checkout and cancellation are hosted by Stripe, so no card detail reaches
-these servers. Configuration: `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, and a price id per plan and interval
-(`STRIPE_PRICE_STUDIO_MONTHLY` and its three siblings). With none of it
-set, the billing endpoints refuse rather than granting anything, and the
-rest of the product works unchanged.
+these servers.
+
+Copy `.env.local.example` to `.env.local` and fill it in; `dev-api.sh`
+loads it. That file is gitignored, and secrets belong in it rather than on
+a command line, where they end up in shell history. With none of it set the
+billing endpoints refuse rather than granting anything, and the rest of the
+product works unchanged.
 
 **Before taking money:** a subscription is continuous business activity,
 which in Italy needs a P.IVA and VAT handling. Stripe Tax computes the
