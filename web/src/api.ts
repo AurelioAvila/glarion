@@ -18,6 +18,21 @@ export interface Profile {
   agency_logo_url: string | null;
 }
 
+export interface PreviewObservation {
+  label: string;
+  value: string;
+  is_finding: boolean;
+}
+
+export interface PreviewResult {
+  domain: string;
+  observations: PreviewObservation[];
+  notes: string[];
+  /// What the check deliberately did not do. Sent with every result so the
+  /// boundary travels with the data rather than living in one page.
+  caveat: string;
+}
+
 export type Cadence = "manual" | "weekly" | "monthly";
 
 export interface Target {
@@ -293,6 +308,15 @@ export const api = {
       domain,
       client_name: clientName,
     });
+  },
+
+  /// The check that needs no ownership proof.
+  ///
+  /// Reads only what a site publishes to any visitor, so it works on a
+  /// domain nobody has verified — which is the whole point: it shows
+  /// something real before asking anyone to edit DNS.
+  preview(domain: string) {
+    return request<PreviewResult>("POST", "/api/preview", { domain });
   },
 
   setCadence(targetId: string, cadence: Cadence) {

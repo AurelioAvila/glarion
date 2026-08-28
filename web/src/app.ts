@@ -17,7 +17,14 @@
 // number, which would hide exactly the thing worth seeing.
 
 import { api, ApiError, rememberedEmail, session } from "./api.js";
-import type { Cadence, ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
+import type {
+  Cadence,
+  PreviewResult,
+  ScanDetail,
+  ScanSummary,
+  Target,
+  TriagedFinding,
+} from "./api.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
@@ -787,10 +794,15 @@ async function renderTarget(targetId: string): Promise<void> {
       scansSection(site, scans),
     );
   } else {
-    // Deliberately the only thing on the page. Until ownership is proved
-    // nothing else can happen, and offering a scan button that always
-    // fails would just waste the reader's time.
-    container.append(verificationSection(site));
+    // The preview goes first, above the request for a DNS record.
+    //
+    // Asking somebody to edit a client's DNS before they have seen this
+    // product do anything is the worst possible order, and it is where
+    // setup was being abandoned. Everything in the preview is read from
+    // what the site already publishes, so it needs no permission — and
+    // seeing two real problems is a far better reason to finish the domain
+    // check than being told to.
+    append(container, previewSection(site.domain), verificationSection(site));
   }
 }
 
@@ -802,6 +814,77 @@ function expiryNote(target: Target): HTMLElement | null {
     style: "margin: -0.75rem 0 2.25rem",
     text: `Domain confirmed · recheck by ${shortDate(target.verification_expires_at)}`,
   });
+}
+
+/// What can be shown before anyone has proved anything.
+function previewSection(domain: string): HTMLElement {
+  const body = el("div");
+  const section = el("div", { style: "margin-bottom:3rem" }, [
+    sectionRule("A first look"),
+    el("p", {
+      class: "blurb",
+      style: "margin-top:1rem",
+      text:
+        "Read from what this site already publishes to any visitor, so it needs " +
+        "no permission from anyone.",
+    }),
+    body,
+  ]);
+
+  body.append(skeleton());
+
+  void api
+    .preview(domain)
+    .then((result) => {
+      body.replaceChildren(previewBody(result));
+    })
+    .catch((error: unknown) => {
+      // A preview that cannot run is not a failure of the page: the domain
+      // check below still works, so this says so quietly and gets out of
+      // the way.
+      body.replaceChildren(notice("info", describeError(error)));
+    });
+
+  return section;
+}
+
+function previewBody(result: PreviewResult): HTMLElement {
+  const findings = result.observations.filter((observation) => observation.is_finding);
+
+  const line = el("p", { class: "standing", style: "margin-bottom:1.25rem" });
+  if (findings.length === 0) {
+    line.append(
+      el("span", { class: "clear", text: "Nothing obvious" }),
+      " from the outside.",
+    );
+  } else {
+    line.append(
+      el("span", { class: "alarm", text: countOf(findings.length, "thing") }),
+      " visible without looking hard.",
+    );
+  }
+
+  const grid = el("div", { class: "facts" });
+  for (const observation of result.observations) {
+    grid.append(
+      el("div", { class: observation.is_finding ? "fact fact-flagged" : "fact" }, [
+        el("span", { class: "fact-label", text: observation.label }),
+        el("span", { class: "fact-value", text: observation.value }),
+      ]),
+    );
+  }
+
+  const wrapper = el("div", {}, [line, grid]);
+
+  for (const note of result.notes) {
+    wrapper.append(el("p", { class: "hint", style: "margin-top:1rem", text: note }));
+  }
+
+  // The caveat comes from the server with the data, so a clean preview can
+  // never be mistaken for a clean site.
+  wrapper.append(el("p", { class: "hint", style: "margin-top:1.25rem", text: result.caveat }));
+
+  return wrapper;
 }
 
 /// The screen that decides whether anyone ever sees a report.
@@ -820,8 +903,9 @@ function verificationSection(target: Target): HTMLElement {
       class: "blurb",
       style: "margin-top:1.25rem",
       text:
-        "We only scan sites whose owner has asked us to. Publish the record below " +
-        "and we will confirm it. One time, valid for 30 days.",
+        "A full scan probes far more than the check above, so it only runs on sites " +
+        "whose owner has asked us to. Publish the record below and we will confirm " +
+        "it. One time, valid for 30 days.",
     }),
     body,
   ]);

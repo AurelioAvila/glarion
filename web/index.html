@@ -315,6 +315,11 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
   text-transform: uppercase;
   color: var(--ink-3);
 }
+/* A fact the owner would want to change, rather than one that merely
+   describes the site. */
+.fact-flagged { border-bottom-color: color-mix(in srgb, var(--alarm) 35%, transparent); }
+.fact-flagged .fact-value { color: var(--alarm); }
+
 .fact-value {
   font-size: .88rem;
   color: var(--ink-2);
