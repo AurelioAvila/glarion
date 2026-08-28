@@ -41,6 +41,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend types
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc --noEmit
+
       - name: Format
         run: cargo fmt --all -- --check
 

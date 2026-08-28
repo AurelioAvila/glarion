@@ -96,10 +96,19 @@ pub fn expiry_from(now: DateTime<Utc>) -> DateTime<Utc> {
 /// Fetches TXT records for the verification subdomain. Returns an empty
 /// Vec (not an error) when the record simply doesn't exist yet — that is
 /// an expected, common state (user hasn't added it yet), not a failure.
-pub async fn fetch_dns_txt_records(domain: &str) -> anyhow::Result<Vec<String>> {
+pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError> {
+    use hickory_resolver::config::{ResolverConfig, ResolverOpts};
     use hickory_resolver::TokioAsyncResolver;
 
-    let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
+    // Public resolvers rather than the host's configuration, deliberately.
+    //
+    // Whether someone's domain is verified must not depend on which machine
+    // the API happens to run on. Host configuration also breaks in ways that
+    // are invisible until they bite: a Windows development machine here
+    // advertised an IPv6 link-local nameserver whose scope id made every
+    // response get discarded, so all lookups timed out and every
+    // verification attempt failed with an opaque error.
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), ResolverOpts::default());
     let name = dns_txt_record_name(domain);
 
     let lookup = tokio::time::timeout(
@@ -113,9 +122,22 @@ pub async fn fetch_dns_txt_records(domain: &str) -> anyhow::Result<Vec<String>> 
             .iter()
             .map(|record| record.to_string().trim_matches('"').to_string())
             .collect()),
+        // The record simply is not there yet. Expected and common — the
+        // user has probably not finished adding it.
         Ok(Err(_)) => Ok(Vec::new()),
-        Err(_) => anyhow::bail!("DNS lookup timed out"),
+        Err(_) => Err(DnsError::Unreachable),
     }
+}
+
+/// Why a lookup could not answer.
+///
+/// Kept separate from "the record was absent" because the two mean
+/// different things to the person waiting: one is "keep going", the other
+/// is "this is on us, try again".
+#[derive(Debug, thiserror::Error)]
+pub enum DnsError {
+    #[error("could not reach DNS to check the record")]
+    Unreachable,
 }
 
 /// Fetches the well-known verification file over HTTPS only — plain HTTP

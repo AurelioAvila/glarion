@@ -44,25 +44,33 @@ External tools are spawned with an argument vector, never a shell string.
 
 ## Structure
 
-- `crates/api` — HTTP API (Axum): auth, targets, verification, scans. Also
-  builds the `runner` binary.
+- `crates/api` — HTTP API (Axum): auth, targets, verification, scans,
+  results. Also builds the `runner` binary.
 - `crates/orchestrator` — verification, target validation, scan policy, job
   runner, tool wrappers.
-- `crates/report` — normalization and report generation. Not built yet.
+- `crates/report` — triage and report rendering.
+- `web/` — the dashboard: TypeScript compiled with `tsc`, no framework and
+  no bundler, matching the rest of the portfolio.
 - `migrations/` — Postgres schema, applied with sqlx.
 
 ## Running
 
-Two processes sharing a database:
-
 ```bash
-cargo run --bin api       # HTTP API
-cargo run --bin runner    # scan worker
+bash scripts/dev-api.sh                              # API + database
+cargo run --bin runner                               # scan worker
+cd web && npm install && npm run build               # dashboard, once
+python -m http.server 5173 --directory web           # serve it
 ```
 
-Required environment: `DATABASE_URL` and `JWT_SECRET` (32+ characters).
-Optional: `PORT`, `CORS_EXTRA_ORIGINS`. Both binaries refuse to start
-rather than fall back to a default.
+`scripts/dev-api.sh` starts the development database, generates a JWT
+secret on first run, and opens CORS to the local dashboard. In production
+the API needs `DATABASE_URL` and `JWT_SECRET` (32+ characters); `PORT` and
+`CORS_EXTRA_ORIGINS` are optional. Both binaries refuse to start rather
+than fall back to a default.
+
+The dashboard talks to the same origin it is served from. On localhost it
+falls back to port 8080, so development needs no configuration and no
+machine-specific URL can be committed by accident.
 
 The runner needs [`nuclei`](https://github.com/projectdiscovery/nuclei) on
 `PATH`. A job whose tool is missing fails with a recorded reason rather
@@ -75,7 +83,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 81 tests at present.
+the whole suite with the integration tests active. 135 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -123,8 +131,14 @@ disabling the expiry check makes
 `scan_is_refused_when_verification_has_expired` fail, so the test is known
 to be capable of catching a regression rather than merely passing.
 
-Not built yet: report generation, billing, the frontend, and the
-testssl/httpx/subfinder wrappers.
+Findings are triaged rather than listed: a real scan of a small production
+site returned 32 results, of which three warranted action and nineteen were
+inventory. The scanner's own severity is not used as the priority — it
+rates a missing Content-Security-Policy as informational, which is wrong
+for a report going to a client. Reports are rendered as a single
+self-contained HTML file under the agency's name, printable to PDF.
+
+Not built yet: billing, and the testssl/httpx/subfinder wrappers.
 
 ### Known limits
 
