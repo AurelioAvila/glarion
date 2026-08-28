@@ -23,6 +23,24 @@ expires after 30 days. The check runs in two independent places:
 Every queued scan writes an authorization record in the same transaction as
 the job, so a job cannot exist without a trail of who authorized it.
 
+## Two tiers, and why only one is gated
+
+A full scan probes: it requests paths a site never advertised and tries
+known vulnerability fingerprints against them. That is the act the gate
+above exists for.
+
+Reading a site's DNS records, its TLS configuration, the response headers
+on its front page, and the two files it publishes for automated readers is
+not that. It is what a browser or a search-engine crawler collects on an
+ordinary visit, and there is nothing to authorise about reading what a site
+broadcasts to anyone. `POST /api/preview` does exactly that much and no
+more — one front-page request, two well-known files, `GET` only, no
+redirects followed — and needs neither an account nor a verified domain.
+
+Keeping them apart matters commercially as much as legally. Before it,
+nobody could see a single result without first editing DNS for a client's
+domain, which is to say before we had shown them anything at all.
+
 ## Where traffic can be aimed
 
 Proving ownership of a name is not the same as proving the name is safe to
@@ -94,7 +112,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 179 tests at present.
+the whole suite with the integration tests active. 188 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
