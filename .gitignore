@@ -25,3 +25,4 @@ credentials.json
 *.swp
 .DS_Store
 Thumbs.db
+.preview/

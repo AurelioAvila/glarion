@@ -70,6 +70,9 @@ pub struct TriagedFinding {
     pub scanner_severity: Severity,
     pub guidance: Option<Guidance>,
     pub evidence: Option<String>,
+    /// The rule that produced this row. Where duplicates were folded
+    /// together this is the first of them, so it identifies the row for
+    /// debugging rather than enumerating everything behind it.
     pub template_id: String,
     /// How many raw findings were folded into this row. A scanner reports
     /// one result per matching rule, so a single misconfiguration can
@@ -173,7 +176,7 @@ pub fn triage(finding: &Finding) -> TriagedFinding {
     let (disposition, priority, guidance) = classify(&template_id, matcher, finding.severity);
 
     TriagedFinding {
-        title: display_title(&template_id, matcher, &finding.title),
+        title: display_title(&template_id, matcher, &finding.title, disposition),
         disposition,
         priority,
         scanner_severity: finding.severity,
@@ -184,10 +187,29 @@ pub fn triage(finding: &Finding) -> TriagedFinding {
     }
 }
 
-/// A client-readable title. The scanner's names are written for operators
-/// ("HTTP Missing Security Headers" repeated five times); a report needs to
-/// say which header, once per header.
-fn display_title(template_id: &str, matcher: &str, scanner_title: &str) -> String {
+/// A client-readable title.
+///
+/// The scanner's names are written for operators ("HTTP Missing Security
+/// Headers" repeated five times, "DNS DMARC - Detect"); a report needs to
+/// name the actual issue, once per issue.
+///
+/// The disposition is an input because a title must never contradict the
+/// section it is filed under. The `tls-version` template fires both when an
+/// obsolete protocol is offered and when the configuration is perfectly
+/// fine, so titling it "Obsolete TLS version accepted" unconditionally put
+/// that sentence in the appendix under "found unremarkable" — which reads
+/// as a contradiction and costs the reader confidence in the whole
+/// document.
+fn display_title(
+    template_id: &str,
+    matcher: &str,
+    scanner_title: &str,
+    disposition: Disposition,
+) -> String {
+    if disposition == Disposition::Inventory {
+        return inventory_title(template_id, scanner_title);
+    }
+
     match (template_id, matcher) {
         ("http-missing-security-headers", "content-security-policy") => {
             "No Content-Security-Policy header".to_string()
@@ -202,6 +224,33 @@ fn display_title(template_id: &str, matcher: &str, scanner_title: &str) -> Strin
         ("email-extractor", _) => "Email addresses published in the page source".to_string(),
         ("robots-txt-endpoint", _) => "Paths disclosed in robots.txt".to_string(),
         ("tls-version", _) => "Obsolete TLS version accepted".to_string(),
+        _ => scanner_title.to_string(),
+    }
+}
+
+/// Appendix wording: a plain statement of what was checked. Phrased as a
+/// completed check rather than as a defect, because everything here was
+/// found to be in order.
+fn inventory_title(template_id: &str, scanner_title: &str) -> String {
+    match template_id {
+        "tls-version" => "TLS protocol versions".to_string(),
+        "ssl-issuer" => "Certificate issuer".to_string(),
+        "ssl-dns-names" => "Names covered by the certificate".to_string(),
+        "wildcard-tls" => "Wildcard certificate in use".to_string(),
+        "dnssec-detection" => "DNSSEC".to_string(),
+        "dmarc-detect" => "DMARC record".to_string(),
+        "spf-record-detect" => "SPF record".to_string(),
+        "caa-fingerprint" => "CAA record".to_string(),
+        "mx-fingerprint" => "Mail servers".to_string(),
+        "nameserver-fingerprint" => "Name servers".to_string(),
+        "txt-fingerprint" => "DNS TXT records".to_string(),
+        "aaaa-fingerprint" => "IPv6 addresses".to_string(),
+        "waf-detect" | "dns-waf-detect" => "Web application firewall".to_string(),
+        "tech-detect" => "Detected technologies".to_string(),
+        "robots-txt" => "robots.txt".to_string(),
+        "security-txt" => "security.txt".to_string(),
+        "form-detection" => "Forms on the page".to_string(),
+        "google-floc-disabled" => "Browser tracking opt-out".to_string(),
         _ => scanner_title.to_string(),
     }
 }
@@ -272,9 +321,17 @@ fn classify(
                      embedded third-party content.",
                 ),
             ),
-            // A header we have no specific opinion about: surface it as a
-            // judgement call rather than pretending to rank it.
-            _ => (Disposition::Review, Priority::Low, None),
+            // A header we have no specific opinion about. Still explained:
+            // an unexplained row in the middle of explained ones reads as
+            // an oversight, and the reader cannot act on it either way.
+            _ => (
+                Disposition::Review,
+                Priority::Low,
+                guidance(
+                    "This hardening header is not being sent. It is a defence-in-depth                      measure rather than a flaw, and whether it is worth adding depends                      on what the site does.",
+                    "Review against the site's needs. Adding it is usually harmless, but                      test first if the site embeds or is embedded by third-party content.",
+                ),
+            ),
         },
 
         "weak-hsts-detect" => (
@@ -417,12 +474,18 @@ fn collapse_duplicates(findings: Vec<TriagedFinding>) -> Vec<TriagedFinding> {
     let mut collapsed: Vec<TriagedFinding> = Vec::with_capacity(findings.len());
 
     for finding in findings {
-        // Matched on the reader-facing title rather than the template id:
-        // one template can legitimately produce several distinct rows (a
-        // different missing header each time), and those must stay apart.
-        let existing = collapsed
-            .iter_mut()
-            .find(|c| c.title == finding.title && c.template_id == finding.template_id);
+        // Matched on the reader-facing title alone.
+        //
+        // Not on the template id: two different rules can describe the same
+        // thing to a reader — a firewall detected over DNS and over HTTP
+        // both produce "Web application firewall", and printing that twice
+        // looks like a mistake. Nor title *and* template id, which is what
+        // let that duplicate through.
+        //
+        // Distinct issues keep distinct titles by construction — each
+        // missing header is named individually — so keying on the title
+        // cannot merge things the reader needed to see apart.
+        let existing = collapsed.iter_mut().find(|c| c.title == finding.title);
 
         match existing {
             Some(existing) => {

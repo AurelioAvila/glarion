@@ -119,7 +119,12 @@ fn the_missing_csp_reaches_the_top_of_the_report() {
 fn dns_and_certificate_facts_stay_in_the_appendix() {
     // "You have an MX record" is not a finding. Putting rows like this in
     // front of a client is what makes a report look padded.
-    let triaged = triage_scan(&load_real_scan());
+    //
+    // Asserted per finding rather than on the collapsed output: once
+    // duplicates merge, a row carries only the first template that produced
+    // it, which is a presentation detail. Classification is what is under
+    // test here.
+    let findings = load_real_scan();
 
     for template in [
         "mx-fingerprint",
@@ -128,13 +133,16 @@ fn dns_and_certificate_facts_stay_in_the_appendix() {
         "ssl-issuer",
         "dnssec-detection",
         "waf-detect",
+        "dns-waf-detect",
     ] {
-        assert!(
-            triaged.inventory.iter().any(|f| f.template_id == template),
-            "{template} belongs in the appendix"
-        );
-        assert!(
-            !triaged.actionable.iter().any(|f| f.template_id == template),
+        let finding = findings
+            .iter()
+            .find(|f| f.raw["template-id"] == template)
+            .unwrap_or_else(|| panic!("{template} should be present in the fixture"));
+
+        assert_eq!(
+            report::triage::triage(finding).disposition,
+            Disposition::Inventory,
             "{template} must not be presented as something to fix"
         );
     }
@@ -277,4 +285,86 @@ fn titles_are_written_for_the_client_not_the_operator() {
             finding.title
         );
     }
+}
+
+#[test]
+fn an_appendix_row_never_describes_a_problem() {
+    // The appendix is headed "checked and found unremarkable". A row there
+    // reading "Obsolete TLS version accepted" contradicts its own heading,
+    // and a reader who notices stops trusting the rest of the document.
+    let triaged = triage_scan(&load_real_scan());
+
+    let alarming = [
+        "Obsolete",
+        "obsolete",
+        "Missing",
+        "missing",
+        "Weak",
+        "weak",
+        "exposed",
+        "Exposed",
+        "disclosed",
+        "Disclosed",
+        "not enforced",
+    ];
+
+    for finding in &triaged.inventory {
+        for word in alarming {
+            assert!(
+                !finding.title.contains(word),
+                "appendix row '{}' reads as a problem but is filed as fine",
+                finding.title
+            );
+        }
+    }
+}
+
+#[test]
+fn appendix_rows_are_not_left_in_scanner_shorthand() {
+    // "DNS DMARC - Detect" and "AAAA Record - IPv6 Detection" are operator
+    // wording. The appendix is short, so raw names stand out.
+    let triaged = triage_scan(&load_real_scan());
+
+    for finding in &triaged.inventory {
+        assert!(
+            !finding.title.contains(" - Detect") && !finding.title.contains("Detection"),
+            "appendix row '{}' still uses the scanner's wording",
+            finding.title
+        );
+    }
+}
+
+#[test]
+fn nothing_the_reader_must_judge_is_left_unexplained() {
+    // A bare title among explained ones reads as an oversight, and the
+    // reader cannot act on it either way.
+    let triaged = triage_scan(&load_real_scan());
+
+    for finding in triaged.actionable.iter().chain(triaged.review.iter()) {
+        assert!(
+            finding.guidance.is_some(),
+            "'{}' ({}) is presented without an explanation",
+            finding.title,
+            finding.template_id
+        );
+    }
+}
+
+#[test]
+fn two_rules_describing_the_same_thing_produce_one_row() {
+    // A firewall is detected both over DNS and over HTTP, by two different
+    // templates that both come out as "Web application firewall". Two
+    // identical lines in the appendix read as a mistake.
+    let triaged = triage_scan(&load_real_scan());
+
+    let mut titles: Vec<&str> = triaged.inventory.iter().map(|f| f.title.as_str()).collect();
+    let before = titles.len();
+    titles.sort_unstable();
+    titles.dedup();
+
+    assert_eq!(
+        titles.len(),
+        before,
+        "the appendix lists the same wording more than once"
+    );
 }
