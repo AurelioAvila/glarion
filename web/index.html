@@ -150,7 +150,32 @@ button:disabled { opacity: .6; cursor: default; }
 }
 .linklike:hover { color: var(--text); }
 
-.auth-card { max-width: 24rem; margin: 3rem auto; }
+.auth-card { max-width: 26rem; margin: 3rem auto; }
+
+/* Two fields that belong together read better side by side, and collapse
+   on a narrow screen rather than squeezing. */
+.field-pair { display: flex; gap: .75rem; }
+.field-pair label { flex: 1 1 0; min-width: 0; }
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  cursor: pointer;
+}
+.checkbox input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.hint-error { color: var(--danger); }
+.hint-error[hidden] { display: none; }
+
+@media (max-width: 30rem) {
+  .field-pair { flex-direction: column; gap: 0; }
+}
 .auth-card .primary { width: 100%; }
 .switch { margin: 1.1rem 0 0; font-size: .88rem; color: var(--text-2); text-align: center; }
 

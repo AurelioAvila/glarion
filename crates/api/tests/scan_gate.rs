@@ -88,23 +88,138 @@ fn post(path: &str, token: Option<&str>, body: Value) -> Request<Body> {
     builder.body(Body::from(body.to_string())).unwrap()
 }
 
-/// Signs up a user and returns (token, user_id).
-async fn signup(app: &axum::Router, email: &str) -> (String, Uuid) {
+const TEST_PASSWORD: &str = "a-sufficiently-long-password";
+
+/// Registers a user, confirms the address, and signs in.
+///
+/// Signup deliberately returns no session — the account cannot be used
+/// until the emailed link is followed. Rather than intercept mail, the
+/// confirmation is applied straight to the database, which keeps these
+/// tests about the scan gate instead of about email delivery. The sign-in
+/// afterwards is what proves confirmation actually took effect.
+async fn signup(app: &axum::Router, pool: &PgPool, email: &str) -> (String, Uuid) {
     let (status, body) = send(
         app,
         post(
             "/api/auth/signup",
             None,
-            json!({ "email": email, "password": "a-sufficiently-long-password" }),
+            json!({
+                "first_name": "Test",
+                "last_name": "Person",
+                "date_of_birth": "1990-01-01",
+                "email": email,
+                "password": TEST_PASSWORD,
+                "password_confirmation": TEST_PASSWORD,
+            }),
         ),
     )
     .await;
 
     assert_eq!(status, StatusCode::OK, "signup failed: {body}");
+
+    sqlx::query("update users set email_verified_at = now() where email = $1")
+        .bind(email)
+        .execute(pool)
+        .await
+        .expect("could not confirm the test account");
+
+    let (status, body) = send(
+        app,
+        post(
+            "/api/auth/login",
+            None,
+            json!({ "email": email, "password": TEST_PASSWORD }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "login failed: {body}");
     (
         body["token"].as_str().unwrap().to_string(),
         Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap(),
     )
+}
+
+#[tokio::test]
+async fn an_unconfirmed_account_cannot_sign_in() {
+    // The account exists and the password is right; only the address is
+    // unconfirmed. Letting this through would make the emailed link
+    // decorative.
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool);
+
+    let email = "unconfirmed@example.com";
+    let (status, _) = send(
+        &app,
+        post(
+            "/api/auth/signup",
+            None,
+            json!({
+                "first_name": "Test",
+                "last_name": "Person",
+                "date_of_birth": "1990-01-01",
+                "email": email,
+                "password": TEST_PASSWORD,
+                "password_confirmation": TEST_PASSWORD,
+            }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/auth/login",
+            None,
+            json!({ "email": email, "password": TEST_PASSWORD }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["error"], "email_not_verified");
+}
+
+#[tokio::test]
+async fn signup_does_not_reveal_that_an_address_is_already_registered() {
+    // Otherwise signup becomes the account-enumeration oracle that the
+    // sign-in endpoint is careful not to be.
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let email = "taken@example.com";
+    let register = || {
+        post(
+            "/api/auth/signup",
+            None,
+            json!({
+                "first_name": "Test",
+                "last_name": "Person",
+                "date_of_birth": "1990-01-01",
+                "email": email,
+                "password": TEST_PASSWORD,
+                "password_confirmation": TEST_PASSWORD,
+            }),
+        )
+    };
+
+    let (first_status, first_body) = send(&app, register()).await;
+    let (second_status, second_body) = send(&app, register()).await;
+
+    assert_eq!(first_status, second_status);
+    assert_eq!(first_body, second_body);
+
+    let accounts: i64 = sqlx::query_scalar("select count(*) from users where email = $1")
+        .bind(email)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(accounts, 1, "the second attempt must not create an account");
 }
 
 async fn create_target(app: &axum::Router, token: &str, domain: &str) -> Uuid {
@@ -146,9 +261,9 @@ async fn scan_is_refused_when_target_was_never_verified() {
     let Some(pool) = test_pool().await else {
         return;
     };
-    let app = app(pool);
+    let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "never-verified@example.com").await;
+    let (token, _) = signup(&app, &pool, "never-verified@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
 
     let (status, body) = send(
@@ -172,7 +287,7 @@ async fn scan_is_refused_when_verification_has_expired() {
     };
     let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "expired@example.com").await;
+    let (token, _) = signup(&app, &pool, "expired@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
 
     // Verified 40 days ago, expired 10 days ago.
@@ -203,7 +318,7 @@ async fn scan_is_queued_when_verification_is_current() {
     };
     let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "verified@example.com").await;
+    let (token, _) = signup(&app, &pool, "verified@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
     insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
 
@@ -242,7 +357,7 @@ async fn scan_is_refused_without_explicit_consent() {
     };
     let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "no-consent@example.com").await;
+    let (token, _) = signup(&app, &pool, "no-consent@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
     insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
 
@@ -276,7 +391,7 @@ async fn scan_is_refused_for_a_tool_outside_the_allowlist() {
     };
     let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "bad-tool@example.com").await;
+    let (token, _) = signup(&app, &pool, "bad-tool@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
     insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
 
@@ -300,11 +415,11 @@ async fn a_user_cannot_scan_someone_elses_target() {
     };
     let app = app(pool.clone());
 
-    let (owner_token, _) = signup(&app, "owner@example.com").await;
+    let (owner_token, _) = signup(&app, &pool, "owner@example.com").await;
     let target_id = create_target(&app, &owner_token, "example.com").await;
     insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
 
-    let (attacker_token, _) = signup(&app, "attacker@example.com").await;
+    let (attacker_token, _) = signup(&app, &pool, "attacker@example.com").await;
 
     let (status, _) = send(
         &app,
@@ -346,14 +461,14 @@ async fn repeated_failed_logins_are_rate_limited() {
     let Some(pool) = test_pool().await else {
         return;
     };
-    let app = app(pool);
+    let app = app(pool.clone());
 
-    signup(&app, "brute-force-target@example.com").await;
+    signup(&app, &pool, "brute-force-target@example.com").await;
 
     // Guess past the limit. The point is that the endpoint stops answering
     // at all, rather than continuing to accept guesses indefinitely.
     let mut saw_rate_limit = false;
-    for _ in 0..(api::rate_limit::AUTH_ATTEMPTS_PER_WINDOW + 5) {
+    for _ in 0..(api::rate_limit::AUTH_ATTEMPTS_PER_WINDOW + 10) {
         let (status, _) = send(
             &app,
             post(
@@ -384,9 +499,9 @@ async fn ip_literal_targets_are_refused_at_creation() {
     let Some(pool) = test_pool().await else {
         return;
     };
-    let app = app(pool);
+    let app = app(pool.clone());
 
-    let (token, _) = signup(&app, "ip-target@example.com").await;
+    let (token, _) = signup(&app, &pool, "ip-target@example.com").await;
 
     for candidate in ["127.0.0.1", "169.254.169.254", "http://localhost:3000"] {
         let (status, _) = send(

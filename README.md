@@ -68,6 +68,14 @@ the API needs `DATABASE_URL` and `JWT_SECRET` (32+ characters); `PORT` and
 `CORS_EXTRA_ORIGINS` are optional. Both binaries refuse to start rather
 than fall back to a default.
 
+Email uses Resend, the provider already used elsewhere in the portfolio:
+set `RESEND_API_KEY`, `MAIL_FROM`, and `PUBLIC_URL` (where confirmation
+links should point — taken from configuration rather than from a request
+header, since a link built from an attacker-supplied Host is how
+confirmation mail becomes phishing). With no key configured, messages are
+logged instead of sent and the confirmation link appears in the API output,
+so the signup flow can be exercised locally without a mail account.
+
 The dashboard talks to the same origin it is served from. On localhost it
 falls back to port 8080, so development needs no configuration and no
 machine-specific URL can be committed by accident.
@@ -83,7 +91,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 135 tests at present.
+the whole suite with the integration tests active. 153 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -121,10 +129,18 @@ Working: ownership verification, target and resolved-address validation,
 authentication, scan policy and both gate checks, the Nuclei wrapper, and
 the job runner.
 
+Registration collects a name and date of birth alongside the address; the
+date of birth exists to check the account holder is old enough to enter a
+paid contract, which is the only reason to hold it. An account cannot be
+used until the address is confirmed through an emailed link, and neither
+signup nor sign-in reveals whether an address is already registered.
+
 Authentication uses Argon2 with JWTs pinned to HS256 and a `token_version`
 column for revocation. Login performs the same work whether or not the
 account exists, so response timing does not reveal which addresses are
-registered. Authentication and verification endpoints are rate limited.
+registered. Confirmation links are stored only as a hash, expire after 24
+hours, and stop working once used. Authentication and verification
+endpoints are rate limited.
 
 The gate has been verified against a live database and mutation-checked:
 disabling the expiry check makes

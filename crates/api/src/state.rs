@@ -1,4 +1,7 @@
 use sqlx::PgPool;
+use std::sync::Arc;
+
+use crate::mailer::Mailer;
 
 use crate::rate_limit::RateLimiter;
 
@@ -13,6 +16,8 @@ pub struct AppState {
     pub auth_limiter: RateLimiter,
     /// Separate budget for ownership checks, which cause outbound traffic.
     pub verification_limiter: RateLimiter,
+    /// Shared so the HTTP client and configuration are built once.
+    pub mailer: Arc<Mailer>,
 }
 
 impl AppState {
@@ -22,6 +27,7 @@ impl AppState {
             jwt_secret,
             auth_limiter: RateLimiter::for_auth(),
             verification_limiter: RateLimiter::for_verification(),
+            mailer: Arc::new(Mailer::from_env()),
         }
     }
 }

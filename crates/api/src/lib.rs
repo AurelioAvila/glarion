@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod mailer;
 pub mod rate_limit;
 pub mod routes;
 pub mod state;
@@ -68,6 +69,11 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(|| async { "ok" }))
         .route("/api/auth/signup", post(routes::accounts::signup))
         .route("/api/auth/login", post(routes::accounts::login))
+        .route("/api/auth/verify", post(routes::accounts::verify_email))
+        .route(
+            "/api/auth/resend-verification",
+            post(routes::accounts::resend_verification),
+        )
         .route(
             "/api/targets",
             get(routes::targets::list_targets).post(routes::targets::create_target),

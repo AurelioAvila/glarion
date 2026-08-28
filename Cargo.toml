@@ -23,6 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hickory-resolver = "0.24"
 reqwest = { version = "0.12", features = ["json"] }
 rand = "0.8"
+sha2 = "0.10"
 jsonwebtoken = "9"
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["rand_core"] }
