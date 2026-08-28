@@ -20,6 +20,7 @@ import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type { ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
+import * as palette from "./palette.js";
 
 const root = () => byId<HTMLElement>("view");
 
@@ -100,6 +101,18 @@ async function withPending<T>(
     button.disabled = false;
     button.textContent = original;
   }
+}
+
+/// The placeholder shown while a view is fetching.
+///
+/// A shape rather than the word "loading": it occupies roughly what the
+/// real content will, so the page does not jump when the data lands.
+function skeleton(): HTMLElement {
+  return el("ul", { class: "skeleton", "aria-label": "Loading" }, [
+    el("li"),
+    el("li"),
+    el("li"),
+  ]);
 }
 
 function sectionRule(title: string, count?: string): HTMLElement {
@@ -392,7 +405,7 @@ function buildRows(targets: Target[], scans: ScanSummary[]): SiteRow[] {
 async function renderTargets(): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading" }));
+  container.append(skeleton());
 
   let rows: SiteRow[];
   try {
@@ -432,6 +445,49 @@ async function renderTargets(): Promise<void> {
     ledger.append(siteEntry(row));
   }
   container.append(ledger);
+
+  // Registered after render so the palette offers exactly what is on
+  // screen, rather than a copy captured when it was last opened.
+  palette.setCommands(() => [
+    ...rows.map((row) => ({
+      group: "Sites",
+      label: row.target.domain,
+      detail: row.target.client_name ?? undefined,
+      keywords: row.state,
+      run: () => {
+        window.location.hash = `#/targets/${row.target.id}`;
+      },
+    })),
+    ...standardCommands(),
+  ]);
+}
+
+/// Commands available from anywhere.
+function standardCommands(): palette.Command[] {
+  return [
+    {
+      group: "Go to",
+      label: "Sites",
+      run: () => {
+        window.location.hash = "#/targets";
+      },
+    },
+    {
+      group: "Go to",
+      label: "Settings",
+      run: () => {
+        window.location.hash = "#/settings";
+      },
+    },
+    {
+      group: "Account",
+      label: "Sign out",
+      run: () => {
+        session.clear();
+        window.location.hash = "#/signin";
+      },
+    },
+  ];
 }
 
 /// The assessment, written out.
@@ -514,9 +570,40 @@ function siteEntry(row: SiteRow): HTMLElement {
         target.client_name ? el("div", { class: "entry-client", text: target.client_name }) : null,
         detail,
       ]),
-      el("div", { class: "entry-right" }, [historyStrip(row), el("span", { class: "entry-go", text: "→" })]),
+      el("div", { class: "entry-right" }, [
+        severitySplit(row),
+        historyStrip(row),
+        el("span", { class: "entry-go", text: "→" }),
+      ]),
     ]),
   ]);
+}
+
+/// How the outstanding work splits by rank.
+///
+/// "3 to fix" does not distinguish one serious problem plus two notes from
+/// three serious problems, and those are different afternoons. The split is
+/// only fetched for the scan being shown in detail, so on the list it is
+/// derived from what the summary already carries: the ranks are not in the
+/// list payload, so this shows magnitude only when there is nothing better.
+function severitySplit(row: SiteRow): HTMLElement | null {
+  const latest = row.latest;
+  if (!latest || latest.status !== "completed" || latest.actionable_count === 0) return null;
+
+  const split = el("div", {
+    class: "split",
+    role: "img",
+    "aria-label": countOf(latest.actionable_count, "item") + " to fix",
+  });
+
+  // Capped so a bad site does not draw a wall of marks; the number beside
+  // it is the exact figure.
+  const marks = Math.min(latest.actionable_count, 6);
+  for (let index = 0; index < marks; index += 1) {
+    split.append(el("span", { class: "split-mark split-high" }));
+  }
+
+  return split;
 }
 
 /// The last few scans, oldest on the left.
@@ -636,7 +723,7 @@ function addTargetForm(): HTMLElement {
 async function renderTarget(targetId: string): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading" }));
+  container.append(skeleton());
 
   let target: Target | undefined;
   let scans: ScanSummary[] = [];
@@ -939,7 +1026,7 @@ function scanEntry(scan: ScanSummary): HTMLElement {
 async function renderScan(scanId: string): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading" }));
+  container.append(skeleton());
 
   let detail: ScanDetail;
   try {
@@ -1126,7 +1213,18 @@ function renderNav(): void {
   const link = (href: string, text: string, matches: string[]): HTMLElement =>
     el("a", { href, text, class: matches.includes(section) ? "active" : undefined });
 
-  nav.append(link("#/targets", "Sites", ["targets", "scans", ""]), link("#/settings", "Settings", ["settings"]));
+  // Without something on screen saying so, a keyboard-first interface is
+  // just an interface nobody knows is keyboard-first.
+  const jump = el("button", { class: "kbd-hint", type: "button", title: "Jump to anything" }, [
+    el("kbd", { text: navigator.platform.includes("Mac") ? "⌘K" : "Ctrl K" }),
+  ]);
+  on(jump, "click", () => palette.open());
+
+  nav.append(
+    jump,
+    link("#/targets", "Sites", ["targets", "scans", ""]),
+    link("#/settings", "Settings", ["settings"]),
+  );
 
   const signOut = el("button", { type: "button", text: "Sign out" });
   on(signOut, "click", () => {
@@ -1136,7 +1234,7 @@ function renderNav(): void {
   nav.append(signOut);
 }
 
-function route(): void {
+function routeInner(): void {
   stopPolling();
   renderNav();
 
@@ -1181,5 +1279,17 @@ function route(): void {
   void renderTargets();
 }
 
-window.addEventListener("hashchange", route);
+function route(): void {
+  routeInner();
+}
+
+palette.installShortcuts();
+// A sensible default so the palette is never empty on a view that has not
+// registered anything more specific.
+palette.setCommands(standardCommands);
+
+window.addEventListener("hashchange", () => {
+  palette.close();
+  route();
+});
 window.addEventListener("DOMContentLoaded", route);

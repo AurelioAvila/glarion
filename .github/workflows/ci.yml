@@ -45,11 +45,12 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Frontend types
+      - name: Frontend types and tests
         working-directory: web
         run: |
           npm ci
           npx tsc --noEmit
+          npm test
 
       - name: Format
         run: cargo fmt --all -- --check

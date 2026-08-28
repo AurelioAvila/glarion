@@ -182,6 +182,14 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
   transition: background .1s ease;
 }
 .entry:hover { background: var(--raise); }
+
+/*
+  The keyboard's position in the list. Deliberately different from hover —
+  a brighter ground plus a hairline on the right — so that moving the mouse
+  across the page does not make you lose where the keyboard was.
+*/
+.entry-on { background: var(--raise); box-shadow: inset -2px 0 0 var(--ink-3); }
+.entry:focus-visible { outline: none; background: var(--raise); box-shadow: inset -2px 0 0 var(--ink); }
 .entry::before {
   content: "";
   position: absolute;
@@ -218,6 +226,18 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
 .entry-state .sep { color: var(--rule); }
 
 .entry-right { display: flex; align-items: center; gap: 1.5rem; }
+
+/*
+  How the outstanding work splits by rank, as a stack of short bars.
+  "3 to fix" does not say whether that is three trivia or one serious
+  problem and two notes, and those need different amounts of somebody's
+  afternoon.
+*/
+.split { display: flex; gap: 2px; align-items: center; }
+.split-mark { width: 3px; height: 12px; border-radius: 1px; }
+.split-urgent, .split-high { background: var(--alarm); }
+.split-medium { background: var(--caution); }
+.split-low { background: var(--ink-3); }
 
 /* --- history strip ----------------------------------------------------- */
 
@@ -571,6 +591,127 @@ code {
 }
 .appendix li { margin: .3rem 0; break-inside: avoid; }
 .appendix li::before { content: "— "; color: var(--rule); }
+
+/* --- command palette --------------------------------------------------- */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 1.25rem 1.25rem;
+  z-index: 100;
+  animation: fade .1s ease-out;
+}
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+.palette {
+  width: 100%;
+  max-width: 34rem;
+  background: var(--raise);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+  overflow: hidden;
+  animation: rise .12s ease-out;
+}
+@keyframes rise { from { transform: translateY(-6px); opacity: .6 } to { transform: none; opacity: 1 } }
+
+.palette-input {
+  width: 100%;
+  padding: 1rem 1.1rem;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 1rem;
+}
+.palette-input:focus { outline: none; border-bottom-color: var(--rule); }
+
+.palette-results { max-height: 48vh; overflow-y: auto; padding: .4rem 0; }
+
+.palette-group {
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: .7rem 1.1rem .3rem;
+}
+
+.palette-item {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  padding: .5rem 1.1rem;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.palette-item-on { background: var(--bg); border-left-color: var(--ink); }
+.palette-label { font-size: .93rem; }
+.palette-detail { font-size: .82rem; color: var(--ink-3); margin-left: auto; }
+.palette-empty { padding: 1.1rem; margin: 0; color: var(--ink-3); font-size: .9rem; }
+
+.palette-foot {
+  display: flex;
+  gap: 1.25rem;
+  padding: .6rem 1.1rem;
+  border-top: 1px solid var(--rule);
+  font-size: .72rem;
+  color: var(--ink-3);
+}
+.palette-hint { display: flex; align-items: center; gap: .4rem; }
+
+kbd {
+  font-family: var(--mono);
+  font-size: .68rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: .1rem .35rem;
+  color: var(--ink-2);
+  background: var(--sink);
+}
+
+/* The one affordance that tells a first-time reader the keyboard exists. */
+.kbd-hint {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: .75rem;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.kbd-hint:hover { color: var(--ink-2); }
+
+/* --- loading ------------------------------------------------------------ */
+
+/*
+  A shape rather than the word "loading". The rows are the size the real
+  rows will be, so the page does not jump when they arrive.
+*/
+.skeleton { list-style: none; margin: 0; padding: 0; }
+.skeleton li {
+  height: 1rem;
+  margin: 1.9rem 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--rule-soft) 0%, var(--rule) 50%, var(--rule-soft) 100%);
+  background-size: 200% 100%;
+  animation: sweep 1.4s ease-in-out infinite;
+}
+.skeleton li:nth-child(1) { width: 42%; }
+.skeleton li:nth-child(2) { width: 58%; }
+.skeleton li:nth-child(3) { width: 35%; }
+@keyframes sweep { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton li, .palette, .palette-overlay { animation: none; }
+}
 
 @media (max-width: 46rem) {
   main { padding: 2.25rem 1.25rem 5rem; }
