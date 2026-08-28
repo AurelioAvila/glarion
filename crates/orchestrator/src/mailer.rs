@@ -169,6 +169,77 @@ pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> St
     )
 }
 
+/// One line of the free emailed report.
+pub struct ReportLine {
+    pub label: String,
+    pub value: String,
+    /// Something the owner would want to change, rather than a description.
+    pub is_finding: bool,
+}
+
+/// The free report, sent to whoever asked for it.
+///
+/// This is the first thing most people will ever see from us, and it has
+/// two jobs that pull against each other: be genuinely useful on its own,
+/// and be honest that it is not the whole picture. It does the second by
+/// naming what it did *not* look at rather than by hedging what it did —
+/// a report that qualifies every line reads as though it is unsure, while
+/// one that states its scope reads as though it knows where its edges are.
+pub fn preview_report_email(domain: &str, lines: &[ReportLine], upgrade_link: &str) -> String {
+    let safe_domain = escape(domain);
+    let safe_link = escape(upgrade_link);
+
+    let findings = lines.iter().filter(|line| line.is_finding).count();
+    let headline = match findings {
+        0 => "Nothing obvious from the outside".to_string(),
+        1 => "1 thing worth fixing".to_string(),
+        n => format!("{n} things worth fixing"),
+    };
+
+    let mut rows = String::new();
+    for line in lines {
+        let colour = if line.is_finding {
+            "#c2412d"
+        } else {
+            "#16191d"
+        };
+        let weight = if line.is_finding { "600" } else { "400" };
+        rows.push_str(&format!(
+            r#"<tr>
+<td style="padding:7px 16px 7px 0;color:#5c6470;font-size:13px;white-space:nowrap;vertical-align:top">{}</td>
+<td style="padding:7px 0;color:{colour};font-weight:{weight};font-size:14px">{}</td>
+</tr>"#,
+            escape(&line.label),
+            escape(&line.value),
+        ));
+    }
+
+    format!(
+        r#"<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#16191d;max-width:560px">
+<p style="font-size:19px;font-weight:600;margin:0 0 2px">{headline}</p>
+<p style="color:#5c6470;margin:0 0 22px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px">{safe_domain}</p>
+
+<table style="border-collapse:collapse;width:100%;margin-bottom:26px">{rows}</table>
+
+<p style="margin:0 0 6px"><strong>What this did not look at</strong></p>
+<p style="color:#5c6470;font-size:14px;margin:0 0 22px">
+This read only what {safe_domain} publishes to any visitor: its headers, its
+certificate, its DNS, and the files it offers to automated readers. It did not
+examine the application itself — outdated components with known vulnerabilities,
+exposed administrative paths, or misconfigured storage — because that requires
+the domain's owner to confirm the request first.
+</p>
+
+<p><a href="{safe_link}" style="display:inline-block;background:#16191d;color:#ffffff;padding:11px 20px;border-radius:4px;text-decoration:none;font-weight:600">Run the full check</a></p>
+
+<p style="color:#8b9199;font-size:12px;margin-top:26px">
+You received this because this report was requested from your address. We do not
+add you to anything by sending it.
+</p>
+</div>"#
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +313,76 @@ mod tests {
         );
 
         assert!(body.to_lowercase().contains("turn it off"));
+    }
+
+    /// Collapses the whitespace in a rendered body.
+    ///
+    /// The template wraps its prose across source lines, so asserting on a
+    /// sentence would otherwise be asserting on where the author happened
+    /// to press return. What matters is that the sentence is there.
+    fn flat(html: &str) -> String {
+        html.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn line(label: &str, value: &str, is_finding: bool) -> ReportLine {
+        ReportLine {
+            label: label.to_string(),
+            value: value.to_string(),
+            is_finding,
+        }
+    }
+
+    #[test]
+    fn the_report_counts_only_what_is_wrong() {
+        let lines = vec![
+            line("Server", "cloudflare", false),
+            line("Content-Security-Policy", "Not set", true),
+            line("HSTS", "180 days", true),
+        ];
+
+        let body = preview_report_email("example.com", &lines, "https://glarion.app");
+
+        assert!(flat(&body).contains("2 things worth fixing"));
+    }
+
+    #[test]
+    fn a_clean_report_does_not_claim_the_site_is_clean() {
+        // The most dangerous message this system could send is "nothing
+        // found" read as "nothing there".
+        let lines = vec![line("Server", "nginx", false)];
+        let body = preview_report_email("example.com", &lines, "https://glarion.app");
+
+        assert!(flat(&body).contains("Nothing obvious from the outside"));
+        assert!(flat(&body).contains("did not look at"));
+    }
+
+    #[test]
+    fn the_report_names_its_own_limits() {
+        let body = preview_report_email("example.com", &[], "https://glarion.app");
+
+        // Stating the scope, rather than hedging every line.
+        assert!(flat(&body).contains("did not examine the application itself"));
+        assert!(flat(&body).to_lowercase().contains("confirm the request"));
+    }
+
+    #[test]
+    fn a_report_cannot_be_injected_through_the_domain_or_a_value() {
+        // The domain is typed by a stranger, and the values are read off
+        // somebody else's server.
+        let lines = vec![line("<b>label</b>", "<script>alert(1)</script>", true)];
+        let body = preview_report_email("<script>alert(2)</script>", &lines, "https://glarion.app");
+
+        assert!(!body.contains("<script>alert(1)</script>"));
+        assert!(!body.contains("<script>alert(2)</script>"));
+        assert!(!body.contains("<b>label</b>"));
+    }
+
+    #[test]
+    fn the_report_says_it_did_not_subscribe_anyone() {
+        // Sending a report is not consent to market to somebody.
+        let body = preview_report_email("example.com", &[], "https://glarion.app");
+
+        assert!(flat(&body).contains("do not add you to anything"));
     }
 
     #[test]
