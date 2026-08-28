@@ -7,12 +7,13 @@
 # its configuration — so no superuser password is needed and there is no way
 # to damage an existing database.
 #
-#   bash scripts/dev-db.sh start    # create (first run) and start
+#   bash scripts/dev-db.sh start     # create (first run) and start
 #   bash scripts/dev-db.sh stop
 #   bash scripts/dev-db.sh status
-#   bash scripts/dev-db.sh url      # print TEST_DATABASE_URL
-#   bash scripts/dev-db.sh test     # start, then run the full test suite
-#   bash scripts/dev-db.sh destroy  # delete the cluster entirely
+#   bash scripts/dev-db.sh url       # connection URL for the test database
+#   bash scripts/dev-db.sh url dev   # connection URL for the app's database
+#   bash scripts/dev-db.sh test      # start, then run the full test suite
+#   bash scripts/dev-db.sh destroy   # delete the cluster entirely
 #
 # The generated password lives in $CLUSTER_DIR/../password, outside the repo.
 
@@ -23,7 +24,16 @@ BASE_DIR="${GLARION_DB_HOME:-$HOME/.glarion-devdb}"
 CLUSTER_DIR="$BASE_DIR/data"
 PASSWORD_FILE="$BASE_DIR/password"
 LOG_FILE="$BASE_DIR/postgres.log"
-DB_NAME="glarion_test"
+
+# Two databases on the one cluster, deliberately.
+#
+# The integration tests TRUNCATE every table. Pointing the running app at
+# the same database means a test run silently destroys whatever you were
+# working on — accounts, targets, scan history — and the symptom arrives
+# much later as "my login stopped working". Keeping them apart costs one
+# extra CREATE DATABASE and removes the problem entirely.
+TEST_DB_NAME="glarion_test"
+DEV_DB_NAME="glarion_dev"
 DB_USER="glarion"
 
 find_pg_bin() {
@@ -111,7 +121,7 @@ start_cluster() {
 
     if is_running; then
         echo "==> Already running on port $PORT"
-        ensure_database
+        ensure_databases
         return 0
     fi
 
@@ -133,7 +143,7 @@ start_cluster() {
 
     # Poll until it accepts connections rather than sleeping a fixed amount.
     local attempt=0
-    until pg_isready -h 127.0.0.1 -p "$PORT" >/dev/null 2>&1; do
+    until is_running; do
         attempt=$((attempt + 1))
         if [ "$attempt" -gt 30 ]; then
             echo "error: server did not become ready; see $LOG_FILE" >&2
@@ -142,25 +152,27 @@ start_cluster() {
         sleep 1
     done
 
-    ensure_database
+    ensure_databases
 }
 
-ensure_database() {
-    local password
+ensure_databases() {
+    local password name
     password=$(cat "$PASSWORD_FILE")
 
-    if ! PGPASSWORD="$password" psql -h 127.0.0.1 -p "$PORT" -U "$DB_USER" \
-        -d postgres -tAc "select 1 from pg_database where datname = '$DB_NAME'" \
-        | grep -q 1; then
-        echo "==> Creating database $DB_NAME"
-        PGPASSWORD="$password" createdb -h 127.0.0.1 -p "$PORT" -U "$DB_USER" "$DB_NAME"
-    fi
+    for name in "$TEST_DB_NAME" "$DEV_DB_NAME"; do
+        if ! PGPASSWORD="$password" psql -h 127.0.0.1 -p "$PORT" -U "$DB_USER" \
+            -d postgres -tAc "select 1 from pg_database where datname = '$name'" \
+            | grep -q 1; then
+            echo "==> Creating database $name"
+            PGPASSWORD="$password" createdb -h 127.0.0.1 -p "$PORT" -U "$DB_USER" "$name"
+        fi
+    done
 }
 
 print_url() {
     local password
     password=$(cat "$PASSWORD_FILE")
-    echo "postgres://$DB_USER:$password@127.0.0.1:$PORT/$DB_NAME"
+    echo "postgres://$DB_USER:$password@127.0.0.1:$PORT/$1"
 }
 
 case "${1:-start}" in
@@ -186,7 +198,13 @@ case "${1:-start}" in
         ;;
 
     url)
-        print_url
+        # Defaults to the test database, which is what the test tooling
+        # asks for; `url dev` gives the one the running app should use.
+        if [ "${2:-test}" = "dev" ]; then
+            print_url "$DEV_DB_NAME"
+        else
+            print_url "$TEST_DB_NAME"
+        fi
         ;;
 
     test)
@@ -194,7 +212,8 @@ case "${1:-start}" in
         echo
         echo "==> Running the full test suite with integration tests active"
         # --test-threads=1: the integration tests truncate shared tables.
-        TEST_DATABASE_URL="$(print_url)" cargo test --workspace -- --test-threads=1
+        TEST_DATABASE_URL="$(print_url "$TEST_DB_NAME")" \
+            cargo test --workspace -- --test-threads=1
         ;;
 
     destroy)
@@ -207,7 +226,7 @@ case "${1:-start}" in
         ;;
 
     *)
-        echo "usage: bash scripts/dev-db.sh {start|stop|status|url|test|destroy}" >&2
+        echo "usage: bash scripts/dev-db.sh {start|stop|status|url [dev]|test|destroy}" >&2
         exit 1
         ;;
 esac

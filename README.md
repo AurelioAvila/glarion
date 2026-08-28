@@ -119,9 +119,15 @@ superuser credentials and cannot disturb an existing database.
 bash scripts/dev-db.sh start     # create and start
 bash scripts/dev-db.sh stop
 bash scripts/dev-db.sh status
-bash scripts/dev-db.sh url       # print the connection URL
+bash scripts/dev-db.sh url       # connection URL for the test database
+bash scripts/dev-db.sh url dev   # connection URL for the app's database
 bash scripts/dev-db.sh destroy   # delete it entirely
 ```
+
+The cluster holds two databases. `glarion_test` is what the integration
+tests use, and they TRUNCATE every table in it; `glarion_dev` is what the
+running app uses. Keeping them apart is why a test run no longer destroys
+the accounts and scan history you were working with.
 
 ## Status
 
