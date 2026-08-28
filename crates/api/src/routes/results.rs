@@ -10,6 +10,7 @@ use orchestrator::finding::{Finding, Severity};
 use report::html::{render_html, ReportMeta};
 use report::triage::{triage_scan, TriagedScan};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -31,9 +32,21 @@ pub struct ScanSummary {
     pub failure_reason: Option<String>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-    /// How many raw results were stored. Null-safe count, so a finished
-    /// scan that found nothing reports zero rather than nothing at all.
+    /// How many raw results the scanner stored. Kept because it is the
+    /// honest total, but it is not the number to show a customer — see
+    /// `actionable_count`.
     pub finding_count: i64,
+    /// How many of those are worth acting on, after triage.
+    ///
+    /// This is the number that belongs on a dashboard. The raw count on a
+    /// well-run site was 32 where 3 warranted action, and showing 32
+    /// contradicts the entire point of triaging: it tells an agency their
+    /// client has thirty-two problems when the answer is three.
+    ///
+    /// Not persisted, because triage runs on read — a rule improved
+    /// tomorrow should change this number for scans that already happened.
+    #[sqlx(default)]
+    pub actionable_count: i64,
 }
 
 /// Lists the caller's scans, most recent first.
@@ -45,7 +58,7 @@ pub async fn list_scans(
     user: AuthUser,
     Query(query): Query<ListScansQuery>,
 ) -> ApiResult<Json<Vec<ScanSummary>>> {
-    let scans: Vec<ScanSummary> = sqlx::query_as(
+    let mut scans: Vec<ScanSummary> = sqlx::query_as(
         "select j.id, j.target_id, t.domain, j.tool, j.status, j.failure_reason,
                 j.created_at, j.completed_at,
                 (select count(*) from scan_results r where r.scan_job_id = j.id) as finding_count
@@ -60,6 +73,8 @@ pub async fn list_scans(
     .bind(query.target_id)
     .fetch_all(&state.pool)
     .await?;
+
+    fill_actionable_counts(&state, &mut scans).await?;
 
     Ok(Json(scans))
 }
@@ -76,13 +91,65 @@ pub async fn get_scan(
     user: AuthUser,
     Path(scan_id): Path<Uuid>,
 ) -> ApiResult<Json<ScanDetail>> {
-    let summary = load_summary(&state, user.id, scan_id).await?;
+    let mut summary = load_summary(&state, user.id, scan_id).await?;
     let findings = load_findings(&state, scan_id).await?;
+    let triaged = triage_scan(&findings);
 
-    Ok(Json(ScanDetail {
-        summary,
-        triaged: triage_scan(&findings),
-    }))
+    summary.actionable_count = triaged.actionable.len() as i64;
+
+    Ok(Json(ScanDetail { summary, triaged }))
+}
+
+/// Fills in `actionable_count` for a batch of scans.
+///
+/// One query for all of them rather than one per scan: a list of a hundred
+/// scans would otherwise be a hundred round trips for a number shown in a
+/// summary row.
+async fn fill_actionable_counts(state: &AppState, scans: &mut [ScanSummary]) -> ApiResult<()> {
+    let ids: Vec<Uuid> = scans
+        .iter()
+        .filter(|scan| scan.status == "completed" && scan.finding_count > 0)
+        .map(|scan| scan.id)
+        .collect();
+
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        scan_job_id: Uuid,
+        severity: String,
+        title: String,
+        description: Option<String>,
+        raw_output: serde_json::Value,
+    }
+
+    let rows: Vec<Row> = sqlx::query_as(
+        "select scan_job_id, severity, title, description, raw_output
+         from scan_results where scan_job_id = any($1)",
+    )
+    .bind(&ids)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let mut by_scan: HashMap<Uuid, Vec<Finding>> = HashMap::new();
+    for row in rows {
+        by_scan.entry(row.scan_job_id).or_default().push(Finding {
+            severity: Severity::from_tool_label(&row.severity),
+            title: row.title,
+            description: row.description,
+            raw: row.raw_output,
+        });
+    }
+
+    for scan in scans.iter_mut() {
+        if let Some(findings) = by_scan.get(&scan.id) {
+            scan.actionable_count = triage_scan(findings).actionable.len() as i64;
+        }
+    }
+
+    Ok(())
 }
 
 /// Renders the report as a standalone HTML document.

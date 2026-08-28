@@ -52,7 +52,12 @@ export interface ScanSummary {
   failure_reason: string | null;
   created_at: string;
   completed_at: string | null;
+  /// Everything the scanner reported, including inventory.
   finding_count: number;
+  /// What survived triage. This is the number to show a reader; the raw
+  /// count tells an agency their client has thirty-two problems when the
+  /// answer is three.
+  actionable_count: number;
 }
 
 export type Disposition = "act" | "review" | "inventory";
