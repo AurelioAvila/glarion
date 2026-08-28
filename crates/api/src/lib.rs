@@ -33,6 +33,21 @@ pub async fn run() -> Result<()> {
 
     let state = AppState::new(pool, config.jwt_secret.clone());
 
+    // Said out loud at boot rather than left to be discovered by waiting
+    // for a message that will never arrive. Logging instead of sending is
+    // the right default for development, but it is a difference worth
+    // knowing about before someone signs up and stares at their inbox.
+    if state.mailer.is_configured() {
+        tracing::info!(
+            links_point_at = %state.mailer.public_url,
+            "email delivery is configured"
+        );
+    } else {
+        tracing::warn!(
+            "RESEND_API_KEY is unset — no email will be sent. Confirmation links are written to this log instead. Set RESEND_API_KEY, MAIL_FROM and PUBLIC_URL to deliver them."
+        );
+    }
+
     let origins: Vec<_> = config
         .allowed_origins()
         .iter()
