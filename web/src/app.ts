@@ -4,10 +4,21 @@
 // the portfolio. Views render into a single root element; each render
 // rebuilds its subtree rather than patching it, which is fast enough for a
 // handful of screens and removes a whole class of stale-DOM bugs.
+//
+// Two ideas run through the layouts, both from what this product is for.
+//
+// Colour is reserved for security state. The chrome is achromatic, so the
+// only coloured marks on a page are the ones that mean something is wrong,
+// needs a decision, or is fine. See the note at the top of index.html.
+//
+// Change is the subject, not inventory. An agency's job is noticing that a
+// site got worse, so the sites view leads with a written assessment and
+// carries a run of recent scans per site rather than a single current
+// number, which would hide exactly the thing worth seeing.
 
 import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type { ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
-import { append, byId, clear, copyableValue, detailRow, el, on } from "./dom.js";
+import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 
 const root = () => byId<HTMLElement>("view");
@@ -18,6 +29,9 @@ const root = () => byId<HTMLElement>("view");
 /// seconds would be thousands of pointless requests. Ten seconds keeps the
 /// page feeling live without that.
 const SCAN_POLL_MS = 10_000;
+
+/// How many past scans the history strip shows.
+const HISTORY_LENGTH = 8;
 
 let pollTimer: number | undefined;
 
@@ -30,8 +44,8 @@ function stopPolling(): void {
 
 // --- shared pieces ---------------------------------------------------------
 
-function banner(kind: "error" | "ok" | "info", message: string): HTMLElement {
-  return el("p", { class: `banner banner-${kind}`, role: "status", text: message });
+function notice(kind: "error" | "ok" | "info", message: string): HTMLElement {
+  return el("p", { class: `notice notice-${kind}`, role: "status", text: message });
 }
 
 /// Turns a thrown value into something worth showing.
@@ -62,6 +76,10 @@ function describeError(error: unknown): string {
   return "Something went wrong.";
 }
 
+function field(label: string, input: HTMLElement, hint?: HTMLElement | null): HTMLElement {
+  return el("label", {}, [el("span", { class: "label-text", text: label }), input, hint ?? null]);
+}
+
 function submitButton(label: string): HTMLButtonElement {
   return el("button", { class: "primary", type: "submit", text: label });
 }
@@ -84,6 +102,13 @@ async function withPending<T>(
   }
 }
 
+function sectionRule(title: string, count?: string): HTMLElement {
+  return el("div", { class: "section-rule" }, [
+    el("h2", { text: title }),
+    count ? el("span", { class: "count", text: count }) : null,
+  ]);
+}
+
 // --- sign in ---------------------------------------------------------------
 
 function renderSignIn(): void {
@@ -95,30 +120,24 @@ function renderSignIn(): void {
 
   const email = el("input", {
     type: "email",
-    name: "email",
     required: true,
     autocomplete: "email",
     value: saved ?? "",
   });
-  const password = el("input", {
-    type: "password",
-    name: "password",
-    required: true,
-    autocomplete: "current-password",
-  });
+  const password = el("input", { type: "password", required: true, autocomplete: "current-password" });
   const remember = el("input", { type: "checkbox", checked: saved !== null });
   const button = submitButton("Sign in");
 
-  const form = el("form", { class: "card auth-card" }, [
+  const form = el("form", { class: "auth" }, [
     el("h1", { text: "Sign in" }),
     message,
-    el("label", {}, ["Email", email]),
-    el("label", {}, ["Password", password]),
+    field("Email", email),
+    field("Password", password),
     el("label", { class: "checkbox" }, [remember, "Remember my email on this device"]),
     button,
     el("p", { class: "switch" }, [
       "No account yet? ",
-      el("a", { href: "#/signup", text: "Create one" }),
+      el("a", { class: "inline", href: "#/signup", text: "Create one" }),
     ]),
   ]);
 
@@ -126,7 +145,7 @@ function renderSignIn(): void {
     event.preventDefault();
     clear(message);
 
-    void withPending(button, "Signing in\u2026", async () => {
+    void withPending(button, "Signing in…", async () => {
       try {
         const result = await api.login(email.value, password.value);
         rememberedEmail.set(remember.checked ? email.value.trim() : null);
@@ -139,13 +158,12 @@ function renderSignIn(): void {
           message.replaceChildren(unconfirmedNotice(email.value));
           return;
         }
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
   container.append(form);
-  // Focus whichever field still needs filling in.
   (saved ? password : email).focus();
 }
 
@@ -155,18 +173,18 @@ function unconfirmedNotice(email: string): HTMLElement {
   const resend = el("button", { class: "linklike", type: "button", text: "Send it again" });
 
   on(resend, "click", () => {
-    void withPending(resend, "Sending\u2026", async () => {
+    void withPending(resend, "Sending…", async () => {
       try {
         const result = await api.resendVerification(email);
-        wrapper.replaceChildren(banner("ok", result.message));
+        wrapper.replaceChildren(notice("ok", result.message));
       } catch (error) {
-        wrapper.replaceChildren(banner("error", describeError(error)));
+        wrapper.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
   wrapper.append(
-    banner("info", "Confirm your email address before signing in. Check your inbox."),
+    notice("info", "Confirm your email address before signing in. Check your inbox."),
     resend,
   );
   return wrapper;
@@ -189,11 +207,7 @@ function renderSignUp(): void {
     autocomplete: "new-password",
     minlength: 12,
   });
-  const confirmation = el("input", {
-    type: "password",
-    required: true,
-    autocomplete: "new-password",
-  });
+  const confirmation = el("input", { type: "password", required: true, autocomplete: "new-password" });
   const button = submitButton("Create account");
 
   // Checked as the user types rather than only on submit, so a mismatch is
@@ -207,29 +221,25 @@ function renderSignUp(): void {
   on(password, "input", checkMatch);
   on(confirmation, "input", checkMatch);
 
-  const form = el("form", { class: "card auth-card" }, [
+  const form = el("form", { class: "auth" }, [
     el("h1", { text: "Create your account" }),
     message,
     el("div", { class: "field-pair" }, [
-      el("label", {}, ["First name", firstName]),
-      el("label", {}, ["Last name", lastName]),
+      field("First name", firstName),
+      field("Last name", lastName),
     ]),
-    el("label", {}, [
+    field(
       "Date of birth",
       dateOfBirth,
       el("span", { class: "hint", text: "You must be 18 or over to open an account." }),
-    ]),
-    el("label", {}, ["Email", email]),
-    el("label", {}, [
-      "Password",
-      password,
-      el("span", { class: "hint", text: "At least 12 characters." }),
-    ]),
-    el("label", {}, ["Repeat password", confirmation, mismatch]),
+    ),
+    field("Email", email),
+    field("Password", password, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("Repeat password", confirmation, mismatch),
     button,
     el("p", { class: "switch" }, [
       "Already have an account? ",
-      el("a", { href: "#/signin", text: "Sign in" }),
+      el("a", { class: "inline", href: "#/signin", text: "Sign in" }),
     ]),
   ]);
 
@@ -243,7 +253,7 @@ function renderSignUp(): void {
       return;
     }
 
-    void withPending(button, "Creating\u2026", async () => {
+    void withPending(button, "Creating…", async () => {
       try {
         const result = await api.signup({
           firstName: firstName.value,
@@ -255,7 +265,7 @@ function renderSignUp(): void {
         });
         renderCheckYourEmail(result.email);
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
@@ -278,18 +288,18 @@ function renderCheckYourEmail(email: string): void {
 
   on(resend, "click", () => {
     clear(message);
-    void withPending(resend, "Sending\u2026", async () => {
+    void withPending(resend, "Sending…", async () => {
       try {
         const result = await api.resendVerification(email);
-        message.replaceChildren(banner("ok", result.message));
+        message.replaceChildren(notice("ok", result.message));
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
   container.append(
-    el("div", { class: "card auth-card" }, [
+    el("div", { class: "auth" }, [
       el("h1", { text: "Confirm your email" }),
       el("p", {
         class: "blurb",
@@ -302,11 +312,10 @@ function renderCheckYourEmail(email: string): void {
       // Resending deliberately answers the same way whether or not the
       // address still needs confirming, so somebody who has already
       // followed the link — in another tab, or on their phone — is told
-      // "a new link is on its way" and has nowhere to go. Without this
-      // they are stranded on a screen that cannot change.
+      // "a new link is on its way" and has nowhere to go.
       el("p", { class: "switch" }, [
         "Already confirmed? ",
-        el("a", { href: "#/signin", text: "Sign in" }),
+        el("a", { class: "inline", href: "#/signin", text: "Sign in" }),
       ]),
     ]),
   );
@@ -316,7 +325,7 @@ function renderCheckYourEmail(email: string): void {
 async function renderVerify(token: string): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Confirming\u2026" }));
+  container.append(el("p", { class: "loading", text: "Confirming" }));
 
   try {
     const result = await api.verifyEmail(token);
@@ -327,12 +336,12 @@ async function renderVerify(token: string): Promise<void> {
   } catch (error) {
     clear(container);
     container.append(
-      el("div", { class: "card auth-card" }, [
+      el("div", { class: "auth" }, [
         el("h1", { text: "That link did not work" }),
-        banner("error", describeError(error)),
+        notice("error", describeError(error)),
         el("p", { class: "switch" }, [
           "You can ",
-          el("a", { href: "#/signin", text: "sign in" }),
+          el("a", { class: "inline", href: "#/signin", text: "sign in" }),
           " to request a new one.",
         ]),
       ]),
@@ -342,181 +351,244 @@ async function renderVerify(token: string): Promise<void> {
 
 // --- sites -----------------------------------------------------------------
 
-/// A site with the state a reader needs at a glance.
+/// The state a site is in, as one word.
 ///
-/// The API returns targets and scans separately, so the two are joined
-/// here. That keeps the list endpoint simple and costs one extra request
-/// on a page that is already fetching.
+/// Everything visual keys off this: the spine colour, the wording, the
+/// order rows appear in. Deriving it once means those three cannot drift
+/// apart and start telling the reader different things.
+type SiteState = "alarm" | "caution" | "clear" | "idle";
+
 interface SiteRow {
   target: Target;
-  latestScan: ScanSummary | undefined;
+  /// Newest first.
+  scans: ScanSummary[];
+  latest: ScanSummary | undefined;
+  state: SiteState;
 }
 
-function joinScans(targets: Target[], scans: ScanSummary[]): SiteRow[] {
-  return targets.map((target) => ({
-    target,
-    // Scans arrive newest first, so the first match is the latest.
-    latestScan: scans.find((scan) => scan.target_id === target.id),
-  }));
+function stateOf(target: Target, latest: ScanSummary | undefined): SiteState {
+  if (!target.verified) return "caution";
+  if (!latest) return "idle";
+  if (latest.status === "failed") return "caution";
+  if (latest.status !== "completed") return "idle";
+  return latest.actionable_count > 0 ? "alarm" : "clear";
+}
+
+function buildRows(targets: Target[], scans: ScanSummary[]): SiteRow[] {
+  const rows = targets.map((target) => {
+    const own = scans.filter((scan) => scan.target_id === target.id);
+    const latest = own[0];
+    return { target, scans: own, latest, state: stateOf(target, latest) };
+  });
+
+  // Worst first. A list sorted by name makes somebody read all of it to
+  // find the one thing that needs doing today.
+  const order: Record<SiteState, number> = { alarm: 0, caution: 1, idle: 2, clear: 3 };
+  return rows.sort(
+    (a, b) => order[a.state] - order[b.state] || a.target.domain.localeCompare(b.target.domain),
+  );
 }
 
 async function renderTargets(): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading\u2026" }));
+  container.append(el("p", { class: "loading", text: "Loading" }));
 
   let rows: SiteRow[];
   try {
     const [targets, scans] = await Promise.all([api.targets(), api.scans()]);
-    rows = joinScans(targets, scans);
+    rows = buildRows(targets, scans);
   } catch (error) {
     clear(container);
-    container.append(banner("error", describeError(error)));
+    container.append(notice("error", describeError(error)));
     return;
   }
 
   clear(container);
 
   if (rows.length === 0) {
-    container.append(onboarding());
+    container.append(firstRun());
     return;
   }
 
   const addPanel = addTargetForm();
   addPanel.hidden = true;
 
-  const addButton = el("button", { class: "primary", type: "button", text: "Add site" });
+  const addButton = el("button", { class: "ghost", type: "button", text: "Add a site" });
   on(addButton, "click", () => {
     addPanel.hidden = !addPanel.hidden;
     if (!addPanel.hidden) addPanel.querySelector("input")?.focus();
   });
 
   container.append(
-    el("div", { class: "page-head" }, [
-      el("div", {}, [
-        el("h1", { text: "Sites" }),
-        el("p", {
-          class: "lede",
-          text: "The sites you look after, and what each one needs.",
-        }),
-      ]),
-      addButton,
-    ]),
+    standingStatement(rows),
+    el("div", { class: "head-row" }, [el("div"), addButton]),
     addPanel,
-    summaryTiles(rows),
+    sectionRule("Sites", countOf(rows.length, "site")),
   );
 
-  const list = el("ul", { class: "site-list" });
+  const ledger = el("ul", { class: "ledger" });
   for (const row of rows) {
-    list.append(siteCard(row));
+    ledger.append(siteEntry(row));
   }
-  container.append(list);
+  container.append(ledger);
 }
 
-/// The three numbers worth reading before anything else.
+/// The assessment, written out.
 ///
-/// An agency with twenty clients does not want to scan the list looking
-/// for red; it wants to know immediately whether today needs attention.
-function summaryTiles(rows: SiteRow[]): HTMLElement {
-  const needingAttention = rows.filter(
-    (row) => row.latestScan?.status === "completed" && row.latestScan.actionable_count > 0,
-  ).length;
-  const awaitingSetup = rows.filter((row) => !row.target.verified).length;
+/// Three numbers in boxes leave the reader to work out what they add up
+/// to. A sentence has already done that, and the coloured words keep it
+/// scannable — the shape of the line tells you the answer before you have
+/// read it.
+function standingStatement(rows: SiteRow[]): HTMLElement {
+  const alarm = rows.filter((row) => row.state === "alarm").length;
+  const caution = rows.filter((row) => row.state === "caution").length;
+  const idle = rows.filter((row) => row.state === "idle").length;
 
-  const tile = (value: number, label: string, variant?: string): HTMLElement =>
-    el("div", { class: variant ? `tile ${variant}` : "tile" }, [
-      el("div", { class: "tile-value", text: String(value) }),
-      el("div", { class: "tile-label", text: label }),
-    ]);
+  const line = el("p", { class: "standing" });
 
-  return el("div", { class: "tiles" }, [
-    tile(rows.length, rows.length === 1 ? "Site" : "Sites"),
-    tile(needingAttention, "Need attention", "tile-attention"),
-    tile(awaitingSetup, "Awaiting setup", "tile-setup"),
+  if (alarm > 0) {
+    line.append(
+      el("span", { class: "alarm", text: countOf(alarm, "site") }),
+      ` ${alarm === 1 ? "needs" : "need"} work`,
+    );
+    if (caution > 0) {
+      line.append(", ", el("span", { class: "caution", text: String(caution) }), " awaiting setup");
+    }
+    line.append(".");
+  } else if (caution > 0) {
+    line.append(
+      "Nothing to fix. ",
+      el("span", { class: "caution", text: countOf(caution, "site") }),
+      ` still ${caution === 1 ? "needs" : "need"} setting up.`,
+    );
+  } else if (idle > 0 && idle === rows.length) {
+    line.append("Everything is set up. ", el("strong", { text: "Run your first scan." }));
+  } else {
+    line.append(el("span", { class: "clear", text: "Everything is clear" }), " across your sites.");
+  }
+
+  const newest = rows
+    .map((row) => row.latest)
+    .filter((scan): scan is ScanSummary => scan !== undefined)
+    .map((scan) => scan.completed_at ?? scan.created_at)
+    .sort()
+    .pop();
+
+  return el("div", {}, [
+    line,
+    el("p", {
+      class: "standing-meta",
+      text: newest ? `Last checked ${relativeTime(newest)}` : "No scans yet",
+    }),
   ]);
 }
 
-function siteCard(row: SiteRow): HTMLElement {
-  const { target, latestScan } = row;
+function siteEntry(row: SiteRow): HTMLElement {
+  const { target, latest, state } = row;
 
-  const status = target.verified
-    ? el("span", { class: "chip chip-ok", text: "Verified" })
-    : el("span", { class: "chip chip-pending", text: "Not verified" });
-
-  // The footer answers "what should I do about this site" without a click.
-  const footer = el("div", { class: "site-card-foot" });
+  const detail = el("div", { class: "entry-state" });
 
   if (!target.verified) {
-    footer.append(el("span", { text: "Prove you control the domain to start scanning" }));
-  } else if (!latestScan) {
-    footer.append(el("span", { text: "Ready to scan" }));
-  } else if (latestScan.status === "running" || latestScan.status === "queued") {
-    footer.append(el("span", { text: "Scan in progress\u2026" }));
-  } else if (latestScan.status === "failed") {
-    footer.append(el("span", { text: "Last scan did not finish" }));
+    detail.append(el("span", { class: "headline", text: "Awaiting domain check" }));
+  } else if (!latest) {
+    detail.append(el("span", { text: "Ready to scan" }));
+  } else if (latest.status === "queued" || latest.status === "running") {
+    detail.append(el("span", { text: "Scan running" }));
+  } else if (latest.status === "failed") {
+    detail.append(el("span", { class: "headline", text: "Last scan did not finish" }));
   } else {
-    const needsAction = latestScan.actionable_count;
-    footer.append(
-      needsAction > 0
-        ? el("span", {
-            class: "site-finding-count",
-            text: `${needsAction} to fix`,
-          })
-        : el("span", { class: "site-clean", text: "Nothing to fix" }),
-      el("span", { class: "dot", text: "\u00b7" }),
-      el("span", { text: `scanned ${relativeTime(latestScan.completed_at ?? latestScan.created_at)}` }),
+    detail.append(
+      latest.actionable_count > 0
+        ? el("span", { class: "headline", text: `${latest.actionable_count} to fix` })
+        : el("span", { class: "headline", text: "Clear" }),
+      el("span", { class: "sep", text: "/" }),
+      el("span", { text: relativeTime(latest.completed_at ?? latest.created_at) }),
     );
   }
 
   return el("li", {}, [
-    el("a", { class: "site-card", href: `#/targets/${target.id}` }, [
-      el("div", { class: "site-card-top" }, [
-        el("div", {}, [
-          el("div", { class: "site-domain", text: target.domain }),
-          target.client_name
-            ? el("div", { class: "site-client", text: target.client_name })
-            : null,
-        ]),
-        status,
+    el("a", { class: `entry entry-${state}`, href: `#/targets/${target.id}` }, [
+      el("div", {}, [
+        el("div", { class: "entry-name", text: target.domain }),
+        target.client_name ? el("div", { class: "entry-client", text: target.client_name }) : null,
+        detail,
       ]),
-      footer,
+      el("div", { class: "entry-right" }, [historyStrip(row), el("span", { class: "entry-go", text: "→" })]),
     ]),
   ]);
 }
 
+/// The last few scans, oldest on the left.
+///
+/// This is the thing a single number cannot say. A site that went from
+/// clear to three issues is a different situation from one that has had
+/// three all along, and only the shape of a run shows which is which.
+function historyStrip(row: SiteRow): HTMLElement {
+  const completed = row.scans
+    .filter((scan) => scan.status === "completed")
+    .slice(0, HISTORY_LENGTH)
+    .reverse();
+
+  if (completed.length === 0) {
+    return el("span", { class: "history-empty", text: "no history" });
+  }
+
+  const strip = el("div", {
+    class: "history",
+    role: "img",
+    // The bars are decoration to a screen reader without this; the state
+    // is already in the text beside them, so one summary is enough.
+    "aria-label": `Last ${countOf(completed.length, "scan")}`,
+  });
+
+  const worst = Math.max(1, ...completed.map((scan) => scan.actionable_count));
+
+  for (const scan of completed) {
+    // A clear result still gets a visible mark: a gap would read as
+    // missing data rather than as good news.
+    const share = scan.actionable_count / worst;
+    const height = scan.actionable_count === 0 ? 4 : 8 + Math.round(share * 18);
+
+    strip.append(
+      el("span", {
+        class: "history-bar",
+        style: `height:${height}px`,
+        title: `${scan.actionable_count === 0 ? "Clear" : `${scan.actionable_count} to fix`} — ${relativeTime(scan.completed_at ?? scan.created_at)}`,
+      }),
+    );
+  }
+
+  return strip;
+}
+
 /// What a new customer sees first.
 ///
-/// The old version of this screen was one line of grey text. That is a poor
-/// use of the only moment when someone is guaranteed to be reading: this is
-/// where the product explains what it does, and — more usefully — warns
-/// that step two involves their DNS, which is the part that surprises
-/// people and the reason they abandon setup halfway.
-function onboarding(): HTMLElement {
+/// Written as a procedure rather than as three tiles, because that is what
+/// it is. It also says plainly that step two involves their DNS — the part
+/// nobody expects, and the reason setup gets abandoned halfway.
+function firstRun(): HTMLElement {
   const step = (n: string, title: string, body: string): HTMLElement =>
-    el("div", { class: "step-card" }, [
-      el("span", { class: "step-number", text: n }),
-      el("h3", { text: title }),
-      el("p", { text: body }),
-    ]);
+    el("li", { "data-step": n }, [el("h3", { text: title }), el("p", { text: body })]);
 
-  return el("section", { class: "card onboard" }, [
-    el("h2", { text: "Add your first site" }),
+  return el("div", {}, [
+    el("h1", { text: "Add your first site" }),
     el("p", {
       class: "blurb",
       text:
-        "Glarion checks a website for security problems and turns the result " +
-        "into a short report you can hand straight to your client.",
+        "Glarion checks a website for security problems and turns the result into " +
+        "a short report you can hand straight to your client.",
     }),
-    el("div", { class: "steps" }, [
-      step("1", "Add the site", "The domain, and which client it belongs to."),
+    el("ol", { class: "procedure" }, [
+      step("1", "Add the site", "Its domain, and which client it belongs to."),
       step(
         "2",
-        "Prove it is yours",
-        "A one-time DNS record, so we only ever scan sites whose owner asked us to.",
+        "Prove the domain is yours",
+        "A one-time DNS record. We only ever scan sites whose owner asked us to.",
       ),
-      step("3", "Scan and send", "Run a scan, then download the report under your own name."),
+      step("3", "Scan, then send", "Run a scan and download the report under your own name."),
     ]),
-    addTargetForm(),
+    el("div", { style: "margin-top:2.5rem" }, [addTargetForm()]),
   ]);
 }
 
@@ -530,24 +602,28 @@ function addTargetForm(): HTMLElement {
     autocorrect: "off",
     spellcheck: false,
   });
-  const client = el("input", { type: "text", placeholder: "Client name (optional)" });
-  const button = submitButton("Add site");
+  const client = el("input", { type: "text", placeholder: "Optional" });
+  const button = submitButton("Add");
 
-  const form = el("form", { class: "card inline-form" }, [
+  const form = el("form", {}, [
     message,
-    el("div", { class: "field-row" }, [domain, client, button]),
+    el("div", { class: "field-row" }, [
+      field("Domain", domain),
+      field("Client", client),
+      el("div", {}, [button]),
+    ]),
   ]);
 
   on(form, "submit", (event) => {
     event.preventDefault();
     clear(message);
 
-    void withPending(button, "Adding\u2026", async () => {
+    void withPending(button, "Adding…", async () => {
       try {
         const target = await api.addTarget(domain.value, client.value || null);
         window.location.hash = `#/targets/${target.id}`;
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
@@ -555,12 +631,12 @@ function addTargetForm(): HTMLElement {
   return form;
 }
 
-// --- one site: verification and scans --------------------------------------
+// --- one site --------------------------------------------------------------
 
 async function renderTarget(targetId: string): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading…" }));
+  container.append(el("p", { class: "loading", text: "Loading" }));
 
   let target: Target | undefined;
   let scans: ScanSummary[] = [];
@@ -570,91 +646,86 @@ async function renderTarget(targetId: string): Promise<void> {
     scans = scanList;
   } catch (error) {
     clear(container);
-    container.append(banner("error", describeError(error)));
+    container.append(notice("error", describeError(error)));
     return;
   }
 
   if (!target) {
     clear(container);
-    container.append(banner("error", "That site could not be found."));
+    container.append(notice("error", "That site could not be found."));
     return;
   }
 
   clear(container);
-  append(
-    container,
-    el("p", { class: "breadcrumb" }, [
-      el("a", { href: "#/targets", text: "\u2190 All sites" }),
-    ]),
-    el("div", { class: "page-head" }, [
+  container.append(el("a", { class: "back", href: "#/targets", text: "← Sites" }));
+
+  const site = target;
+  container.append(
+    el("div", { class: "head-row" }, [
       el("div", {}, [
-        el("h1", { text: target.domain }),
-        target.client_name ? el("p", { class: "subtitle", text: target.client_name }) : null,
+        el("h1", { class: "mono", text: site.domain }),
+        site.client_name ? el("p", { class: "lede", text: site.client_name }) : null,
       ]),
-      target.verified
-        ? el("span", { class: "chip chip-ok", text: "Verified" })
-        : el("span", { class: "chip chip-pending", text: "Not verified" }),
     ]),
   );
 
-  if (target.verified) {
-    append(container, verifiedPanel(target), scansPanel(target, scans));
+  if (site.verified) {
+    append(container, expiryNote(site), scansSection(site, scans));
   } else {
     // Deliberately the only thing on the page. Until ownership is proved
     // nothing else can happen, and offering a scan button that always
-    // fails would just be a way to waste the user's time.
-    container.append(verificationPanel(target));
+    // fails would just waste the reader's time.
+    container.append(verificationSection(site));
   }
 }
 
-/// A one-line reminder that ownership proof expires.
-///
-/// Returns nothing when there is no expiry to report, rather than an empty
-/// panel: a card containing a single blank row is worse than no card.
-function verifiedPanel(target: Target): HTMLElement | null {
+function expiryNote(target: Target): HTMLElement | null {
   if (!target.verification_expires_at) return null;
 
-  return el("p", { class: "muted", style: "margin: -0.5rem 0 1.15rem" }, [
-    `Ownership confirmed. Needs re-checking by ${shortDate(target.verification_expires_at)}.`,
-  ]);
+  return el("p", {
+    class: "mono-note",
+    style: "margin: -0.75rem 0 2.25rem",
+    text: `Domain confirmed · recheck by ${shortDate(target.verification_expires_at)}`,
+  });
 }
 
 /// The screen that decides whether anyone ever sees a report.
 ///
-/// It asks the user to leave the product, sign in to a DNS provider, and
-/// paste an exact string. Everything here exists to reduce the chance that
-/// they get it wrong or give up: the record is split into its two parts,
-/// both copyable; the wait for propagation is stated before it happens
-/// rather than after it looks broken; and there is a second method for
-/// people who cannot reach their DNS.
-function verificationPanel(target: Target): HTMLElement {
+/// It asks the reader to leave the product, sign in to a DNS provider, and
+/// paste an exact string, so it is laid out as a procedure. The record is
+/// split into its two parts with a copy control on each, since retyping a
+/// random token is the likeliest way for the step to fail, and the wait for
+/// propagation is stated before it happens rather than after the check
+/// looks broken.
+function verificationSection(target: Target): HTMLElement {
   const body = el("div");
-  const panel = el("section", { class: "card" }, [
-    el("h2", { text: "Prove you control this domain" }),
+  const section = el("div", {}, [
+    sectionRule("Domain check"),
     el("p", {
       class: "blurb",
+      style: "margin-top:1.25rem",
       text:
         "We only scan sites whose owner has asked us to. Publish the record below " +
-        "and we will confirm it — this is a one-time step, valid for 30 days.",
+        "and we will confirm it. One time, valid for 30 days.",
     }),
     body,
   ]);
 
-  const startButton = el("button", { class: "primary", type: "button", text: "Show me the record" });
-  body.append(startButton);
+  const start = el("button", { class: "primary", type: "button", text: "Show me the record" });
+  body.append(start);
 
-  on(startButton, "click", () => {
-    void withPending(startButton, "Preparing…", async () => {
+  on(start, "click", () => {
+    void withPending(start, "Preparing…", async () => {
       try {
         const instructions = await api.startVerification(target.id);
         body.replaceChildren(verificationInstructions(target, instructions));
       } catch (error) {
-        body.replaceChildren(banner("error", describeError(error)), startButton);
+        body.replaceChildren(notice("error", describeError(error)), start);
       }
     });
   });
 
-  return panel;
+  return section;
 }
 
 function verificationInstructions(
@@ -667,33 +738,38 @@ function verificationInstructions(
   },
 ): HTMLElement {
   const message = el("div");
-  const checkButton = el("button", {
-    class: "primary",
-    type: "button",
-    text: "I've added it — check now",
-  });
+  const check = el("button", { class: "primary", type: "button", text: "Check now" });
 
   let method: "dns_txt" | "well_known_file" = "dns_txt";
 
   const dnsPane = el("div", { class: "method-pane" }, [
-    el("p", { class: "step", text: "Add this TXT record at your DNS provider:" }),
-    detailRow("Name", copyableValue(instructions.dns_record_name, "record name")),
-    detailRow("Value", copyableValue(instructions.dns_record_value, "record value")),
+    el("dl", { class: "kv" }, [
+      el("dt", { text: "Type" }),
+      el("dd", { text: "TXT" }),
+      el("dt", { text: "Name" }),
+      el("dd", {}, [copyableValue(instructions.dns_record_name, "record name")]),
+      el("dt", { text: "Value" }),
+      el("dd", {}, [copyableValue(instructions.dns_record_value, "record value")]),
+    ]),
     el("p", {
       class: "hint",
+      style: "margin-top:1.1rem",
       text:
-        "DNS changes usually appear within a few minutes, but some providers " +
-        "take up to an hour. If the check does not find it yet, wait and try again.",
+        "DNS usually updates within a few minutes, though some providers take up " +
+        "to an hour. If the check does not find it yet, wait and try again.",
     }),
   ]);
 
-  const fileP = el("p", { class: "step", text: "Upload a file to this exact address:" });
   const filePane = el("div", { class: "method-pane", hidden: true }, [
-    fileP,
-    detailRow("Address", copyableValue(instructions.well_known_url, "file address")),
-    detailRow("Contents", copyableValue(instructions.well_known_content, "file contents")),
+    el("dl", { class: "kv" }, [
+      el("dt", { text: "Address" }),
+      el("dd", {}, [copyableValue(instructions.well_known_url, "file address")]),
+      el("dt", { text: "Contents" }),
+      el("dd", {}, [copyableValue(instructions.well_known_content, "file contents")]),
+    ]),
     el("p", {
       class: "hint",
+      style: "margin-top:1.1rem",
       text: "The file must be reachable over HTTPS and contain only that value.",
     }),
   ]);
@@ -701,7 +777,7 @@ function verificationInstructions(
   const dnsTab = el("button", { class: "tab tab-active", type: "button", text: "DNS record" });
   const fileTab = el("button", { class: "tab", type: "button", text: "File upload" });
 
-  function selectMethod(next: "dns_txt" | "well_known_file"): void {
+  function select(next: "dns_txt" | "well_known_file"): void {
     method = next;
     const isDns = next === "dns_txt";
     dnsPane.hidden = !isDns;
@@ -711,42 +787,44 @@ function verificationInstructions(
     clear(message);
   }
 
-  on(dnsTab, "click", () => selectMethod("dns_txt"));
-  on(fileTab, "click", () => selectMethod("well_known_file"));
+  on(dnsTab, "click", () => select("dns_txt"));
+  on(fileTab, "click", () => select("well_known_file"));
 
-  on(checkButton, "click", () => {
+  on(check, "click", () => {
     clear(message);
-    void withPending(checkButton, "Checking…", async () => {
+    void withPending(check, "Checking…", async () => {
       try {
         const result = await api.checkVerification(target.id, method);
         if (result.verified) {
-          message.replaceChildren(banner("ok", "Verified. Loading…"));
+          message.replaceChildren(notice("ok", "Confirmed."));
           window.setTimeout(() => void renderTarget(target.id), 700);
         } else {
-          message.replaceChildren(banner("info", result.detail));
+          message.replaceChildren(notice("info", result.detail));
         }
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
-  return el("div", {}, [
+  return el("div", { style: "margin-top:1.75rem" }, [
     el("div", { class: "tabs" }, [dnsTab, fileTab]),
     dnsPane,
     filePane,
-    message,
-    checkButton,
+    el("div", { style: "margin-top:1.75rem" }, [message, check]),
   ]);
 }
 
-function scansPanel(target: Target, scans: ScanSummary[]): HTMLElement {
+function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
   const message = el("div");
-  const list = el("div", { class: "scan-list" });
-  const startButton = el("button", { class: "primary", type: "button", text: "Run a scan" });
+  const list = el("ul", { class: "ledger" });
+  const start = el("button", { class: "primary", type: "button", text: "Run a scan" });
 
-  const panel = el("section", { class: "card" }, [
-    el("div", { class: "panel-head" }, [el("h2", { text: "Scans" }), startButton]),
+  const section = el("div", {}, [
+    el("div", { class: "head-row", style: "margin-bottom:1.25rem" }, [
+      el("div", {}, [sectionRule("Scans")]),
+      start,
+    ]),
     message,
     list,
   ]);
@@ -754,11 +832,11 @@ function scansPanel(target: Target, scans: ScanSummary[]): HTMLElement {
   function paint(current: ScanSummary[]): void {
     clear(list);
     if (current.length === 0) {
-      list.append(el("p", { class: "empty", text: "No scans yet." }));
+      list.append(el("p", { class: "muted", text: "No scans yet." }));
       return;
     }
     for (const scan of current) {
-      list.append(scanRow(scan));
+      list.append(scanEntry(scan));
     }
   }
 
@@ -766,19 +844,19 @@ function scansPanel(target: Target, scans: ScanSummary[]): HTMLElement {
 
   // Poll only while something is unfinished, and stop as soon as everything
   // has settled so an idle tab is not making requests forever.
-  const hasPending = (list_: ScanSummary[]) =>
+  const pending = (list_: ScanSummary[]) =>
     list_.some((scan) => scan.status === "queued" || scan.status === "running");
 
-  function schedulePolling(current: ScanSummary[]): void {
+  function schedule(current: ScanSummary[]): void {
     stopPolling();
-    if (!hasPending(current)) return;
+    if (!pending(current)) return;
 
     pollTimer = window.setInterval(() => {
       void api
         .scans(target.id)
         .then((updated) => {
           paint(updated);
-          if (!hasPending(updated)) stopPolling();
+          if (!pending(updated)) stopPolling();
         })
         .catch(() => {
           // A transient failure should not kill the page; the next tick
@@ -787,60 +865,73 @@ function scansPanel(target: Target, scans: ScanSummary[]): HTMLElement {
     }, SCAN_POLL_MS);
   }
 
-  schedulePolling(scans);
+  schedule(scans);
 
-  on(startButton, "click", () => {
+  on(start, "click", () => {
     clear(message);
-    void withPending(startButton, "Starting…", async () => {
+    void withPending(start, "Starting…", async () => {
       try {
         await api.startScan(target.id);
         const updated = await api.scans(target.id);
         paint(updated);
-        schedulePolling(updated);
+        schedule(updated);
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
-  return panel;
+  return section;
 }
 
-function scanRow(scan: ScanSummary): HTMLElement {
-  const status = el("span", {
-    class: `chip chip-${scan.status}`,
-    text:
-      scan.status === "queued"
-        ? "Queued"
-        : scan.status === "running"
-          ? "Running"
-          : scan.status === "completed"
-            ? "Done"
-            : "Failed",
-  });
+function scanEntry(scan: ScanSummary): HTMLElement {
+  const state: SiteState =
+    scan.status === "failed"
+      ? "caution"
+      : scan.status !== "completed"
+        ? "idle"
+        : scan.actionable_count > 0
+          ? "alarm"
+          : "clear";
 
-  const summary =
+  const headline =
+    scan.status === "queued"
+      ? "Queued"
+      : scan.status === "running"
+        ? "Running"
+        : scan.status === "failed"
+          ? "Did not finish"
+          : scan.actionable_count > 0
+            ? `${scan.actionable_count} to fix`
+            : "Clear";
+
+  const detail = el("div", { class: "entry-state" }, [
+    el("span", { class: "headline", text: headline }),
+    el("span", { class: "sep", text: "/" }),
+    el("span", { text: relativeTime(scan.completed_at ?? scan.created_at) }),
     scan.status === "completed"
-      ? scan.actionable_count > 0
-        ? `${scan.actionable_count} to fix of ${countOf(scan.finding_count, "check")}`
-        : `Nothing to fix, ${countOf(scan.finding_count, "check")}`
-      : scan.status === "failed" && scan.failure_reason
-        ? scan.failure_reason
-        : "";
-
-  const row = el("div", { class: "scan-row" }, [
-    status,
-    el("span", { class: "muted", text: relativeTime(scan.completed_at ?? scan.created_at) }),
-    summary ? el("span", { class: "muted", text: summary }) : null,
+      ? el("span", {}, [
+          el("span", { class: "sep", text: "/" }),
+          ` ${countOf(scan.finding_count, "check")}`,
+        ])
+      : null,
+    scan.status === "failed" && scan.failure_reason
+      ? el("span", { class: "muted", text: scan.failure_reason })
+      : null,
   ]);
 
+  const inner = el("div", {}, [detail]);
+
   if (scan.status === "completed") {
-    row.append(
-      el("a", { class: "grow", href: `#/scans/${scan.id}`, text: "View findings \u2192" }),
-    );
+    return el("li", {}, [
+      el("a", { class: `entry entry-${state}`, href: `#/scans/${scan.id}` }, [
+        inner,
+        el("span", { class: "entry-go", text: "→" }),
+      ]),
+    ]);
   }
 
-  return row;
+  return el("li", {}, [el("div", { class: `entry entry-${state}` }, [inner])]);
 }
 
 // --- one scan --------------------------------------------------------------
@@ -848,14 +939,14 @@ function scanRow(scan: ScanSummary): HTMLElement {
 async function renderScan(scanId: string): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading…" }));
+  container.append(el("p", { class: "loading", text: "Loading" }));
 
   let detail: ScanDetail;
   try {
     detail = await api.scan(scanId);
   } catch (error) {
     clear(container);
-    container.append(banner("error", describeError(error)));
+    container.append(notice("error", describeError(error)));
     return;
   }
 
@@ -870,87 +961,103 @@ async function renderScan(scanId: string): Promise<void> {
       try {
         await api.downloadReport(detail.id, detail.domain);
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
 
+  const actionable = detail.triaged.actionable.length;
+  const verdict = el("p", { class: "standing" });
+  if (actionable > 0) {
+    verdict.append(
+      el("span", { class: "alarm", text: countOf(actionable, "thing") }),
+      ` to fix on `,
+      el("strong", { text: detail.domain }),
+      ".",
+    );
+  } else {
+    verdict.append(
+      el("span", { class: "clear", text: "Nothing to fix" }),
+      " on ",
+      el("strong", { text: detail.domain }),
+      ".",
+    );
+  }
+
   container.append(
-    el("p", { class: "breadcrumb" }, [
-      el("a", { href: `#/targets/${detail.target_id}`, text: `← ${detail.domain}` }),
-    ]),
-    el("div", { class: "panel-head" }, [el("h1", { text: "Findings" }), download]),
-    message,
+    el("a", { class: "back", href: `#/targets/${detail.target_id}`, text: `← ${detail.domain}` }),
+    verdict,
     el("p", {
-      class: "subtitle",
-      text: `${detail.triaged.actionable.length} need attention · ${detail.triaged.review.length} worth a decision · ${detail.triaged.inventory.length} checked`,
+      class: "standing-meta",
+      text: `${countOf(detail.finding_count, "check")} · ${detail.triaged.review.length} to decide · scanned ${relativeTime(detail.completed_at ?? detail.created_at)}`,
     }),
+    el("div", { class: "head-row", style: "margin-bottom:2rem" }, [el("div"), download]),
+    message,
   );
 
-  append(
-    container,
-    findingSection("Needs attention", detail.triaged.actionable, "Nothing here requires a fix."),
-    findingSection("Worth a decision", detail.triaged.review, null),
-  );
+  if (detail.triaged.actionable.length > 0) {
+    container.append(sectionRule("Fix these", countOf(detail.triaged.actionable.length, "item")));
+    container.append(worklist(detail.triaged.actionable));
+  }
+
+  if (detail.triaged.review.length > 0) {
+    container.append(
+      el("div", { style: "margin-top:2.75rem" }, [
+        sectionRule("Your call", countOf(detail.triaged.review.length, "item")),
+        worklist(detail.triaged.review),
+      ]),
+    );
+  }
 
   if (detail.triaged.inventory.length > 0) {
-    const items = el("ul", { class: "inventory" });
+    const items = el("ul", { class: "appendix" });
     for (const finding of detail.triaged.inventory) {
       items.append(el("li", { text: finding.title }));
     }
     container.append(
-      el("section", { class: "card" }, [
-        el("h2", { text: "Also checked" }),
-        el("p", { class: "blurb", text: "Verified and found unremarkable." }),
-        items,
+      el("div", { style: "margin-top:2.75rem" }, [
+        sectionRule("Checked, nothing to report", String(detail.triaged.inventory.length)),
+        el("div", { style: "margin-top:1.1rem" }, [items]),
       ]),
     );
   }
 }
 
-function findingSection(
-  heading: string,
-  findings: TriagedFinding[],
-  emptyText: string | null,
-): HTMLElement | null {
-  if (findings.length === 0 && emptyText === null) return null;
-
-  const section = el("section", { class: "card" }, [el("h2", { text: heading })]);
-
-  if (findings.length === 0) {
-    section.append(el("p", { class: "empty", text: emptyText ?? "" }));
-    return section;
-  }
+/// Findings as a numbered worklist, in the order they should be dealt with.
+///
+/// A grid of cards implies the reader picks one. A numbered list says where
+/// to start, which is what somebody with an hour and a client site wants.
+function worklist(findings: TriagedFinding[]): HTMLElement {
+  const list = el("ol", { class: "worklist" });
 
   for (const finding of findings) {
-    section.append(findingCard(finding));
+    list.append(
+      el("li", { class: "work-item" }, [
+        el("div", { class: "work-head" }, [
+          el("h3", { text: finding.title }),
+          el("span", { class: `rank rank-${finding.priority}`, text: finding.priority }),
+          finding.occurrences > 1
+            ? el("span", { class: "work-repeat", text: `×${finding.occurrences}` })
+            : null,
+        ]),
+        finding.guidance ? el("p", { class: "work-why", text: finding.guidance.why }) : null,
+        finding.guidance
+          ? el("div", { class: "work-fix" }, [
+              el("span", { class: "work-label", text: "Do this" }),
+              finding.guidance.fix,
+            ])
+          : null,
+        finding.evidence
+          ? el("p", { class: "work-evidence" }, [
+              el("span", { class: "work-label", text: "Observed" }),
+              el("code", { text: finding.evidence }),
+            ])
+          : null,
+      ]),
+    );
   }
-  return section;
-}
 
-function findingCard(finding: TriagedFinding): HTMLElement {
-  return el("article", { class: "finding" }, [
-    el("div", { class: "finding-head" }, [
-      el("span", { class: `pill pill-${finding.priority}`, text: finding.priority }),
-      el("h3", { text: finding.title }),
-    ]),
-    finding.occurrences > 1
-      ? el("p", { class: "muted", text: `Observed ${finding.occurrences} times.` })
-      : null,
-    finding.guidance ? el("p", { text: finding.guidance.why }) : null,
-    finding.guidance
-      ? el("p", { class: "fix" }, [
-          el("span", { class: "fix-label", text: "What to do" }),
-          finding.guidance.fix,
-        ])
-      : null,
-    finding.evidence
-      ? el("p", { class: "evidence" }, [
-          el("span", { class: "fix-label", text: "Observed" }),
-          el("code", { text: finding.evidence }),
-        ])
-      : null,
-  ]);
+  return list;
 }
 
 // --- settings --------------------------------------------------------------
@@ -963,7 +1070,7 @@ async function renderSettings(): Promise<void> {
   try {
     profile = await api.profile();
   } catch (error) {
-    container.append(banner("error", describeError(error)));
+    container.append(notice("error", describeError(error)));
     return;
   }
 
@@ -976,19 +1083,15 @@ async function renderSettings(): Promise<void> {
   });
   const button = submitButton("Save");
 
-  const form = el("form", { class: "card" }, [
+  const form = el("form", { style: "max-width:30rem" }, [
     el("h1", { text: "Your details" }),
     el("p", {
       class: "blurb",
       text: "These appear on the reports you send to clients. Ours never do.",
     }),
     message,
-    el("label", {}, ["Your business name", name]),
-    el("label", {}, [
-      "Logo URL",
-      logo,
-      el("span", { class: "hint", text: "Must be an https address." }),
-    ]),
+    field("Business name", name),
+    field("Logo URL", logo, el("span", { class: "hint", text: "Must be an https address." })),
     button,
   ]);
 
@@ -1001,9 +1104,9 @@ async function renderSettings(): Promise<void> {
           agency_name: name.value || null,
           agency_logo_url: logo.value || null,
         });
-        message.replaceChildren(banner("ok", "Saved."));
+        message.replaceChildren(notice("ok", "Saved."));
       } catch (error) {
-        message.replaceChildren(banner("error", describeError(error)));
+        message.replaceChildren(notice("error", describeError(error)));
       }
     });
   });
@@ -1019,22 +1122,13 @@ function renderNav(): void {
 
   if (!session.isSignedIn) return;
 
-  // Marking the current section costs one class and stops the header
-  // looking like three interchangeable words.
   const section = window.location.hash.split("/")[1] ?? "";
   const link = (href: string, text: string, matches: string[]): HTMLElement =>
-    el("a", {
-      href,
-      text,
-      class: matches.includes(section) ? "active" : undefined,
-    });
+    el("a", { href, text, class: matches.includes(section) ? "active" : undefined });
 
-  nav.append(
-    link("#/targets", "Sites", ["targets", "scans", ""]),
-    link("#/settings", "Settings", ["settings"]),
-  );
+  nav.append(link("#/targets", "Sites", ["targets", "scans", ""]), link("#/settings", "Settings", ["settings"]));
 
-  const signOut = el("button", { class: "linklike", type: "button", text: "Sign out" });
+  const signOut = el("button", { type: "button", text: "Sign out" });
   on(signOut, "click", () => {
     session.clear();
     window.location.hash = "#/signin";
