@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod billing;
 pub mod config;
 pub mod error;
 pub mod rate_limit;
@@ -83,6 +84,15 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(|| async { "ok" }))
         // Ungated on purpose: it reads only what a site publishes to any
         // visitor. See routes::preview.
+        // Unauthenticated by necessity: Stripe calls it. The signature is
+        // the only thing guarding it — see routes::billing::webhook.
+        .route("/api/billing/webhook", post(routes::billing::webhook))
+        .route("/api/billing", get(routes::billing::get_subscription))
+        .route(
+            "/api/billing/checkout",
+            post(routes::billing::start_checkout),
+        )
+        .route("/api/billing/portal", post(routes::billing::open_portal))
         .route("/api/preview", post(routes::preview::run_preview))
         .route("/api/preview/email", post(routes::preview::email_preview))
         .route("/api/auth/signup", post(routes::accounts::signup))

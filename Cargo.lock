@@ -53,6 +53,7 @@ dependencies = [
  "argon2",
  "axum",
  "chrono",
+ "hmac",
  "jsonwebtoken",
  "orchestrator",
  "password-hash",

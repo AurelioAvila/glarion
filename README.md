@@ -112,7 +112,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 188 tests at present.
+the whole suite with the integration tests active. 208 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -188,7 +188,36 @@ scanning on. Notification is sent only when a result differs from the one
 before it: a weekly "still three issues" teaches people to filter the
 sender, and then the message that mattered goes unread too.
 
-Not built yet: billing, and the testssl/httpx/subfinder wrappers.
+## Plans
+
+| Plan | Price | Sites | Automatic checks |
+|---|---|---|---|
+| Free | — | 1 | No |
+| Studio | 39 EUR / month, 390 / year | 10 | Weekly or monthly |
+| Agency | 99 EUR / month, 990 / year | 40 | Weekly or monthly |
+
+Priced per account with a site allowance, not per site. The competition
+charges from about 90 USD per application, which is a sensible model for a
+company protecting its own domain and the wrong one for an agency looking
+after twenty of somebody else's.
+
+The site allowance is derived from the plan rather than stored beside it:
+two copies of the same number drift apart the moment either is written
+without the other, and the one that drifts is the one enforcing a paid
+limit.
+
+Checkout and cancellation are hosted by Stripe, so no card detail reaches
+these servers. Configuration: `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, and a price id per plan and interval
+(`STRIPE_PRICE_STUDIO_MONTHLY` and its three siblings). With none of it
+set, the billing endpoints refuse rather than granting anything, and the
+rest of the product works unchanged.
+
+**Before taking money:** a subscription is continuous business activity,
+which in Italy needs a P.IVA and VAT handling. Stripe Tax computes the
+rates; the filing obligation is not something software solves.
+
+Not built yet: the testssl/httpx/subfinder wrappers.
 
 ### Known limits
 

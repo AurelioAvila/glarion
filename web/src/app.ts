@@ -19,6 +19,7 @@
 import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type {
   Cadence,
+  Subscription,
   PreviewResult,
   ScanDetail,
   ScanSummary,
@@ -1459,14 +1460,27 @@ function worklist(findings: TriagedFinding[]): HTMLElement {
 async function renderSettings(): Promise<void> {
   const container = root();
   clear(container);
+  container.append(skeleton());
 
   let profile = { agency_name: null as string | null, agency_logo_url: null as string | null };
+  let subscription: Subscription | undefined;
   try {
-    profile = await api.profile();
+    const [loadedProfile, loadedSubscription] = await Promise.all([
+      api.profile(),
+      // Billing is optional infrastructure: the rest of settings must
+      // still work on a deployment where Stripe is not configured.
+      api.subscription().catch(() => undefined),
+    ]);
+    profile = loadedProfile;
+    subscription = loadedSubscription;
   } catch (error) {
+    clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
+
+  clear(container);
+  if (subscription) container.append(planSection(subscription));
 
   const message = el("div");
   const name = el("input", { type: "text", value: profile.agency_name ?? "" });
@@ -1505,7 +1519,122 @@ async function renderSettings(): Promise<void> {
     });
   });
 
-  container.append(form);
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Your details"), form]));
+}
+
+/// The plan, and the way out of it.
+///
+/// Cancelling goes to Stripe's own portal rather than being reimplemented
+/// here. A subscription somebody can only end by emailing support is a dark
+/// pattern, and the portal already handles cards, invoices and cancellation
+/// properly.
+function planSection(subscription: Subscription): HTMLElement {
+  const message = el("div");
+
+  const usage = el("p", { class: "standing", style: "margin-bottom:.5rem" });
+  usage.append(
+    el("strong", { text: subscription.plan_name }),
+    " — ",
+    `${subscription.targets_used} of ${subscription.max_targets} ${
+      subscription.max_targets === 1 ? "site" : "sites"
+    } used`,
+    ".",
+  );
+
+  const meta: string[] = [];
+  if (!subscription.allows_scheduling) meta.push("Automatic checks not included");
+  if (subscription.current_period_end) {
+    meta.push(`Renews ${shortDate(subscription.current_period_end)}`);
+  }
+  if (subscription.status && subscription.status !== "active") {
+    meta.push(subscription.status.replace(/_/g, " "));
+  }
+
+  const section = el("div", {}, [
+    sectionRule("Plan"),
+    el("div", { style: "margin-top:1.25rem" }, [usage]),
+    meta.length > 0 ? el("p", { class: "standing-meta", text: meta.join(" · ") }) : null,
+    message,
+  ]);
+
+  if (subscription.manageable) {
+    const manage = el("button", { class: "ghost", type: "button", text: "Manage billing" });
+    on(manage, "click", () => {
+      void withPending(manage, "Opening…", async () => {
+        try {
+          const result = await api.billingPortal();
+          window.location.href = result.url;
+        } catch (error) {
+          message.replaceChildren(notice("error", describeError(error)));
+        }
+      });
+    });
+    section.append(manage);
+  }
+
+  // Anything the account is not already on. Showing the current plan as a
+  // buyable option is how people end up subscribing twice.
+  const offers = [
+    {
+      plan: "studio",
+      name: "Studio",
+      price: "€39",
+      yearly: "€390",
+      detail: "10 sites, weekly checks",
+    },
+    {
+      plan: "agency",
+      name: "Agency",
+      price: "€99",
+      yearly: "€990",
+      detail: "40 sites, weekly checks",
+    },
+  ].filter((offer) => offer.plan !== subscription.plan);
+
+  if (offers.length > 0) {
+    const list = el("ul", { class: "ledger", style: "margin-top:1.5rem" });
+
+    for (const offer of offers) {
+      const monthly = el("button", { class: "primary", type: "button", text: `${offer.price}/mo` });
+      const yearly = el("button", {
+        class: "ghost",
+        type: "button",
+        text: `${offer.yearly}/yr`,
+        title: "Two months free",
+      });
+
+      const go = (interval: "monthly" | "yearly", button: HTMLButtonElement) => () => {
+        clear(message);
+        void withPending(button, "Opening…", async () => {
+          try {
+            const result = await api.checkout(offer.plan, interval);
+            window.location.href = result.url;
+          } catch (error) {
+            message.replaceChildren(notice("error", describeError(error)));
+          }
+        });
+      };
+
+      on(monthly, "click", go("monthly", monthly));
+      on(yearly, "click", go("yearly", yearly));
+
+      list.append(
+        el("li", {}, [
+          el("div", { class: "entry entry-idle" }, [
+            el("div", {}, [
+              el("div", { class: "entry-name", text: offer.name }),
+              el("div", { class: "entry-state" }, [el("span", { text: offer.detail })]),
+            ]),
+            el("div", { class: "entry-right" }, [yearly, monthly]),
+          ]),
+        ]),
+      );
+    }
+
+    section.append(list);
+  }
+
+  return section;
 }
 
 // --- routing ---------------------------------------------------------------
