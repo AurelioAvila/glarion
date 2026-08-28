@@ -341,6 +341,18 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         return Ok(());
     };
 
+    // Stripe does not guarantee delivery order between this event and
+    // checkout.session.completed, which is what normally binds
+    // stripe_customer_id to the account. If this one arrives first, the
+    // customer id match below finds nothing and the grant is silently
+    // lost. start_checkout stamps the subscription with this metadata for
+    // exactly this case, so the row can still be found by user_id.
+    let user_id = subscription
+        .get("metadata")
+        .and_then(|value| value.get("user_id"))
+        .and_then(|value| value.as_str())
+        .and_then(|value| Uuid::parse_str(value).ok());
+
     let status = subscription
         .get("status")
         .and_then(|value| value.as_str())
@@ -387,12 +399,14 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
 
     sqlx::query(
         "update entitlements
-         set plan = $2,
+         set stripe_customer_id = $1,
+             plan = $2,
              max_targets = $3,
              subscription_status = $4,
              stripe_subscription_id = $5,
              current_period_end = $6
-         where stripe_customer_id = $1 and product = 'glarion'",
+         where product = 'glarion'
+           and (stripe_customer_id = $1 or user_id = $7)",
     )
     .bind(customer)
     .bind(plan.as_db_str())
@@ -400,6 +414,7 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     .bind(status)
     .bind(subscription_id)
     .bind(period_end)
+    .bind(user_id)
     .execute(&state.pool)
     .await?;
 
