@@ -7,6 +7,9 @@
 .env.*
 *.env
 *.env.local
+# The documented template carries no values and has to be readable by
+# anyone setting the project up.
+!.env.local.example
 secrets.*
 *.pem
 *.key
