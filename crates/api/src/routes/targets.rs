@@ -5,7 +5,7 @@
 //! touches the target beyond a single DNS lookup or one HTTPS GET of a
 //! fixed path — verification is not a scan.
 
-use axum::extract::{Path, State};
+use axum::extract::{ConnectInfo, Path, State};
 use axum::Json;
 use chrono::{DateTime, Utc};
 use orchestrator::domain::normalize_target;
@@ -14,6 +14,7 @@ use orchestrator::verification::{
     VerificationMethod, VerificationStatus,
 };
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -194,9 +195,17 @@ pub async fn start_verification(
 pub async fn check_verification(
     State(state): State<AppState>,
     user: AuthUser,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Path(target_id): Path<Uuid>,
     Json(body): Json<CheckVerificationRequest>,
 ) -> ApiResult<Json<CheckVerificationResponse>> {
+    // This handler causes outbound traffic to a host the caller chose, so
+    // it is metered even though the caller is authenticated and owns the
+    // target record.
+    if !state.verification_limiter.check(peer.ip()) {
+        return Err(ApiError::TooManyRequests);
+    }
+
     let domain = owned_target_domain(&state, user.id, target_id).await?;
 
     let method = match body.method.as_str() {

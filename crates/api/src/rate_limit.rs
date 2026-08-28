@@ -34,6 +34,18 @@ pub const AUTH_ATTEMPTS_PER_WINDOW: u32 = 10;
 /// Length of the authentication window.
 pub const AUTH_WINDOW_SECS: u64 = 300;
 
+/// Ownership checks allowed per window.
+///
+/// Each check makes us perform a DNS lookup or an outbound HTTPS request to
+/// a host the caller nominated. Unmetered, that is a request-amplification
+/// primitive: one cheap API call turns into traffic aimed at a third party
+/// from our address space. The allowance is generous enough for someone
+/// legitimately waiting on DNS propagation and retrying.
+pub const VERIFICATION_CHECKS_PER_WINDOW: u32 = 20;
+
+/// Length of the verification-check window.
+pub const VERIFICATION_WINDOW_SECS: u64 = 300;
+
 /// Entries older than this are dropped during cleanup so the map cannot
 /// grow without bound from one-shot addresses.
 const ENTRY_TTL_SECS: u64 = 900;
@@ -99,6 +111,14 @@ impl RateLimiter {
         Self::new(
             AUTH_ATTEMPTS_PER_WINDOW,
             Duration::from_secs(AUTH_WINDOW_SECS),
+        )
+    }
+
+    /// The limiter used for ownership verification checks.
+    pub fn for_verification() -> Self {
+        Self::new(
+            VERIFICATION_CHECKS_PER_WINDOW,
+            Duration::from_secs(VERIFICATION_WINDOW_SECS),
         )
     }
 

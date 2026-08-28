@@ -16,6 +16,14 @@ use crate::state::AppState;
 /// resists offline cracking.
 const MIN_PASSWORD_LEN: usize = 12;
 
+/// Maximum accepted password length.
+///
+/// Not a security policy — it is a cost ceiling. Argon2 hashes whatever it
+/// is given, so without a cap an attacker can post a multi-megabyte body
+/// and make each request cost far more to reject than to send. 256 is far
+/// above any real passphrase.
+const MAX_PASSWORD_LEN: usize = 256;
+
 #[derive(Deserialize)]
 pub struct CredentialsRequest {
     pub email: String,
@@ -41,9 +49,15 @@ pub async fn signup(
 
     let email = normalize_email(&body.email)?;
 
-    if body.password.chars().count() < MIN_PASSWORD_LEN {
+    let password_len = body.password.chars().count();
+    if password_len < MIN_PASSWORD_LEN {
         return Err(ApiError::BadRequest(format!(
             "password must be at least {MIN_PASSWORD_LEN} characters"
+        )));
+    }
+    if password_len > MAX_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_LEN} characters"
         )));
     }
 
@@ -87,6 +101,12 @@ pub async fn login(
     // over the limit.
     if !state.auth_limiter.check(peer.ip()) {
         return Err(ApiError::TooManyRequests);
+    }
+
+    // Reject an oversized password before hashing rather than after: the
+    // whole point of the cap is to not spend Argon2 time on it.
+    if body.password.len() > MAX_PASSWORD_LEN * 4 {
+        return Err(ApiError::InvalidCredentials);
     }
 
     let email = normalize_email(&body.email)?;

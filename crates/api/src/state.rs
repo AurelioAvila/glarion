@@ -11,6 +11,8 @@ pub struct AppState {
     /// Shared across all auth requests, so the limit is per client rather
     /// than per connection.
     pub auth_limiter: RateLimiter,
+    /// Separate budget for ownership checks, which cause outbound traffic.
+    pub verification_limiter: RateLimiter,
 }
 
 impl AppState {
@@ -19,6 +21,7 @@ impl AppState {
             pool,
             jwt_secret,
             auth_limiter: RateLimiter::for_auth(),
+            verification_limiter: RateLimiter::for_verification(),
         }
     }
 }
