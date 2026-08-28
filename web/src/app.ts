@@ -285,6 +285,17 @@ function renderCheckYourEmail(email: string): void {
       }),
       message,
       el("p", { class: "switch" }, ["Nothing arrived? ", resend]),
+      // A way out.
+      //
+      // Resending deliberately answers the same way whether or not the
+      // address still needs confirming, so somebody who has already
+      // followed the link — in another tab, or on their phone — is told
+      // "a new link is on its way" and has nowhere to go. Without this
+      // they are stranded on a screen that cannot change.
+      el("p", { class: "switch" }, [
+        "Already confirmed? ",
+        el("a", { href: "#/signin", text: "Sign in" }),
+      ]),
     ]),
   );
 }
