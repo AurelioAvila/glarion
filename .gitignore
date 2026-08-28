@@ -1,0 +1,27 @@
+/target
+
+# Secrets and local configuration. Nothing matching these should ever be
+# committed; the dev database keeps its generated password outside the repo
+# entirely (~/.glarion-devdb), which is why no path here refers to it.
+.env
+.env.*
+*.env
+*.env.local
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Scan output and reports may contain findings about real customer sites.
+/scan-output
+/reports
+*.report.json
+
+# Editor and OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

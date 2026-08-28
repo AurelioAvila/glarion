@@ -1,0 +1,19 @@
+# Normalize line endings in the repository to LF.
+#
+# Without this, committing from Windows stores CRLF, and a shell script
+# whose shebang ends in \r fails on Linux with an opaque "bad interpreter"
+# error — which is exactly where CI runs.
+* text=auto eol=lf
+
+# Scripts must be LF regardless of any local core.autocrlf setting.
+*.sh text eol=lf
+
+# Keep Rust, SQL, and config files LF for consistent diffs across machines.
+*.rs text eol=lf
+*.sql text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+
+# Cargo.lock is generated; collapse it in diffs and reviews.
+Cargo.lock linguist-generated=true

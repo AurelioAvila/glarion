@@ -1,0 +1,404 @@
+//! Integration tests for the scan authorization gate.
+//!
+//! These are the tests that matter most in this codebase: they prove that a
+//! scan cannot be queued against a domain whose ownership is not currently
+//! verified. The unit tests in `orchestrator::verification` prove the
+//! predicate is correct; these prove the HTTP layer actually consults it.
+//!
+//! They require a real Postgres, addressed by `TEST_DATABASE_URL`, whose
+//! tables they TRUNCATE. The usual way to run them:
+//!
+//!   bash scripts/dev-db.sh test
+//!
+//! Without that variable the tests skip rather than fail, so `cargo test`
+//! stays green on a machine with no database — but CI must set it, because
+//! an unexercised gate is not a verified gate.
+
+use axum::body::Body;
+use axum::extract::ConnectInfo;
+use axum::http::{Request, StatusCode};
+use chrono::{Duration, Utc};
+use serde_json::{json, Value};
+use sqlx::PgPool;
+use std::net::SocketAddr;
+use tower::ServiceExt;
+use uuid::Uuid;
+
+use api::state::AppState;
+
+const JWT_SECRET: &str = "integration-test-secret-long-enough-for-hs256";
+
+/// Returns None (and prints why) when no test database is configured.
+async fn test_pool() -> Option<PgPool> {
+    let url = match std::env::var("TEST_DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            eprintln!("skipping: TEST_DATABASE_URL not set");
+            return None;
+        }
+    };
+
+    let pool = PgPool::connect(&url)
+        .await
+        .expect("could not connect to TEST_DATABASE_URL");
+
+    sqlx::migrate!("../../migrations")
+        .run(&pool)
+        .await
+        .expect("migrations failed");
+
+    // Fresh state per test run. Cascade because everything hangs off users.
+    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements cascade")
+        .execute(&pool)
+        .await
+        .expect("truncate failed");
+
+    Some(pool)
+}
+
+fn app(pool: PgPool) -> axum::Router {
+    api::router(AppState::new(pool, JWT_SECRET.to_string()))
+}
+
+/// Sends a request with ConnectInfo populated, which the scan handler needs
+/// in order to record the caller's IP in the audit trail.
+async fn send(app: &axum::Router, mut req: Request<Body>) -> (StatusCode, Value) {
+    req.extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([203, 0, 113, 10], 51234))));
+
+    let response = app.clone().oneshot(req).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, body)
+}
+
+fn post(path: &str, token: Option<&str>, body: Value) -> Request<Body> {
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("content-type", "application/json");
+
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    builder.body(Body::from(body.to_string())).unwrap()
+}
+
+/// Signs up a user and returns (token, user_id).
+async fn signup(app: &axum::Router, email: &str) -> (String, Uuid) {
+    let (status, body) = send(
+        app,
+        post(
+            "/api/auth/signup",
+            None,
+            json!({ "email": email, "password": "a-sufficiently-long-password" }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "signup failed: {body}");
+    (
+        body["token"].as_str().unwrap().to_string(),
+        Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap(),
+    )
+}
+
+async fn create_target(app: &axum::Router, token: &str, domain: &str) -> Uuid {
+    let (status, body) = send(
+        app,
+        post("/api/targets", Some(token), json!({ "domain": domain })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "create target failed: {body}");
+    Uuid::parse_str(body["id"].as_str().unwrap()).unwrap()
+}
+
+/// Writes a completed verification straight to the database, bypassing the
+/// DNS lookup. The lookup itself is unit-tested; what we need here is a
+/// target in the "verified" state so the gate has something to allow.
+async fn insert_verification(
+    pool: &PgPool,
+    target_id: Uuid,
+    verified_ago: Duration,
+    expires_in: Duration,
+) {
+    let now = Utc::now();
+    sqlx::query(
+        "insert into target_verifications (target_id, method, token, verified_at, expires_at)
+         values ($1, 'dns_txt', $2, $3, $4)",
+    )
+    .bind(target_id)
+    .bind("test-token")
+    .bind(now - verified_ago)
+    .bind(now + expires_in)
+    .execute(pool)
+    .await
+    .expect("could not insert verification");
+}
+
+#[tokio::test]
+async fn scan_is_refused_when_target_was_never_verified() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool);
+
+    let (token, _) = signup(&app, "never-verified@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["error"], "target_not_verified");
+}
+
+#[tokio::test]
+async fn scan_is_refused_when_verification_has_expired() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, "expired@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+
+    // Verified 40 days ago, expired 10 days ago.
+    insert_verification(&pool, target_id, Duration::days(40), Duration::days(-10)).await;
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "an expired verification must not permit a scan"
+    );
+    assert_eq!(body["error"], "target_not_verified");
+}
+
+#[tokio::test]
+async fn scan_is_queued_when_verification_is_current() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, "verified@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "scan should be allowed: {body}");
+    assert_eq!(body["status"], "queued");
+
+    // The audit trail must exist for the queued job — a job without one
+    // would mean we cannot show who authorized the scan.
+    let authorized: i64 = sqlx::query_scalar(
+        "select count(*) from scan_jobs j
+         join scan_authorizations a on a.id = j.scan_authorization_id
+         where j.target_id = $1",
+    )
+    .bind(target_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(authorized, 1);
+}
+
+#[tokio::test]
+async fn scan_is_refused_without_explicit_consent() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, "no-consent@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+    let (status, _) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": false }),
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "a verified target still requires per-scan consent"
+    );
+
+    let jobs: i64 = sqlx::query_scalar("select count(*) from scan_jobs")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(jobs, 0, "no job may be written without consent");
+}
+
+#[tokio::test]
+async fn scan_is_refused_for_a_tool_outside_the_allowlist() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, "bad-tool@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+    let (status, _) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "sqlmap", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn a_user_cannot_scan_someone_elses_target() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (owner_token, _) = signup(&app, "owner@example.com").await;
+    let target_id = create_target(&app, &owner_token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+    let (attacker_token, _) = signup(&app, "attacker@example.com").await;
+
+    let (status, _) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&attacker_token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    // 404 rather than 403: another user's target id should not be
+    // confirmable as existing.
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn scan_requires_authentication() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool);
+
+    let (status, _) = send(
+        &app,
+        post(
+            "/api/scans",
+            None,
+            json!({ "target_id": Uuid::new_v4(), "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn repeated_failed_logins_are_rate_limited() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool);
+
+    signup(&app, "brute-force-target@example.com").await;
+
+    // Guess past the limit. The point is that the endpoint stops answering
+    // at all, rather than continuing to accept guesses indefinitely.
+    let mut saw_rate_limit = false;
+    for _ in 0..(api::rate_limit::AUTH_ATTEMPTS_PER_WINDOW + 5) {
+        let (status, _) = send(
+            &app,
+            post(
+                "/api/auth/login",
+                None,
+                json!({
+                    "email": "brute-force-target@example.com",
+                    "password": "definitely-the-wrong-password"
+                }),
+            ),
+        )
+        .await;
+
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            saw_rate_limit = true;
+            break;
+        }
+    }
+
+    assert!(
+        saw_rate_limit,
+        "login must start refusing once the attempt limit is reached"
+    );
+}
+
+#[tokio::test]
+async fn ip_literal_targets_are_refused_at_creation() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool);
+
+    let (token, _) = signup(&app, "ip-target@example.com").await;
+
+    for candidate in ["127.0.0.1", "169.254.169.254", "http://localhost:3000"] {
+        let (status, _) = send(
+            &app,
+            post("/api/targets", Some(&token), json!({ "domain": candidate })),
+        )
+        .await;
+
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "{candidate} must not be registrable as a target"
+        );
+    }
+}

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # A throwaway Postgres so the scan-gate integration tests actually run.
+    # These tests skip when TEST_DATABASE_URL is unset, so without this
+    # service CI would report green while never exercising the gate.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: glarion_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/glarion_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # Single-threaded: the integration tests truncate shared tables, so
+      # parallel execution would have them clobber each other.
+      - name: Test
+        run: cargo test --workspace -- --test-threads=1
+
+      # The gate tests silently skip without a database. Failing the build
+      # when that happens is the only way to keep "CI is green" meaningful.
+      - name: Assert the gate tests actually ran
+        run: |
+          output=$(cargo test --workspace --test scan_gate -- --test-threads=1 --nocapture 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "skipping: TEST_DATABASE_URL not set"; then
+            echo "::error::scan_gate tests skipped — the authorization gate was not verified"
+            exit 1
+          fi
