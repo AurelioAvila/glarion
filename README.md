@@ -50,7 +50,8 @@ External tools are spawned with an argument vector, never a shell string.
   runner, tool wrappers.
 - `crates/report` — triage and report rendering.
 - `web/` — the dashboard: TypeScript compiled with `tsc`, no framework and
-  no bundler, matching the rest of the portfolio.
+  no bundler, matching the rest of the portfolio. Driven from the keyboard:
+  `⌘K`/`Ctrl-K` or `/` opens the command palette, `j`/`k` walk the list.
 - `migrations/` — Postgres schema, applied with sqlx.
 
 ## Running
@@ -91,7 +92,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 153 tests at present.
+the whole suite with the integration tests active. 163 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a

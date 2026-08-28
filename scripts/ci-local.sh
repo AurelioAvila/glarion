@@ -25,11 +25,11 @@ cargo fmt --all -- --check
 step "Clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
-step "Frontend types"
+step "Frontend types and tests"
 # Skipped rather than failed when dependencies are not installed: the
 # backend checks should still be runnable without a Node toolchain.
 if [ -d web/node_modules ]; then
-    (cd web && npx tsc --noEmit)
+    (cd web && npx tsc --noEmit && npm test --silent)
 else
     echo "skipped — run 'npm install' in web/ to include this"
 fi
