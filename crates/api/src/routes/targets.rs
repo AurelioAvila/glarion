@@ -246,18 +246,37 @@ pub async fn check_verification(
     let (verification_id, token) = pending
         .ok_or_else(|| ApiError::BadRequest("no pending verification — start one first".into()))?;
 
+    // A lookup that cannot complete is reported as "not verified yet" with
+    // an explanation, not as a server error.
+    //
+    // From the user's side both outcomes mean "keep waiting", and a 500
+    // tells them nothing they can act on — while an unreachable resolver or
+    // an unreachable site is a perfectly ordinary thing to hit halfway
+    // through setting up DNS. It stays fail-closed either way: nothing here
+    // can report success without actually seeing the token.
     let matched = match method {
-        VerificationMethod::DnsTxt => {
-            let records = verification::fetch_dns_txt_records(&domain)
-                .await
-                .map_err(ApiError::Internal)?;
-            token_present(&records, &token)
-        }
+        VerificationMethod::DnsTxt => match verification::fetch_dns_txt_records(&domain).await {
+            Ok(records) => token_present(&records, &token),
+            Err(_) => {
+                return Ok(Json(CheckVerificationResponse {
+                    verified: false,
+                    expires_at: None,
+                    detail: "We could not reach DNS just now. Please try again in a moment.".into(),
+                }))
+            }
+        },
         VerificationMethod::WellKnownFile => {
-            let body = verification::fetch_well_known_file(&domain)
-                .await
-                .map_err(ApiError::Internal)?;
-            file_contains_token(&body, &token)
+            match verification::fetch_well_known_file(&domain).await {
+                Ok(body) => file_contains_token(&body, &token),
+                Err(_) => {
+                    return Ok(Json(CheckVerificationResponse {
+                        verified: false,
+                        expires_at: None,
+                        detail: "We could not fetch that file. Check it is reachable over                                  HTTPS, then try again."
+                            .into(),
+                    }))
+                }
+            }
         }
     };
 

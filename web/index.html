@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glarion</title>
+<!-- Empty means same origin. Point it at a backend URL for local development. -->
+<meta name="glarion-api" content="">
+<style>
+:root {
+  --bg: #0b0e13;
+  --surface: #131820;
+  --surface-2: #1a212b;
+  --inset: #0e1219;
+  --line: #232c39;
+  --line-strong: #33404f;
+  --text: #eef2f7;
+  --text-2: #a7b2c1;
+  --text-3: #78849a;
+  --accent: #4c8dff;
+  --accent-ink: #07101f;
+  --ok: #4ec98a;
+  --warn: #f0b743;
+  --danger: #ff7a6b;
+  --r: 12px;
+  --r-sm: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.top {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.top-inner {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.wordmark {
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--text);
+}
+.wordmark:hover { text-decoration: none; }
+#nav-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-size: .9rem;
+}
+#nav-links a { color: var(--text-2); }
+#nav-links a:hover { color: var(--text); text-decoration: none; }
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 5rem;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 .3rem; letter-spacing: -.015em; }
+h2 { font-size: 1.05rem; margin: 0; letter-spacing: -.01em; }
+h3 { font-size: .97rem; margin: 0; }
+
+.subtitle { color: var(--text-2); margin: 0 0 1.5rem; }
+.breadcrumb { margin: 0 0 1rem; font-size: .88rem; }
+.blurb { color: var(--text-2); font-size: .9rem; margin: .4rem 0 1.2rem; max-width: 46rem; }
+.hint { display: block; color: var(--text-3); font-size: .82rem; margin-top: .35rem; }
+.muted { color: var(--text-3); font-size: .87rem; }
+.empty { color: var(--text-3); margin: .6rem 0; }
+.loading { color: var(--text-3); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 1.35rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .5rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 1rem;
+  font-size: .87rem;
+  color: var(--text-2);
+}
+
+input {
+  display: block;
+  width: 100%;
+  margin-top: .35rem;
+  padding: .6rem .7rem;
+  background: var(--inset);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+}
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+button:disabled { opacity: .6; cursor: default; }
+
+.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  padding: .6rem 1rem;
+  font-weight: 600;
+}
+.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.linklike {
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  padding: 0;
+}
+.linklike:hover { color: var(--text); }
+
+.auth-card { max-width: 24rem; margin: 3rem auto; }
+.auth-card .primary { width: 100%; }
+.switch { margin: 1.1rem 0 0; font-size: .88rem; color: var(--text-2); text-align: center; }
+
+.inline-form { padding: 1rem 1.1rem; }
+.field-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+.field-row input { flex: 1 1 12rem; margin-top: 0; width: auto; }
+
+.target-list { list-style: none; padding: 0; margin: 0; }
+.target-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .85rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  margin-bottom: .5rem;
+}
+.target-domain { font-weight: 550; }
+.target-client { margin: .1rem 0 0; color: var(--text-3); font-size: .85rem; }
+
+.chip {
+  flex: none;
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .03em;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.chip-ok { color: var(--ok); }
+.chip-pending, .chip-queued { color: var(--text-3); }
+.chip-running { color: var(--warn); }
+.chip-completed { color: var(--ok); }
+.chip-failed { color: var(--danger); }
+
+.tabs { display: flex; gap: .4rem; margin-bottom: 1.1rem; }
+.tab {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--line);
+  padding: .4rem .8rem;
+  font-size: .86rem;
+}
+.tab-active {
+  background: var(--inset);
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.method-pane[hidden] { display: none; }
+.step { margin: 0 0 .9rem; font-size: .92rem; }
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  margin-bottom: .6rem;
+  flex-wrap: wrap;
+}
+.detail-label {
+  flex: none;
+  width: 5rem;
+  color: var(--text-3);
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.copyable {
+  display: flex;
+  align-items: stretch;
+  gap: .4rem;
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+.copyable-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--inset);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: .45rem .6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .85rem;
+  overflow-wrap: anywhere;
+}
+.copy-button {
+  flex: none;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--line-strong);
+  padding: 0 .75rem;
+  font-size: .82rem;
+}
+.copy-button:hover { color: var(--text); }
+
+.banner {
+  margin: 0 0 1rem;
+  padding: .6rem .8rem;
+  border-radius: var(--r-sm);
+  font-size: .88rem;
+  border: 1px solid;
+}
+.banner-error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.banner-ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 9%, transparent); }
+.banner-info { color: var(--text-2); border-color: var(--line-strong); background: var(--inset); }
+
+.scan-list { margin-top: .8rem; }
+.scan-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .6rem 0;
+  border-top: 1px solid var(--line);
+}
+.scan-row:first-child { border-top: 0; }
+
+.finding {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+.finding:first-of-type { border-top: 0; }
+.finding-head { display: flex; align-items: baseline; gap: .7rem; }
+.pill {
+  flex: none;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: .15rem .45rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.pill-urgent, .pill-high { color: var(--danger); }
+.pill-medium { color: var(--warn); }
+.pill-low { color: var(--text-2); }
+.pill-none { color: var(--text-3); }
+
+.fix { margin: .5rem 0 0; }
+.fix-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-3);
+  margin-right: .4rem;
+}
+.evidence { margin: .5rem 0 0; font-size: .88rem; }
+code {
+  background: var(--inset);
+  padding: .1rem .35rem;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.inventory {
+  columns: 2;
+  column-gap: 2rem;
+  padding-left: 1.1rem;
+  color: var(--text-2);
+  font-size: .89rem;
+  margin: 0;
+}
+.inventory li { margin: .15rem 0; break-inside: avoid; }
+
+@media (max-width: 40rem) {
+  .inventory { columns: 1; }
+  .detail-label { width: auto; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="wordmark" href="#/targets">Glarion</a>
+    <nav id="nav-links"></nav>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<script type="module" src="./dist/app.js"></script>
+</body>
+</html>

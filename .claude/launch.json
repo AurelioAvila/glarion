@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/dev-api.sh"],
+      "port": 8080
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5173", "--directory", "web"],
+      "port": 5173
+    }
+  ]
+}
