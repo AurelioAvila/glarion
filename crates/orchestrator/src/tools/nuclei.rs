@@ -28,7 +28,14 @@ pub const RATE_LIMIT_PER_SECOND: u32 = 20;
 
 /// Wall-clock ceiling for a single scan. A scan that hasn't finished by
 /// now is killed rather than left to run indefinitely.
-pub const SCAN_TIMEOUT_SECS: u64 = 600;
+///
+/// Measured, not guessed: a full-template scan of a single small static
+/// site behind a CDN took 17.5 minutes at our rate limit. The first value
+/// here was 10 minutes, which would have killed every real scan partway
+/// through and recorded it as a failure. Kept at roughly double the
+/// observed time so an ordinary site has headroom; a site large enough to
+/// exceed this needs a narrower template selection, not a longer timeout.
+pub const SCAN_TIMEOUT_SECS: u64 = 2400;
 
 /// Cap on captured stdout. Nuclei on a large site can emit a lot; past
 /// this point we stop rather than buffer without limit.
