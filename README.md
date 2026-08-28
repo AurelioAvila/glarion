@@ -48,7 +48,9 @@ External tools are spawned with an argument vector, never a shell string.
   results. Also builds the `runner` binary.
 - `crates/orchestrator` — verification, target validation, scan policy, job
   runner, tool wrappers.
-- `crates/report` — triage and report rendering.
+- `crates/report` — report rendering. Triage lives in `orchestrator`,
+  since deciding which findings matter is domain knowledge rather than
+  presentation, and the worker needs it too.
 - `web/` — the dashboard: TypeScript compiled with `tsc`, no framework and
   no bundler, matching the rest of the portfolio. Driven from the keyboard:
   `⌘K`/`Ctrl-K` or `/` opens the command palette, `j`/`k` walk the list.
@@ -92,7 +94,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 163 tests at present.
+the whole suite with the integration tests active. 179 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -160,6 +162,13 @@ inventory. The scanner's own severity is not used as the priority — it
 rates a missing Content-Security-Policy as informational, which is wrong
 for a report going to a client. Reports are rendered as a single
 self-contained HTML file under the agency's name, printable to PDF.
+
+Sites can be put on a weekly or monthly schedule. A schedule is standing
+authorization, so it can only be set while ownership is proved, and the
+scheduler refuses — loudly — once that proof lapses rather than quietly
+scanning on. Notification is sent only when a result differs from the one
+before it: a weekly "still three issues" teaches people to filter the
+sender, and then the message that mattered goes unread too.
 
 Not built yet: billing, and the testssl/httpx/subfinder wrappers.
 

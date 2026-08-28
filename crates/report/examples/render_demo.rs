@@ -2,11 +2,11 @@
 //! cargo run -p report --example render_demo > report.html
 use chrono::{TimeZone, Utc};
 use orchestrator::finding::{Finding, Severity};
+use orchestrator::triage::triage_scan;
 use report::html::{render_html, ReportMeta};
-use report::triage::triage_scan;
 
 fn main() {
-    let raw = include_str!("../tests/fixtures/nuclei_real_scan.jsonl");
+    let raw = include_str!("../../orchestrator/tests/fixtures/nuclei_real_scan.jsonl");
     let findings: Vec<Finding> = raw
         .lines()
         .filter(|l| !l.trim().is_empty())

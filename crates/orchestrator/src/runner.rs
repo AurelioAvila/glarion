@@ -14,6 +14,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::finding::Finding;
+use crate::mailer::{change_email, Mailer};
+use crate::schedule::{compare, headline};
 use crate::tools::nuclei;
 use crate::verification::{is_currently_verified, VerificationStatus};
 
@@ -28,12 +30,12 @@ struct ClaimedJob {
 }
 
 /// Runs until cancelled. Intended to be spawned as its own task or process.
-pub async fn run_forever(pool: PgPool) {
+pub async fn run_forever(pool: PgPool, mailer: Mailer) {
     loop {
         match claim_next_job(&pool).await {
             Ok(Some(job)) => {
                 let job_id = job.id;
-                if let Err(err) = execute(&pool, job).await {
+                if let Err(err) = execute(&pool, &mailer, job).await {
                     tracing::error!(%job_id, error = ?err, "job execution failed");
                 }
             }
@@ -69,7 +71,7 @@ async fn claim_next_job(pool: &PgPool) -> sqlx::Result<Option<ClaimedJob>> {
     .await
 }
 
-async fn execute(pool: &PgPool, job: ClaimedJob) -> anyhow::Result<()> {
+async fn execute(pool: &PgPool, mailer: &Mailer, job: ClaimedJob) -> anyhow::Result<()> {
     // Re-derive permission at execution time. Queueing is not consent —
     // the verification may have lapsed while this job waited.
     let domain = match authorized_domain(pool, job.target_id).await? {
@@ -106,6 +108,10 @@ async fn execute(pool: &PgPool, job: ClaimedJob) -> anyhow::Result<()> {
         }
     };
 
+    // The count that was compared against last time, captured before this
+    // job is marked complete so it cannot find itself.
+    let previous = previous_actionable_count(pool, job.target_id, job.id).await?;
+
     store_findings(pool, job.id, &findings).await?;
 
     sqlx::query("update scan_jobs set status = 'completed', completed_at = now() where id = $1")
@@ -114,7 +120,130 @@ async fn execute(pool: &PgPool, job: ClaimedJob) -> anyhow::Result<()> {
         .await?;
 
     tracing::info!(job_id = %job.id, findings = findings.len(), "scan completed");
+
+    let current = crate::triage::triage_scan(&findings).actionable.len() as i64;
+    report_change(pool, mailer, &job, previous, current).await;
+
     Ok(())
+}
+
+/// Emails the owner when a monitored site has changed.
+///
+/// Only on a change, and never on a first scan: a message saying "still
+/// three issues, same as last week" teaches people to filter the sender,
+/// and then the one that mattered goes unread too.
+///
+/// Failure here is logged, not propagated. The scan itself succeeded, and
+/// marking a completed job as failed because an email bounced would lose
+/// results somebody is waiting for.
+async fn report_change(
+    pool: &PgPool,
+    mailer: &Mailer,
+    job: &ClaimedJob,
+    previous: Option<i64>,
+    current: i64,
+) {
+    let change = compare(previous, current);
+    if !change.worth_reporting() {
+        return;
+    }
+
+    #[derive(sqlx::FromRow)]
+    struct Recipient {
+        email: String,
+        domain: String,
+        scan_cadence: String,
+    }
+
+    let recipient: Option<Recipient> = sqlx::query_as(
+        "select u.email, t.domain, t.scan_cadence
+         from targets t join users u on u.id = t.user_id
+         where t.id = $1",
+    )
+    .bind(job.target_id)
+    .fetch_optional(pool)
+    .await
+    .unwrap_or(None);
+
+    let Some(recipient) = recipient else { return };
+
+    // Only sites somebody put on a schedule. A manual scan is watched by
+    // whoever pressed the button.
+    if recipient.scan_cadence == "manual" {
+        return;
+    }
+
+    let summary = headline(&recipient.domain, &change);
+    let detail = match previous {
+        Some(previous) => {
+            format!("The last scan found {previous} to fix. This one found {current}.")
+        }
+        None => format!("This scan found {current} to fix."),
+    };
+    let link = format!("{}/#/scans/{}", mailer.public_url, job.id);
+    let body = change_email(&recipient.domain, &summary, &detail, &link);
+
+    if let Err(error) = mailer.send(&recipient.email, &summary, &body).await {
+        tracing::error!(error = ?error, "could not send the change notification");
+    }
+}
+
+/// What the previous completed scan of this target found.
+///
+/// Excludes the job being finished so a scan cannot compare against itself.
+async fn previous_actionable_count(
+    pool: &PgPool,
+    target_id: Uuid,
+    current_job: Uuid,
+) -> anyhow::Result<Option<i64>> {
+    let previous_job: Option<Uuid> = sqlx::query_scalar(
+        "select id from scan_jobs
+         where target_id = $1 and id <> $2 and status = 'completed'
+         order by completed_at desc nulls last
+         limit 1",
+    )
+    .bind(target_id)
+    .bind(current_job)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(previous_job) = previous_job else {
+        return Ok(None);
+    };
+
+    let findings = load_findings(pool, previous_job).await?;
+    Ok(Some(
+        crate::triage::triage_scan(&findings).actionable.len() as i64
+    ))
+}
+
+/// Rebuilds the findings of a stored scan.
+async fn load_findings(pool: &PgPool, job_id: Uuid) -> anyhow::Result<Vec<Finding>> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        severity: String,
+        title: String,
+        description: Option<String>,
+        raw_output: serde_json::Value,
+    }
+
+    let rows: Vec<Row> = sqlx::query_as(
+        "select severity, title, description, raw_output
+         from scan_results where scan_job_id = $1",
+    )
+    .bind(job_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| Finding {
+            severity: crate::finding::Severity::from_tool_label(&row.severity),
+            title: row.title,
+            description: row.description,
+            raw: row.raw_output,
+        })
+        .collect())
 }
 
 /// Returns the target's domain only if its ownership verification is valid

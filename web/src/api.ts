@@ -18,12 +18,15 @@ export interface Profile {
   agency_logo_url: string | null;
 }
 
+export type Cadence = "manual" | "weekly" | "monthly";
+
 export interface Target {
   id: string;
   domain: string;
   client_name: string | null;
   verified: boolean;
   verification_expires_at: string | null;
+  scan_cadence: Cadence;
 }
 
 export interface VerificationInstructions {
@@ -285,6 +288,12 @@ export const api = {
     return request<Target>("POST", "/api/targets", {
       domain,
       client_name: clientName,
+    });
+  },
+
+  setCadence(targetId: string, cadence: Cadence) {
+    return request<Target>("PUT", `/api/targets/${encodeURIComponent(targetId)}/cadence`, {
+      cadence,
     });
   },
 

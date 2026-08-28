@@ -1,13 +1,12 @@
 pub mod auth;
 pub mod config;
 pub mod error;
-pub mod mailer;
 pub mod rate_limit;
 pub mod routes;
 pub mod state;
 
 use anyhow::{Context, Result};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::Router;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -92,6 +91,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/targets",
             get(routes::targets::list_targets).post(routes::targets::create_target),
+        )
+        .route(
+            "/api/targets/:id/cadence",
+            put(routes::targets::set_cadence),
         )
         .route(
             "/api/targets/:id/verification",

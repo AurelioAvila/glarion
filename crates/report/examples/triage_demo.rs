@@ -1,10 +1,10 @@
 //! Prints the triage of the bundled real scan, to eyeball what a client
 //! would actually see. Run with: cargo run -p report --example triage_demo
 use orchestrator::finding::{Finding, Severity};
-use report::triage::triage_scan;
+use orchestrator::triage::triage_scan;
 
 fn main() {
-    let raw = include_str!("../tests/fixtures/nuclei_real_scan.jsonl");
+    let raw = include_str!("../../orchestrator/tests/fixtures/nuclei_real_scan.jsonl");
     let findings: Vec<Finding> = raw
         .lines()
         .filter(|l| !l.trim().is_empty())

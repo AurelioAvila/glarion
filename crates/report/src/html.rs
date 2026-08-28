@@ -15,7 +15,7 @@
 
 use chrono::{DateTime, Utc};
 
-use crate::triage::{Disposition, Priority, TriagedFinding, TriagedScan};
+use orchestrator::triage::{Disposition, Priority, TriagedFinding, TriagedScan};
 
 /// Who the report is for and who it is from.
 #[derive(Debug, Clone)]
@@ -350,9 +350,9 @@ const STYLES: &str = r#"<style>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::triage::{triage_scan, Guidance};
     use chrono::TimeZone;
     use orchestrator::finding::{Finding, Severity};
+    use orchestrator::triage::{triage_scan, Guidance};
     use serde_json::json;
 
     fn meta() -> ReportMeta {

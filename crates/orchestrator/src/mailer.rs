@@ -146,6 +146,29 @@ pub fn verification_email(first_name: &str, link: &str) -> String {
     )
 }
 
+/// The message sent when a monitored site changes.
+///
+/// Deliberately short and specific. This is the only email an agency gets
+/// from us once they are set up, so it has to be worth opening: what
+/// changed, on which site, and a way to see the detail. A digest of
+/// everything that happened would be filtered within a month.
+pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> String {
+    let safe_domain = escape(domain);
+    let safe_summary = escape(summary);
+    let safe_detail = escape(detail);
+    let safe_link = escape(link);
+
+    format!(
+        r#"<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#16191d">
+<p style="font-size:17px;margin:0 0 4px"><strong>{safe_summary}</strong></p>
+<p style="color:#5c6470;margin:0 0 20px">{safe_domain}</p>
+<p>{safe_detail}</p>
+<p><a href="{safe_link}" style="display:inline-block;background:#16191d;color:#ffffff;padding:10px 18px;border-radius:4px;text-decoration:none">See what changed</a></p>
+<p style="color:#5c6470;font-size:13px">You are getting this because this site is on a scanning schedule. Turn it off on the site's page.</p>
+</div>"#
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +213,35 @@ mod tests {
             mailer.verification_link("tok"),
             "https://glarion.app/#/verify/tok"
         );
+    }
+
+    #[test]
+    fn a_change_message_cannot_be_injected_through_the_domain() {
+        // The domain came from a signup form, and every other value here is
+        // built from scan output.
+        let body = change_email(
+            "<script>alert(1)</script>",
+            "2 new issues",
+            "detail",
+            "https://example.com",
+        );
+
+        assert!(!body.contains("<script>alert(1)</script>"));
+        assert!(body.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn a_change_message_says_how_to_stop_receiving_them() {
+        // A recurring email with no way off it is how a sender ends up in a
+        // spam folder along with everything else it sends.
+        let body = change_email(
+            "example.com",
+            "1 new issue",
+            "detail",
+            "https://example.com",
+        );
+
+        assert!(body.to_lowercase().contains("turn it off"));
     }
 
     #[test]
