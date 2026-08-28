@@ -363,9 +363,24 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         _ => Plan::Free,
     };
 
+    // Read from the item first, then the subscription.
+    //
+    // Stripe moved the billing period onto subscription items in a recent
+    // API version, so the field is simply absent at the top level on a
+    // current account — which showed up as a renewal date that was always
+    // blank. Checking both keeps this working either way rather than
+    // pinning us to one version.
     let period_end = subscription
-        .get("current_period_end")
+        .get("items")
+        .and_then(|items| items.get("data"))
+        .and_then(|data| data.get(0))
+        .and_then(|item| item.get("current_period_end"))
         .and_then(|value| value.as_i64())
+        .or_else(|| {
+            subscription
+                .get("current_period_end")
+                .and_then(|value| value.as_i64())
+        })
         .and_then(|seconds| Utc.timestamp_opt(seconds, 0).single());
 
     let subscription_id = subscription.get("id").and_then(|value| value.as_str());
