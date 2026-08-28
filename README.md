@@ -120,3 +120,15 @@ to be capable of catching a regression rather than merely passing.
   process, leaving a small DNS-rebinding window between check and scan.
 
 Full plan: `C:\Users\aurel\.claude\plans\nifty-waddling-shore.md`.
+
+### Running the checks locally
+
+```bash
+bash scripts/ci-local.sh
+```
+
+Mirrors the hosted workflow: formatting, clippy, the full suite with the
+integration tests active, and the assertion that the gate tests actually
+ran rather than skipped. Hosted Actions do not run on this repository until
+the account has Actions billing configured, so this script is currently the
+one that enforces those checks.
