@@ -84,6 +84,7 @@ pub fn router(state: AppState) -> Router {
         // Ungated on purpose: it reads only what a site publishes to any
         // visitor. See routes::preview.
         .route("/api/preview", post(routes::preview::run_preview))
+        .route("/api/preview/email", post(routes::preview::email_preview))
         .route("/api/auth/signup", post(routes::accounts::signup))
         .route("/api/auth/login", post(routes::accounts::login))
         .route("/api/auth/verify", post(routes::accounts::verify_email))
