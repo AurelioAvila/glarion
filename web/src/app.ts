@@ -38,13 +38,24 @@ function banner(kind: "error" | "ok" | "info", message: string): HTMLElement {
 /// An expired session is handled rather than displayed: telling someone
 /// "unauthorized" when the fix is to sign in again is a worse experience
 /// than simply taking them there.
+///
+/// The two cases have to be told apart, though. Sign-in answers a wrong
+/// password with 401 as well, and treating that as an expired session
+/// showed "Your session expired" to someone who had simply mistyped —
+/// while clearing a session they did not have. Only a request made *with*
+/// a session can have had one expire.
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.isAuthFailure) {
+    if (error.code === "invalid_credentials") {
+      return "That email and password do not match.";
+    }
+
+    if (error.isAuthFailure && session.isSignedIn) {
       session.clear();
       window.location.hash = "#/signin";
       return "Your session expired. Please sign in again.";
     }
+
     return error.message;
   }
   return "Something went wrong.";

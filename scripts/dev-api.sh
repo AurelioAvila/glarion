@@ -28,7 +28,10 @@ if [ ! -f "$SECRET_FILE" ]; then
     chmod 600 "$SECRET_FILE" 2>/dev/null || true
 fi
 
-DATABASE_URL="$(bash scripts/dev-db.sh url)"
+# The development database, not the test one. The integration tests
+# truncate every table, so running the app against that database means a
+# test run wipes the accounts and scan history you were working with.
+DATABASE_URL="$(bash scripts/dev-db.sh url dev)"
 JWT_SECRET="$(cat "$SECRET_FILE")"
 
 # Added to the built-in first-party origins rather than replacing them —
