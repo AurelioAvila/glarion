@@ -24,12 +24,18 @@ use crate::state::AppState;
 #[derive(Deserialize)]
 pub struct CreateTargetRequest {
     pub domain: String,
+    /// Which of the agency's clients this site belongs to. Appears on the
+    /// report; optional, because a freelancer scanning their own site has
+    /// nobody to name.
+    #[serde(default)]
+    pub client_name: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct TargetResponse {
     pub id: Uuid,
     pub domain: String,
+    pub client_name: Option<String>,
     pub verified: bool,
     pub verification_expires_at: Option<DateTime<Utc>>,
 }
@@ -88,13 +94,19 @@ pub async fn create_target(
         )));
     }
 
+    let client_name = body
+        .client_name
+        .map(|name| name.trim().chars().take(120).collect::<String>())
+        .filter(|name| !name.is_empty());
+
     let target_id: Option<Uuid> = sqlx::query_scalar(
-        "insert into targets (user_id, domain) values ($1, $2)
+        "insert into targets (user_id, domain, client_name) values ($1, $2, $3)
          on conflict (user_id, domain) do nothing
          returning id",
     )
     .bind(user.id)
     .bind(&domain)
+    .bind(&client_name)
     .fetch_optional(&state.pool)
     .await?;
 
@@ -103,6 +115,7 @@ pub async fn create_target(
     Ok(Json(TargetResponse {
         id: target_id,
         domain,
+        client_name,
         verified: false,
         verification_expires_at: None,
     }))
@@ -113,7 +126,7 @@ pub async fn list_targets(
     user: AuthUser,
 ) -> ApiResult<Json<Vec<TargetResponse>>> {
     let rows: Vec<TargetWithVerificationRow> = sqlx::query_as(
-        "select t.id, t.domain, v.verified_at, v.expires_at
+        "select t.id, t.domain, t.client_name, v.verified_at, v.expires_at
              from targets t
              left join lateral (
                  select verified_at, expires_at
@@ -140,6 +153,7 @@ pub async fn list_targets(
             TargetResponse {
                 id: row.id,
                 domain: row.domain,
+                client_name: row.client_name,
                 verified: is_currently_verified(&status, now),
                 verification_expires_at: row.expires_at,
             }
@@ -154,6 +168,7 @@ pub async fn list_targets(
 struct TargetWithVerificationRow {
     id: Uuid,
     domain: String,
+    client_name: Option<String>,
     verified_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
 }

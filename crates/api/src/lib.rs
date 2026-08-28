@@ -80,7 +80,19 @@ pub fn router(state: AppState) -> Router {
             "/api/targets/:id/verification/check",
             post(routes::targets::check_verification),
         )
-        .route("/api/scans", post(routes::scans::create_scan))
+        .route(
+            "/api/scans",
+            get(routes::results::list_scans).post(routes::scans::create_scan),
+        )
+        .route("/api/scans/:id", get(routes::results::get_scan))
+        .route(
+            "/api/scans/:id/report",
+            get(routes::results::get_scan_report),
+        )
+        .route(
+            "/api/profile",
+            get(routes::profile::get_profile).put(routes::profile::update_profile),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

@@ -56,6 +56,7 @@ dependencies = [
  "jsonwebtoken",
  "orchestrator",
  "password-hash",
+ "report",
  "serde",
  "serde_json",
  "sqlx",
