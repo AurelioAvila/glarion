@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use crate::auth::{hash_password, issue_token, verify_password};
 use crate::error::{ApiError, ApiResult};
-use crate::mailer::verification_email;
 use crate::state::AppState;
+use orchestrator::mailer::verification_email;
 
 /// Minimum password length. Deliberately a length floor rather than a
 /// composition rule (no "must contain a symbol") — length is what actually

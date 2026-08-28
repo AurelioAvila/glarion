@@ -21,7 +21,7 @@
 //! rather than hidden, so a template we have not classified yet fails
 //! toward visibility.
 
-use orchestrator::finding::{Finding, Severity};
+use crate::finding::{Finding, Severity};
 use serde::{Deserialize, Serialize};
 
 /// What the reader should do with a finding.

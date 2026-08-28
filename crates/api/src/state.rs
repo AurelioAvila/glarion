@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use std::sync::Arc;
 
-use crate::mailer::Mailer;
+use orchestrator::mailer::Mailer;
 
 use crate::rate_limit::RateLimiter;
 

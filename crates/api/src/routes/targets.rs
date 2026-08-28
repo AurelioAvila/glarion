@@ -9,6 +9,7 @@ use axum::extract::{ConnectInfo, Path, State};
 use axum::Json;
 use chrono::{DateTime, Utc};
 use orchestrator::domain::normalize_target;
+use orchestrator::schedule::Cadence;
 use orchestrator::verification::{
     self, expiry_from, file_contains_token, is_currently_verified, token_present,
     VerificationMethod, VerificationStatus,
@@ -38,6 +39,86 @@ pub struct TargetResponse {
     pub client_name: Option<String>,
     pub verified: bool,
     pub verification_expires_at: Option<DateTime<Utc>>,
+    /// "manual", "weekly" or "monthly".
+    pub scan_cadence: String,
+}
+
+#[derive(Deserialize)]
+pub struct SetCadenceRequest {
+    pub cadence: String,
+}
+
+/// Puts a site on a recurring schedule, or takes it off one.
+///
+/// A schedule is standing authorization: the customer is saying "keep
+/// checking this" rather than approving one scan. That is why it can only
+/// be set on a target whose ownership is currently proved — otherwise the
+/// instruction would outlive the permission it depends on.
+pub async fn set_cadence(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(target_id): Path<Uuid>,
+    Json(body): Json<SetCadenceRequest>,
+) -> ApiResult<Json<TargetResponse>> {
+    let cadence = Cadence::from_str_or_manual(&body.cadence);
+
+    // Refuse an unrecognised value rather than quietly storing "manual":
+    // somebody asking for a schedule and getting silence is worse than an
+    // error they can see.
+    if cadence == Cadence::Manual && !body.cadence.trim().eq_ignore_ascii_case("manual") {
+        return Err(ApiError::BadRequest(
+            "cadence must be manual, weekly or monthly".into(),
+        ));
+    }
+
+    let row: Option<TargetWithVerificationRow> = sqlx::query_as(
+        "select t.id, t.domain, t.client_name, t.scan_cadence, v.verified_at, v.expires_at
+         from targets t
+         left join lateral (
+             select verified_at, expires_at from target_verifications
+             where target_id = t.id and verified_at is not null
+             order by verified_at desc limit 1
+         ) v on true
+         where t.id = $1 and t.user_id = $2",
+    )
+    .bind(target_id)
+    .bind(user.id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let row = row.ok_or(ApiError::NotFound)?;
+    let now = Utc::now();
+    let status = VerificationStatus {
+        verified_at: row.verified_at,
+        expires_at: row.expires_at,
+    };
+
+    if cadence != Cadence::Manual && !is_currently_verified(&status, now) {
+        return Err(ApiError::TargetNotVerified);
+    }
+
+    // Clearing the stamp when a schedule is switched on makes the first
+    // scan happen now rather than a week from now, so turning monitoring on
+    // produces a result instead of silence.
+    sqlx::query(
+        "update targets
+         set scan_cadence = $2,
+             last_scheduled_at = case when $2 = 'manual' then last_scheduled_at else null end
+         where id = $1",
+    )
+    .bind(target_id)
+    .bind(cadence.as_db_str())
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(TargetResponse {
+        id: row.id,
+        domain: row.domain,
+        client_name: row.client_name,
+        verified: is_currently_verified(&status, now),
+        verification_expires_at: row.expires_at,
+        scan_cadence: cadence.as_db_str().to_string(),
+    }))
 }
 
 #[derive(Serialize)]
@@ -118,6 +199,7 @@ pub async fn create_target(
         client_name,
         verified: false,
         verification_expires_at: None,
+        scan_cadence: "manual".to_string(),
     }))
 }
 
@@ -126,7 +208,7 @@ pub async fn list_targets(
     user: AuthUser,
 ) -> ApiResult<Json<Vec<TargetResponse>>> {
     let rows: Vec<TargetWithVerificationRow> = sqlx::query_as(
-        "select t.id, t.domain, t.client_name, v.verified_at, v.expires_at
+        "select t.id, t.domain, t.client_name, t.scan_cadence, v.verified_at, v.expires_at
              from targets t
              left join lateral (
                  select verified_at, expires_at
@@ -156,6 +238,7 @@ pub async fn list_targets(
                 client_name: row.client_name,
                 verified: is_currently_verified(&status, now),
                 verification_expires_at: row.expires_at,
+                scan_cadence: row.scan_cadence,
             }
         })
         .collect();
@@ -169,6 +252,7 @@ struct TargetWithVerificationRow {
     id: Uuid,
     domain: String,
     client_name: Option<String>,
+    scan_cadence: String,
     verified_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
 }

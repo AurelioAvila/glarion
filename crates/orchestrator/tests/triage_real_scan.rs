@@ -12,7 +12,7 @@
 //! throwing away the evidence that the rest was checked.
 
 use orchestrator::finding::{Finding, Severity};
-use report::triage::{triage_scan, Disposition, Priority};
+use orchestrator::triage::{triage_scan, Disposition, Priority};
 
 fn load_real_scan() -> Vec<Finding> {
     let raw = include_str!("fixtures/nuclei_real_scan.jsonl");
@@ -141,7 +141,7 @@ fn dns_and_certificate_facts_stay_in_the_appendix() {
             .unwrap_or_else(|| panic!("{template} should be present in the fixture"));
 
         assert_eq!(
-            report::triage::triage(finding).disposition,
+            orchestrator::triage::triage(finding).disposition,
             Disposition::Inventory,
             "{template} must not be presented as something to fix"
         );

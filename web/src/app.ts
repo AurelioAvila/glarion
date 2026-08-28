@@ -17,7 +17,7 @@
 // number, which would hide exactly the thing worth seeing.
 
 import { api, ApiError, rememberedEmail, session } from "./api.js";
-import type { ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
+import type { Cadence, ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
@@ -563,6 +563,16 @@ function siteEntry(row: SiteRow): HTMLElement {
     );
   }
 
+  // Which sites are actually being watched, and which are only ever
+  // checked when somebody remembers. That is the difference between a
+  // service and a tool, so it belongs on the list.
+  if (target.scan_cadence !== "manual") {
+    detail.append(
+      el("span", { class: "sep", text: "/" }),
+      el("span", { class: "watching", text: target.scan_cadence }),
+    );
+  }
+
   return el("li", {}, [
     el("a", { class: `entry entry-${state}`, href: `#/targets/${target.id}` }, [
       el("div", {}, [
@@ -757,7 +767,7 @@ async function renderTarget(targetId: string): Promise<void> {
   );
 
   if (site.verified) {
-    append(container, expiryNote(site), scansSection(site, scans));
+    append(container, expiryNote(site), cadenceControl(site), scansSection(site, scans));
   } else {
     // Deliberately the only thing on the page. Until ownership is proved
     // nothing else can happen, and offering a scan button that always
@@ -899,6 +909,81 @@ function verificationInstructions(
     dnsPane,
     filePane,
     el("div", { style: "margin-top:1.75rem" }, [message, check]),
+  ]);
+}
+
+/// Turning recurring scanning on or off.
+///
+/// The whole subscription rests on this switch: a tool somebody has to
+/// remember to run gets used once, while a site that is checked every week
+/// is a service worth paying for every month. So it sits above the scan
+/// list rather than in a settings page nobody opens.
+function cadenceControl(target: Target): HTMLElement {
+  const message = el("div");
+  const options: Array<{ value: Cadence; label: string }> = [
+    { value: "manual", label: "Off" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+  ];
+
+  const buttons = new Map<Cadence, HTMLButtonElement>();
+  const row = el("div", { class: "tabs", style: "margin-bottom:1.1rem" });
+
+  let current = target.scan_cadence;
+
+  function paint(): void {
+    for (const [value, button] of buttons) {
+      button.className = value === current ? "tab tab-active" : "tab";
+    }
+  }
+
+  for (const option of options) {
+    const button = el("button", { class: "tab", type: "button", text: option.label });
+    buttons.set(option.value, button);
+
+    on(button, "click", () => {
+      if (current === option.value) return;
+      const previous = current;
+
+      // Painted before the request so the switch feels immediate; put back
+      // if the server refuses, rather than leaving a lie on screen.
+      current = option.value;
+      paint();
+      clear(message);
+
+      void api
+        .setCadence(target.id, option.value)
+        .then(() => {
+          message.replaceChildren(
+            notice(
+              "ok",
+              option.value === "manual"
+                ? "Automatic checks are off."
+                : `Checking ${option.label.toLowerCase()}. We will email you only when something changes.`,
+            ),
+          );
+        })
+        .catch((error: unknown) => {
+          current = previous;
+          paint();
+          message.replaceChildren(notice("error", describeError(error)));
+        });
+    });
+
+    row.append(button);
+  }
+
+  paint();
+
+  return el("div", { style: "margin-bottom:2.5rem" }, [
+    sectionRule("Automatic checks"),
+    el("p", {
+      class: "blurb",
+      style: "margin:1rem 0 1.1rem",
+      text: "We re-check the site on this schedule and email you only when the result changes.",
+    }),
+    row,
+    message,
   ]);
 }
 
