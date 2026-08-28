@@ -79,6 +79,10 @@ export interface TriagedFinding {
   guidance: Guidance | null;
   evidence: string | null;
   template_id: string;
+  /// Which matcher fired. For a detection template this is the answer
+  /// itself — the firewall's name, the technology — while the evidence is
+  /// only where we looked.
+  matcher: string;
   occurrences: number;
 }
 

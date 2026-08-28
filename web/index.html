@@ -41,6 +41,12 @@
   --caution: #e5a83c;
   --clear: #52c78d;
 
+  /* Charts borrow the ink, not the signal palette: a line showing how many
+     problems there were is not itself a warning, and colouring it red would
+     say "alarm" on a chart that might be showing an improvement. */
+  --chart-line: #8d90a0;
+  --chart-fill: rgba(141, 144, 160, .13);
+
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   color-scheme: dark;
@@ -50,7 +56,13 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* A very slight lift behind the masthead. Flat near-black over a whole
+     screen reads as unfinished rather than as restrained; this is barely
+     perceptible on its own but gives the page a top and a bottom. */
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255, 255, 255, .035), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -272,6 +284,83 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
 
 .entry-go { font-family: var(--mono); font-size: .8rem; color: var(--ink-3); }
 .entry:hover .entry-go { color: var(--ink); }
+
+/* --- what we know ------------------------------------------------------ */
+
+/*
+  Facts pulled from the same scan that produced the findings. Two columns
+  of label-and-value, dense on purpose: this is reference material somebody
+  scans for one line, not prose.
+*/
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .1rem 2.5rem;
+  margin: 1.25rem 0 0;
+}
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: .9rem;
+  padding: .55rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.fact-label {
+  flex: none;
+  width: 6.5rem;
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fact-value {
+  font-size: .88rem;
+  color: var(--ink-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- charts ------------------------------------------------------------ */
+
+.chart-frame { margin: 1.4rem 0 .4rem; }
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: .5rem;
+}
+
+/*
+  One bar showing how a total splits by rank. A comparison of lengths,
+  because people read those accurately and read angles badly.
+*/
+.proportion {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin: 1rem 0 .75rem;
+}
+.proportion-part { border-radius: 1px; }
+.part-alarm { background: var(--alarm); }
+.part-caution { background: var(--caution); }
+.part-low { background: var(--ink-3); }
+.part-clear { background: var(--clear); }
+
+.legend {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: .8rem;
+  color: var(--ink-3);
+}
+.legend-item { display: flex; align-items: center; gap: .45rem; }
+.legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
 
 /* --- procedure (verification, onboarding) ------------------------------ */
 
@@ -722,6 +811,7 @@ kbd {
 
 @media (max-width: 46rem) {
   main { padding: 2.25rem 1.25rem 5rem; }
+  .facts { grid-template-columns: 1fr; }
   .top-inner { padding: 0 1.25rem; }
   .standing { font-size: 1.2rem; }
   .entry { grid-template-columns: 1fr; gap: .9rem; }

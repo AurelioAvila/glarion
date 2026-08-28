@@ -21,6 +21,8 @@ import type { Cadence, ScanDetail, ScanSummary, Target, TriagedFinding } from ".
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
+import { postureChart, proportionBar } from "./chart.js";
+import { siteProfile } from "./profile.js";
 
 const root = () => byId<HTMLElement>("view");
 
@@ -737,10 +739,18 @@ async function renderTarget(targetId: string): Promise<void> {
 
   let target: Target | undefined;
   let scans: ScanSummary[] = [];
+  let latestDetail: ScanDetail | undefined;
   try {
     const [targets, scanList] = await Promise.all([api.targets(), api.scans(targetId)]);
     target = targets.find((candidate) => candidate.id === targetId);
     scans = scanList;
+
+    // The most recent finished scan carries everything the profile and the
+    // summary need. Fetched separately because the list endpoint returns
+    // counts rather than findings, and loading every scan's findings to
+    // render one page would be wasteful.
+    const newest = scanList.find((scan) => scan.status === "completed");
+    if (newest) latestDetail = await api.scan(newest.id);
   } catch (error) {
     clear(container);
     container.append(notice("error", describeError(error)));
@@ -767,7 +777,15 @@ async function renderTarget(targetId: string): Promise<void> {
   );
 
   if (site.verified) {
-    append(container, expiryNote(site), cadenceControl(site), scansSection(site, scans));
+    append(
+      container,
+      expiryNote(site),
+      latestDetail ? currentState(latestDetail) : null,
+      postureSection(scans),
+      latestDetail ? knownFacts(latestDetail) : null,
+      cadenceControl(site),
+      scansSection(site, scans),
+    );
   } else {
     // Deliberately the only thing on the page. Until ownership is proved
     // nothing else can happen, and offering a scan button that always
@@ -909,6 +927,126 @@ function verificationInstructions(
     dnsPane,
     filePane,
     el("div", { style: "margin-top:1.75rem" }, [message, check]),
+  ]);
+}
+
+/// Where the site stands right now, before any history or detail.
+///
+/// The page used to open with a schedule control and a list of scan rows,
+/// which answered "what have we done" rather than "how is the site" — and
+/// the second is the only question anybody arrives with.
+function currentState(detail: ScanDetail): HTMLElement {
+  const counts = { high: 0, medium: 0, low: 0 };
+  for (const finding of detail.triaged.actionable) {
+    if (finding.priority === "urgent" || finding.priority === "high") counts.high += 1;
+    else if (finding.priority === "medium") counts.medium += 1;
+    else counts.low += 1;
+  }
+
+  const total = detail.triaged.actionable.length;
+  const line = el("p", { class: "standing", style: "margin-bottom:.75rem" });
+
+  if (total === 0) {
+    line.append(el("span", { class: "clear", text: "Nothing to fix" }), " on this site.");
+  } else {
+    line.append(
+      el("span", { class: "alarm", text: countOf(total, "thing") }),
+      " to fix, ",
+      el("span", { class: "caution", text: String(detail.triaged.review.length) }),
+      " to decide.",
+    );
+  }
+
+  const bar = proportionBar([
+    { count: counts.high, className: "part-alarm", label: "high" },
+    { count: counts.medium, className: "part-caution", label: "medium" },
+    { count: counts.low, className: "part-low", label: "low" },
+    { count: total === 0 ? 1 : 0, className: "part-clear", label: "clear" },
+  ]);
+
+  const legend = el("div", { class: "legend" });
+  const swatch = (className: string, text: string, count: number): HTMLElement | null =>
+    count === 0
+      ? null
+      : el("span", { class: "legend-item" }, [
+          el("span", { class: `legend-swatch ${className}` }),
+          `${count} ${text}`,
+        ]);
+
+  append(
+    legend,
+    swatch("part-alarm", "high", counts.high),
+    swatch("part-caution", "medium", counts.medium),
+    swatch("part-low", "low", counts.low),
+    el("span", { class: "legend-item" }, [
+      `${countOf(detail.finding_count, "check")} run`,
+    ]),
+  );
+
+  const open = el("a", { class: "ghost", href: `#/scans/${detail.id}`, text: "See the detail →" });
+
+  return el("div", { style: "margin-bottom:2.75rem" }, [
+    line,
+    bar,
+    legend,
+    el("div", { style: "margin-top:1.25rem" }, [open]),
+  ]);
+}
+
+/// How the site has moved over its last few scans.
+///
+/// The single most useful thing an agency can show a client at renewal: a
+/// line that came down and stayed down is the argument for the retainer.
+function postureSection(scans: ScanSummary[]): HTMLElement | null {
+  const completed = scans
+    .filter((scan) => scan.status === "completed")
+    .slice(0, 12)
+    .reverse();
+
+  // One point is not a trend, and a chart of it invites reading a shape
+  // that is not there.
+  if (completed.length < 2) return null;
+
+  const points = completed.map((scan) => ({
+    value: scan.actionable_count,
+    label: relativeTime(scan.completed_at ?? scan.created_at),
+  }));
+
+  const first = completed[0];
+  const last = completed[completed.length - 1];
+
+  return el("div", { style: "margin-bottom:2.75rem" }, [
+    sectionRule("Over time", countOf(completed.length, "scan")),
+    el("div", { class: "chart-frame" }, [postureChart(points)]),
+    el("div", { class: "chart-axis" }, [
+      el("span", { text: first ? relativeTime(first.completed_at ?? first.created_at) : "" }),
+      el("span", { text: last ? relativeTime(last.completed_at ?? last.created_at) : "" }),
+    ]),
+  ]);
+}
+
+/// What the scan learned about the site, beyond what is wrong with it.
+///
+/// All of this was already being collected and filed in an appendix nobody
+/// read. An agency about to speak to a client wants to know what the site
+/// *is* before it hears what is wrong with it.
+function knownFacts(detail: ScanDetail): HTMLElement | null {
+  const facts = siteProfile(detail.triaged.inventory);
+  if (facts.length === 0) return null;
+
+  const grid = el("div", { class: "facts" });
+  for (const fact of facts) {
+    grid.append(
+      el("div", { class: "fact" }, [
+        el("span", { class: "fact-label", text: fact.label }),
+        el("span", { class: "fact-value", text: fact.value }),
+      ]),
+    );
+  }
+
+  return el("div", { style: "margin-bottom:2.75rem" }, [
+    sectionRule("What we found", countOf(facts.length, "detail")),
+    grid,
   ]);
 }
 

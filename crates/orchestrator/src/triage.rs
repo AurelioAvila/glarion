@@ -74,6 +74,13 @@ pub struct TriagedFinding {
     /// together this is the first of them, so it identifies the row for
     /// debugging rather than enumerating everything behind it.
     pub template_id: String,
+    /// Which matcher inside that rule fired.
+    ///
+    /// For a detection template this *is* the finding — "cloudflare" is the
+    /// answer to "which firewall", while the evidence is only the address
+    /// we happened to look at. Carried through so a reader-facing summary
+    /// can say something more useful than the domain it already knows.
+    pub matcher: String,
     /// How many raw findings were folded into this row. A scanner reports
     /// one result per matching rule, so a single misconfiguration can
     /// arrive three times over; printing it three times makes a report look
@@ -183,6 +190,7 @@ pub fn triage(finding: &Finding) -> TriagedFinding {
         guidance,
         evidence: extract_evidence(finding),
         template_id,
+        matcher: matcher.to_string(),
         occurrences: 1,
     }
 }
