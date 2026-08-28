@@ -8,6 +8,7 @@
 import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type { ScanDetail, ScanSummary, Target, TriagedFinding } from "./api.js";
 import { append, byId, clear, copyableValue, detailRow, el, on } from "./dom.js";
+import { countOf, relativeTime, shortDate } from "./format.js";
 
 const root = () => byId<HTMLElement>("view");
 
@@ -339,16 +340,35 @@ async function renderVerify(token: string): Promise<void> {
   }
 }
 
-// --- targets ---------------------------------------------------------------
+// --- sites -----------------------------------------------------------------
+
+/// A site with the state a reader needs at a glance.
+///
+/// The API returns targets and scans separately, so the two are joined
+/// here. That keeps the list endpoint simple and costs one extra request
+/// on a page that is already fetching.
+interface SiteRow {
+  target: Target;
+  latestScan: ScanSummary | undefined;
+}
+
+function joinScans(targets: Target[], scans: ScanSummary[]): SiteRow[] {
+  return targets.map((target) => ({
+    target,
+    // Scans arrive newest first, so the first match is the latest.
+    latestScan: scans.find((scan) => scan.target_id === target.id),
+  }));
+}
 
 async function renderTargets(): Promise<void> {
   const container = root();
   clear(container);
-  container.append(el("p", { class: "loading", text: "Loading…" }));
+  container.append(el("p", { class: "loading", text: "Loading\u2026" }));
 
-  let targets: Target[];
+  let rows: SiteRow[];
   try {
-    targets = await api.targets();
+    const [targets, scans] = await Promise.all([api.targets(), api.scans()]);
+    rows = joinScans(targets, scans);
   } catch (error) {
     clear(container);
     container.append(banner("error", describeError(error)));
@@ -356,34 +376,147 @@ async function renderTargets(): Promise<void> {
   }
 
   clear(container);
-  container.append(el("h1", { text: "Sites" }));
-  container.append(addTargetForm());
 
-  if (targets.length === 0) {
-    container.append(
-      el("p", { class: "empty", text: "No sites yet. Add one above to get started." }),
-    );
+  if (rows.length === 0) {
+    container.append(onboarding());
     return;
   }
 
-  const list = el("ul", { class: "target-list" });
-  for (const target of targets) {
-    list.append(targetRow(target));
+  const addPanel = addTargetForm();
+  addPanel.hidden = true;
+
+  const addButton = el("button", { class: "primary", type: "button", text: "Add site" });
+  on(addButton, "click", () => {
+    addPanel.hidden = !addPanel.hidden;
+    if (!addPanel.hidden) addPanel.querySelector("input")?.focus();
+  });
+
+  container.append(
+    el("div", { class: "page-head" }, [
+      el("div", {}, [
+        el("h1", { text: "Sites" }),
+        el("p", {
+          class: "lede",
+          text: "The sites you look after, and what each one needs.",
+        }),
+      ]),
+      addButton,
+    ]),
+    addPanel,
+    summaryTiles(rows),
+  );
+
+  const list = el("ul", { class: "site-list" });
+  for (const row of rows) {
+    list.append(siteCard(row));
   }
   container.append(list);
 }
 
-function targetRow(target: Target): HTMLElement {
+/// The three numbers worth reading before anything else.
+///
+/// An agency with twenty clients does not want to scan the list looking
+/// for red; it wants to know immediately whether today needs attention.
+function summaryTiles(rows: SiteRow[]): HTMLElement {
+  const needingAttention = rows.filter(
+    (row) => row.latestScan?.status === "completed" && row.latestScan.actionable_count > 0,
+  ).length;
+  const awaitingSetup = rows.filter((row) => !row.target.verified).length;
+
+  const tile = (value: number, label: string, variant?: string): HTMLElement =>
+    el("div", { class: variant ? `tile ${variant}` : "tile" }, [
+      el("div", { class: "tile-value", text: String(value) }),
+      el("div", { class: "tile-label", text: label }),
+    ]);
+
+  return el("div", { class: "tiles" }, [
+    tile(rows.length, rows.length === 1 ? "Site" : "Sites"),
+    tile(needingAttention, "Need attention", "tile-attention"),
+    tile(awaitingSetup, "Awaiting setup", "tile-setup"),
+  ]);
+}
+
+function siteCard(row: SiteRow): HTMLElement {
+  const { target, latestScan } = row;
+
   const status = target.verified
     ? el("span", { class: "chip chip-ok", text: "Verified" })
     : el("span", { class: "chip chip-pending", text: "Not verified" });
 
-  return el("li", { class: "target-row" }, [
-    el("div", {}, [
-      el("a", { class: "target-domain", href: `#/targets/${target.id}`, text: target.domain }),
-      target.client_name ? el("p", { class: "target-client", text: target.client_name }) : null,
+  // The footer answers "what should I do about this site" without a click.
+  const footer = el("div", { class: "site-card-foot" });
+
+  if (!target.verified) {
+    footer.append(el("span", { text: "Prove you control the domain to start scanning" }));
+  } else if (!latestScan) {
+    footer.append(el("span", { text: "Ready to scan" }));
+  } else if (latestScan.status === "running" || latestScan.status === "queued") {
+    footer.append(el("span", { text: "Scan in progress\u2026" }));
+  } else if (latestScan.status === "failed") {
+    footer.append(el("span", { text: "Last scan did not finish" }));
+  } else {
+    const needsAction = latestScan.actionable_count;
+    footer.append(
+      needsAction > 0
+        ? el("span", {
+            class: "site-finding-count",
+            text: `${needsAction} to fix`,
+          })
+        : el("span", { class: "site-clean", text: "Nothing to fix" }),
+      el("span", { class: "dot", text: "\u00b7" }),
+      el("span", { text: `scanned ${relativeTime(latestScan.completed_at ?? latestScan.created_at)}` }),
+    );
+  }
+
+  return el("li", {}, [
+    el("a", { class: "site-card", href: `#/targets/${target.id}` }, [
+      el("div", { class: "site-card-top" }, [
+        el("div", {}, [
+          el("div", { class: "site-domain", text: target.domain }),
+          target.client_name
+            ? el("div", { class: "site-client", text: target.client_name })
+            : null,
+        ]),
+        status,
+      ]),
+      footer,
     ]),
-    status,
+  ]);
+}
+
+/// What a new customer sees first.
+///
+/// The old version of this screen was one line of grey text. That is a poor
+/// use of the only moment when someone is guaranteed to be reading: this is
+/// where the product explains what it does, and — more usefully — warns
+/// that step two involves their DNS, which is the part that surprises
+/// people and the reason they abandon setup halfway.
+function onboarding(): HTMLElement {
+  const step = (n: string, title: string, body: string): HTMLElement =>
+    el("div", { class: "step-card" }, [
+      el("span", { class: "step-number", text: n }),
+      el("h3", { text: title }),
+      el("p", { text: body }),
+    ]);
+
+  return el("section", { class: "card onboard" }, [
+    el("h2", { text: "Add your first site" }),
+    el("p", {
+      class: "blurb",
+      text:
+        "Glarion checks a website for security problems and turns the result " +
+        "into a short report you can hand straight to your client.",
+    }),
+    el("div", { class: "steps" }, [
+      step("1", "Add the site", "The domain, and which client it belongs to."),
+      step(
+        "2",
+        "Prove it is yours",
+        "A one-time DNS record, so we only ever scan sites whose owner asked us to.",
+      ),
+      step("3", "Scan and send", "Run a scan, then download the report under your own name."),
+    ]),
+    addTargetForm(),
   ]);
 }
 
@@ -394,6 +527,7 @@ function addTargetForm(): HTMLElement {
     placeholder: "client-site.com",
     required: true,
     autocapitalize: "none",
+    autocorrect: "off",
     spellcheck: false,
   });
   const client = el("input", { type: "text", placeholder: "Client name (optional)" });
@@ -408,7 +542,7 @@ function addTargetForm(): HTMLElement {
     event.preventDefault();
     clear(message);
 
-    void withPending(button, "Adding…", async () => {
+    void withPending(button, "Adding\u2026", async () => {
       try {
         const target = await api.addTarget(domain.value, client.value || null);
         window.location.hash = `#/targets/${target.id}`;
@@ -449,14 +583,22 @@ async function renderTarget(targetId: string): Promise<void> {
   clear(container);
   append(
     container,
-    el("p", { class: "breadcrumb" }, [el("a", { href: "#/targets", text: "← All sites" })]),
-    el("h1", { text: target.domain }),
-    target.client_name ? el("p", { class: "subtitle", text: target.client_name }) : null,
+    el("p", { class: "breadcrumb" }, [
+      el("a", { href: "#/targets", text: "\u2190 All sites" }),
+    ]),
+    el("div", { class: "page-head" }, [
+      el("div", {}, [
+        el("h1", { text: target.domain }),
+        target.client_name ? el("p", { class: "subtitle", text: target.client_name }) : null,
+      ]),
+      target.verified
+        ? el("span", { class: "chip chip-ok", text: "Verified" })
+        : el("span", { class: "chip chip-pending", text: "Not verified" }),
+    ]),
   );
 
   if (target.verified) {
-    container.append(verifiedPanel(target));
-    container.append(scansPanel(target, scans));
+    append(container, verifiedPanel(target), scansPanel(target, scans));
   } else {
     // Deliberately the only thing on the page. Until ownership is proved
     // nothing else can happen, and offering a scan button that always
@@ -465,16 +607,15 @@ async function renderTarget(targetId: string): Promise<void> {
   }
 }
 
-function verifiedPanel(target: Target): HTMLElement {
-  const expires = target.verification_expires_at
-    ? new Date(target.verification_expires_at).toLocaleDateString()
-    : null;
+/// A one-line reminder that ownership proof expires.
+///
+/// Returns nothing when there is no expiry to report, rather than an empty
+/// panel: a card containing a single blank row is worse than no card.
+function verifiedPanel(target: Target): HTMLElement | null {
+  if (!target.verification_expires_at) return null;
 
-  return el("section", { class: "card" }, [
-    el("div", { class: "panel-head" }, [
-      el("span", { class: "chip chip-ok", text: "Verified" }),
-      expires ? el("span", { class: "muted", text: `Re-check needed after ${expires}` }) : null,
-    ]),
+  return el("p", { class: "muted", style: "margin: -0.5rem 0 1.15rem" }, [
+    `Ownership confirmed. Needs re-checking by ${shortDate(target.verification_expires_at)}.`,
   ]);
 }
 
@@ -666,8 +807,6 @@ function scansPanel(target: Target, scans: ScanSummary[]): HTMLElement {
 }
 
 function scanRow(scan: ScanSummary): HTMLElement {
-  const started = new Date(scan.created_at).toLocaleString();
-
   const status = el("span", {
     class: `chip chip-${scan.status}`,
     text:
@@ -680,18 +819,28 @@ function scanRow(scan: ScanSummary): HTMLElement {
             : "Failed",
   });
 
-  const right =
+  const summary =
     scan.status === "completed"
-      ? el("a", { class: "link", href: `#/scans/${scan.id}`, text: "View findings" })
+      ? scan.actionable_count > 0
+        ? `${scan.actionable_count} to fix of ${countOf(scan.finding_count, "check")}`
+        : `Nothing to fix, ${countOf(scan.finding_count, "check")}`
       : scan.status === "failed" && scan.failure_reason
-        ? el("span", { class: "muted", text: scan.failure_reason })
-        : null;
+        ? scan.failure_reason
+        : "";
 
-  return el("div", { class: "scan-row" }, [
+  const row = el("div", { class: "scan-row" }, [
     status,
-    el("span", { class: "muted", text: started }),
-    right,
+    el("span", { class: "muted", text: relativeTime(scan.completed_at ?? scan.created_at) }),
+    summary ? el("span", { class: "muted", text: summary }) : null,
   ]);
+
+  if (scan.status === "completed") {
+    row.append(
+      el("a", { class: "grow", href: `#/scans/${scan.id}`, text: "View findings \u2192" }),
+    );
+  }
+
+  return row;
 }
 
 // --- one scan --------------------------------------------------------------
@@ -870,9 +1019,19 @@ function renderNav(): void {
 
   if (!session.isSignedIn) return;
 
+  // Marking the current section costs one class and stops the header
+  // looking like three interchangeable words.
+  const section = window.location.hash.split("/")[1] ?? "";
+  const link = (href: string, text: string, matches: string[]): HTMLElement =>
+    el("a", {
+      href,
+      text,
+      class: matches.includes(section) ? "active" : undefined,
+    });
+
   nav.append(
-    el("a", { href: "#/targets", text: "Sites" }),
-    el("a", { href: "#/settings", text: "Settings" }),
+    link("#/targets", "Sites", ["targets", "scans", ""]),
+    link("#/settings", "Settings", ["settings"]),
   );
 
   const signOut = el("button", { class: "linklike", type: "button", text: "Sign out" });
