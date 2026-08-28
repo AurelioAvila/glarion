@@ -33,6 +33,17 @@ export interface PreviewResult {
   caveat: string;
 }
 
+export interface Subscription {
+  plan: string;
+  plan_name: string;
+  max_targets: number;
+  targets_used: number;
+  allows_scheduling: boolean;
+  status: string | null;
+  current_period_end: string | null;
+  manageable: boolean;
+}
+
 export type Cadence = "manual" | "weekly" | "monthly";
 
 export interface Target {
@@ -317,6 +328,18 @@ export const api = {
   /// something real before asking anyone to edit DNS.
   preview(domain: string) {
     return request<PreviewResult>("POST", "/api/preview", { domain });
+  },
+
+  subscription() {
+    return request<Subscription>("GET", "/api/billing");
+  },
+
+  checkout(plan: string, interval: "monthly" | "yearly") {
+    return request<{ url: string }>("POST", "/api/billing/checkout", { plan, interval });
+  },
+
+  billingPortal() {
+    return request<{ url: string }>("POST", "/api/billing/portal", {});
   },
 
   setCadence(targetId: string, cadence: Cadence) {

@@ -19,6 +19,7 @@ use std::net::SocketAddr;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
+use crate::billing::Plan;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -97,6 +98,27 @@ pub async fn set_cadence(
         return Err(ApiError::TargetNotVerified);
     }
 
+    // Unattended re-checking is what the paid plans are for. Checked here
+    // rather than only hidden in the interface: a control nobody can see is
+    // not a limit, it is a suggestion.
+    if cadence != Cadence::Manual {
+        let plan: Option<String> = sqlx::query_scalar(
+            "select plan from entitlements where user_id = $1 and product = 'glarion'",
+        )
+        .bind(user.id)
+        .fetch_optional(&state.pool)
+        .await?;
+
+        // No row reads as the free plan, the same fail-closed way the site
+        // allowance does.
+        let plan = Plan::from_db_str(plan.as_deref().unwrap_or("free"));
+        if !plan.allows_scheduling() {
+            return Err(ApiError::PlanLimit(
+                "automatic checks are part of the paid plans".into(),
+            ));
+        }
+    }
+
     // Clearing the stamp when a schedule is switched on makes the first
     // scan happen now rather than a week from now, so turning monitoring on
     // produces a result instead of silence.
@@ -154,15 +176,23 @@ pub async fn create_target(
     let domain =
         normalize_target(&body.domain).map_err(|err| ApiError::BadRequest(err.to_string()))?;
 
-    let max_targets: i32 = sqlx::query_scalar(
-        "select max_targets from entitlements where user_id = $1 and product = 'glarion'",
+    // Derived from the plan, not read from a column beside it.
+    //
+    // Storing the allowance as well as the plan meant two sources of truth
+    // that drift apart the moment either is written without the other —
+    // and the one that drifts is the one enforcing a paid limit.
+    let plan: Option<String> = sqlx::query_scalar(
+        "select plan from entitlements where user_id = $1 and product = 'glarion'",
     )
     .bind(user.id)
     .fetch_optional(&state.pool)
-    .await?
-    // No entitlement row means no plan, which means no targets. Fail closed
-    // rather than assuming a default allowance.
-    .unwrap_or(0);
+    .await?;
+
+    // No row reads as the free plan rather than as no allowance at all: a
+    // missing entitlement is our bookkeeping problem, and locking somebody
+    // out of the product entirely is the wrong way to notice it.
+    let plan = Plan::from_db_str(plan.as_deref().unwrap_or("free"));
+    let max_targets = plan.max_targets();
 
     let current: i64 = sqlx::query_scalar("select count(*) from targets where user_id = $1")
         .bind(user.id)
@@ -171,7 +201,9 @@ pub async fn create_target(
 
     if current >= max_targets as i64 {
         return Err(ApiError::PlanLimit(format!(
-            "your plan allows {max_targets} target(s)"
+            "the {} plan covers {max_targets} {}",
+            plan.display_name().to_lowercase(),
+            if max_targets == 1 { "site" } else { "sites" }
         )));
     }
 
