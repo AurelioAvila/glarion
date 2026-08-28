@@ -1,0 +1,59 @@
+# Two binaries share this image: `api` serves requests, `runner` executes
+# queued scan jobs. They are deployed as separate Fly processes (see
+# fly.toml) from the same build so there is only one artifact to keep in
+# sync between them.
+
+FROM rust:1-slim-bookworm AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+COPY migrations migrations
+
+# sqlx's compile-time query checking normally needs a live database; a
+# checked-in .sqlx cache (via `cargo sqlx prepare`) avoids that requirement
+# during the container build. If none exists yet, this build must run with
+# DATABASE_URL pointing at a reachable database instead.
+RUN cargo build --release --bin api --bin runner
+
+# --- runtime -----------------------------------------------------------
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Nuclei is the only scanner wired up so far (testssl/httpx/subfinder are
+# not yet built — see the orchestrator's tool wrappers). Pinned rather than
+# tracking latest, so a template-format change upstream can't break scans
+# on a redeploy nobody triggered.
+ARG NUCLEI_VERSION=3.3.7
+RUN curl -fsSL -o /tmp/nuclei.zip \
+    "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    && apt-get update && apt-get install -y --no-install-recommends unzip \
+    && unzip -o /tmp/nuclei.zip -d /usr/local/bin nuclei \
+    && chmod +x /usr/local/bin/nuclei \
+    && rm /tmp/nuclei.zip \
+    && apt-get purge -y unzip && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Nuclei templates are fetched on first run and cached under this path;
+# giving the scan runner its own unprivileged user and home directory
+# keeps that cache (and everything else about the process) off the
+# account that owns the image.
+RUN useradd --system --create-home --home-dir /home/glarion glarion
+WORKDIR /app
+COPY --from=build /app/target/release/api /usr/local/bin/api
+COPY --from=build /app/target/release/runner /usr/local/bin/runner
+RUN chown -R glarion:glarion /app
+USER glarion
+ENV HOME=/home/glarion
+
+# Overridden by fly.toml's per-process start_command; kept as a sane
+# default for `docker run` outside Fly.
+CMD ["/usr/local/bin/api"]
