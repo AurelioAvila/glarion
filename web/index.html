@@ -24,6 +24,11 @@
   --danger: #ff7a6b;
   --r: 12px;
   --r-sm: 8px;
+
+  /* Tells the browser its own controls are on a dark surface. Without it
+     the native date picker, its calendar icon, and the scrollbars are
+     rendered for a light page and disappear against this background. */
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -124,6 +129,26 @@ input:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
   border-color: transparent;
+}
+
+/* Chrome paints autofilled fields with its own light background, which on
+   a dark form looks like a rendering fault. The background cannot be set
+   directly on these, so an inset shadow covers the field instead, and the
+   long transition stops the original colour flashing through on load. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 100px var(--inset) inset;
+  caret-color: var(--text);
+  transition: background-color 100000s ease-in-out 0s;
+}
+
+/* The picker icon ships as a dark glyph; invert it so it is visible. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
 }
 
 button {
