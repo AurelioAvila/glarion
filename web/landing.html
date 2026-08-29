@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glarion — security monitoring for the sites you look after</title>
+<meta name="description" content="Security scanning for web agencies. One account covers every client site, with a report you can hand the client and a weekly check that only writes to you when something changes.">
+
+<!-- Empty means same origin. Set this to point at a backend elsewhere. -->
+<meta name="glarion-api" content="">
+
+<link rel="canonical" href="https://glarion.com/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Glarion — security monitoring for the sites you look after">
+<meta property="og:description" content="Check any domain now, without an account. One subscription covers every client site.">
+
+<!--
+  A landing page for an instrument.
+
+  The page follows the same rule as the product: colour means security
+  state and nothing else. There is no accent colour, no gradient behind a
+  headline, no illustration of a shield. A security product whose front
+  door is decorated in the palette it reserves for alarms has already
+  taught the visitor to ignore the palette.
+
+  The second decision is what the page leads with. Almost every product in
+  this category opens with a claim and a screenshot of itself. This one
+  opens with an input, because the free check is already ungated in the API
+  and reading what a site publishes needs no permission from anybody. A
+  stranger can have a real result about their own domain before they have
+  read a sentence of copy — which is a stronger argument than the sentence
+  would have been, and it is honest in a way a screenshot is not: it is the
+  actual product, on their actual site, including when it says nothing is
+  wrong.
+-->
+
+<style>
+:root {
+  --bg: #0b0b0c;
+  --raise: #131315;
+  --sink: #08080a;
+
+  --rule: #22232a;
+  --rule-soft: #17181d;
+
+  --ink: #f0f0f2;
+  --ink-2: #9c9ea8;
+  /* Lighter than the same token in the product, on purpose.
+     The dashboard's #63656f measures 3.39:1 against this background,
+     which is under WCAG AA. Inside an instrument somebody uses daily
+     that is a defensible trade for calm; on a public page it is not,
+     because this grey carries the navigation, the line under the main
+     input, and the labels on the result. #7c7e88 measures 4.87:1 and
+     still sits well below --ink-2, so the three levels of hierarchy
+     survive intact. */
+  --ink-3: #7c7e88;
+
+  /* The entire signal palette, same as the product. */
+  --alarm: #ff6b57;
+  --caution: #e5a83c;
+  --clear: #52c78d;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255, 255, 255, .035), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+
+.wrap { max-width: 58rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+
+/* --- masthead ---------------------------------------------------------- */
+
+header.top { border-bottom: 1px solid var(--rule); }
+.top-inner {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+.wordmark {
+  font-family: var(--mono);
+  font-size: .8rem;
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.top-nav { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; }
+.top-nav a {
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.top-nav a:hover { color: var(--ink); }
+
+/* --- the opening ------------------------------------------------------- */
+
+.hero { padding-top: 5.5rem; }
+
+h1 {
+  font-size: 2.5rem;
+  line-height: 1.14;
+  letter-spacing: -.033em;
+  font-weight: 560;
+  margin: 0;
+  max-width: 22ch;
+}
+.hero-lede {
+  color: var(--ink-2);
+  font-size: 1.08rem;
+  margin: 1.15rem 0 0;
+  max-width: 46ch;
+}
+
+/* The check. An input on a rule, not a box inside a box. */
+.check { margin: 2.75rem 0 0; max-width: 34rem; }
+.check-row { display: flex; align-items: flex-end; gap: 1rem; }
+.check-field { flex: 1 1 auto; min-width: 0; }
+.check-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: .45rem;
+}
+.check input {
+  display: block;
+  width: 100%;
+  padding: .55rem 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+}
+.check input::placeholder { color: var(--ink-3); }
+.check input:focus { outline: none; border-bottom-color: var(--ink); }
+
+.primary {
+  background: var(--ink);
+  color: var(--bg);
+  border: 0;
+  border-radius: 2px;
+  padding: .6rem 1.15rem;
+  font-size: .87rem;
+  font-weight: 560;
+  white-space: nowrap;
+}
+.primary:hover:not(:disabled) { background: #fff; }
+
+.ghost {
+  background: none;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: .55rem 1rem;
+  font-size: .85rem;
+  white-space: nowrap;
+}
+.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); }
+
+.check-note { font-size: .8rem; color: var(--ink-3); margin: .75rem 0 0; }
+.check-note.is-error { color: var(--alarm); }
+
+/* --- the result -------------------------------------------------------- */
+
+/*
+  Deliberately the same furniture as the dashboard: a sentence that has
+  already done the interpreting, then facts on hairlines. Somebody who
+  signs up should recognise the page they arrived from.
+*/
+#result { margin: 3.25rem 0 0; }
+#result[hidden] { display: none; }
+
+.verdict {
+  font-size: 1.45rem;
+  line-height: 1.4;
+  letter-spacing: -.02em;
+  margin: 0 0 .4rem;
+  font-weight: 400;
+  color: var(--ink-2);
+  max-width: 38rem;
+}
+.verdict strong { color: var(--ink); font-weight: 560; }
+.verdict .alarm { color: var(--alarm); font-weight: 560; }
+.verdict .caution { color: var(--caution); font-weight: 560; }
+.verdict .clear { color: var(--clear); font-weight: 560; }
+
+.verdict-meta {
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 2rem;
+}
+
+.facts { margin: 1.25rem 0 0; }
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: .6rem 0 .6rem .9rem;
+  border-bottom: 1px solid var(--rule-soft);
+  border-left: 2px solid transparent;
+  min-width: 0;
+}
+.fact-flagged { border-left-color: var(--alarm); }
+.fact-ok { border-left-color: var(--rule); }
+.fact-label {
+  flex: none;
+  width: 11rem;
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fact-value { font-size: .88rem; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+.fact-flagged .fact-value { color: var(--alarm); }
+
+.caveat {
+  margin: 1.75rem 0 0;
+  padding-left: .9rem;
+  border-left: 2px solid var(--rule);
+  font-size: .87rem;
+  color: var(--ink-3);
+  max-width: 44rem;
+}
+
+/* The scanning state: the checks tick over as they land, so the wait shows
+   what is being done rather than a spinner that shows only that we are
+   busy. */
+.running { list-style: none; margin: 1.5rem 0 0; padding: 0; }
+.running li {
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--ink-3);
+  padding: .35rem 0;
+  opacity: .25;
+  animation: surface .3s ease-out forwards;
+}
+.running li:nth-child(1) { animation-delay: .05s }
+.running li:nth-child(2) { animation-delay: .5s }
+.running li:nth-child(3) { animation-delay: 1.1s }
+.running li:nth-child(4) { animation-delay: 1.7s }
+@keyframes surface { to { opacity: 1 } }
+
+/* --- sections ---------------------------------------------------------- */
+
+section { padding-top: 5.5rem; }
+
+.section-rule {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0 0 2rem;
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--rule);
+}
+.section-rule h2 {
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.claim {
+  font-size: 1.6rem;
+  line-height: 1.32;
+  letter-spacing: -.025em;
+  font-weight: 560;
+  margin: 0 0 1rem;
+  max-width: 28ch;
+}
+.prose { color: var(--ink-2); max-width: 60ch; margin: 0 0 1rem; }
+.prose:last-child { margin-bottom: 0; }
+
+/* Two columns of argument, on a rule. Not cards. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.5rem 3.5rem;
+}
+.column h3 {
+  font-size: 1rem;
+  margin: 0 0 .5rem;
+  font-weight: 560;
+  letter-spacing: -.012em;
+}
+.column p { margin: 0; color: var(--ink-2); font-size: .92rem; }
+
+/* --- the difference table ---------------------------------------------- */
+
+/*
+  The competitive argument, stated as an arithmetic rather than as an
+  adjective. An agency with twenty client sites can do this sum in their
+  head once the two rows are next to each other, and the sum is the pitch.
+*/
+.compare { width: 100%; border-collapse: collapse; margin: 0; }
+.compare th, .compare td {
+  text-align: left;
+  padding: .85rem 1rem .85rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: .9rem;
+  vertical-align: baseline;
+}
+.compare th {
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  border-bottom-color: var(--rule);
+}
+.compare td:first-child { color: var(--ink-2); }
+.compare .num { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+.compare .them { color: var(--ink-3); }
+
+/* --- pricing ----------------------------------------------------------- */
+
+/*
+  Plans as rows, for the same reason findings are rows: three boxes side by
+  side make the middle one look chosen by us, and the reader spends their
+  attention on the layout instead of on the allowance.
+*/
+.plans { list-style: none; margin: 0; padding: 0; }
+.plan {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem 2rem;
+  align-items: center;
+  padding: 1.4rem 0 1.4rem 1.5rem;
+  border-bottom: 1px solid var(--rule-soft);
+  position: relative;
+}
+.plan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1.1rem;
+  bottom: 1.1rem;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--rule);
+}
+.plan-name { font-family: var(--mono); font-size: .97rem; letter-spacing: -.01em; }
+.plan-detail { color: var(--ink-2); font-size: .88rem; margin-top: .3rem; }
+.plan-price { font-family: var(--mono); font-size: .97rem; text-align: right; white-space: nowrap; }
+.plan-price small { display: block; color: var(--ink-3); font-size: .74rem; margin-top: .2rem; }
+
+/* --- the gate ---------------------------------------------------------- */
+
+/*
+  Said on the marketing page on purpose, not buried in terms. A scanner
+  that will point itself at any domain on request is a different product
+  with a different customer, and being clear about the refusal is part of
+  what an agency is buying.
+*/
+.gate { border-left: 2px solid var(--rule); padding-left: 1.25rem; max-width: 60ch; }
+
+/* --- foot -------------------------------------------------------------- */
+
+footer {
+  margin-top: 6rem;
+  border-top: 1px solid var(--rule);
+  padding: 2rem 0 4rem;
+}
+.foot-inner { display: flex; gap: 2rem; align-items: baseline; flex-wrap: wrap; }
+.foot-note { font-size: .82rem; color: var(--ink-3); }
+.foot-links { margin-left: auto; display: flex; gap: 1.5rem; }
+.foot-links a {
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.foot-links a:hover { color: var(--ink); }
+
+.cta-row { display: flex; gap: 1rem; align-items: center; margin-top: 2rem; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .running li { animation: none; opacity: 1; }
+}
+
+@media (max-width: 46rem) {
+  .wrap { padding-left: 1.25rem; padding-right: 1.25rem; }
+  .top-inner { padding: 0 1.25rem; }
+  .hero { padding-top: 3.5rem; }
+  h1 { font-size: 1.9rem; }
+  section { padding-top: 4rem; }
+  .columns { grid-template-columns: 1fr; gap: 2rem; }
+  .check-row { flex-direction: column; align-items: stretch; gap: .9rem; }
+  .fact { flex-direction: column; gap: .2rem; }
+  .fact-label { width: auto; }
+  .plan { grid-template-columns: 1fr; }
+  .plan-price { text-align: left; }
+  .compare th:nth-child(3), .compare td:nth-child(3) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="wordmark" href="/">Glarion</a>
+    <nav class="top-nav">
+      <a href="#pricing">Pricing</a>
+      <a href="/app/#/login">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <div class="wrap hero">
+    <h1>The client finds out when the site stops loading.</h1>
+    <p class="hero-lede">
+      A certificate expires on a date somebody could have known about six weeks
+      earlier. Glarion watches the sites you look after and writes to you only
+      when something changes.
+    </p>
+
+    <form class="check" id="check-form" novalidate>
+      <div class="check-row">
+        <div class="check-field">
+          <label class="check-label" for="domain">Check a domain now</label>
+          <input id="domain" name="domain" type="text" inputmode="url"
+                 autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="example.com">
+        </div>
+        <button class="primary" type="submit" id="check-go">Check</button>
+      </div>
+      <p class="check-note" id="check-note">
+        No account, no email. This reads only what the site already publishes to
+        every visitor.
+      </p>
+    </form>
+
+    <div id="result" hidden></div>
+  </div>
+
+  <section class="wrap" id="argument">
+    <div class="section-rule"><h2>Why this exists</h2></div>
+    <div class="columns">
+      <div class="column">
+        <h3>Running the scanner is the easy part.</h3>
+        <p>
+          The open-source tools are free and good. Point one at a client site and
+          it returns thirty-odd findings, most of them informational, none of them
+          in an order. That output is not something you can put in front of the
+          person paying you.
+        </p>
+      </div>
+      <div class="column">
+        <h3>Deciding what matters is the work.</h3>
+        <p>
+          Glarion re-ranks everything against what it means for a live business —
+          a missing content policy is informational to a scanner and serious to us
+          — then splits it into what to fix, what to look at, and what is merely
+          on record. A real scan of thirty-two findings came out as three things
+          to do.
+        </p>
+      </div>
+      <div class="column">
+        <h3>Priced for a portfolio, not a project.</h3>
+        <p>
+          Tools in this category charge per application, from about ninety dollars
+          each. That is a sensible price for a company with one product and an
+          absurd one for an agency looking after twenty client sites. One
+          subscription here covers all of them.
+        </p>
+      </div>
+      <div class="column">
+        <h3>The report has your name on it.</h3>
+        <p>
+          Findings come out as a numbered worklist with a plain-English reason and
+          a fix, under your agency's name and logo, printable to PDF. It is
+          written for the client to read, not for the person who ran the scan.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="arithmetic">
+    <div class="section-rule"><h2>The arithmetic</h2></div>
+    <p class="claim">Twenty client sites.</p>
+    <table class="compare">
+      <thead>
+        <tr>
+          <th>Per year</th>
+          <th>Glarion</th>
+          <th>Priced per application</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Twenty sites, monitored weekly</td>
+          <td class="num">&euro;990</td>
+          <td class="num them">&euro;20,000&nbsp;+</td>
+        </tr>
+        <tr>
+          <td>What you can bill for one audit</td>
+          <td class="num">~&euro;300</td>
+          <td class="num them">~&euro;300</td>
+        </tr>
+        <tr>
+          <td>Audits before it has paid for itself</td>
+          <td class="num">4</td>
+          <td class="num them">67</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="prose" style="margin-top:1.5rem">
+      The monitoring is the part you resell. A one-off audit is a job; a site that
+      is watched every week, with a note when something changes, is a retainer.
+    </p>
+  </section>
+
+  <section class="wrap" id="pricing">
+    <div class="section-rule"><h2>Pricing</h2></div>
+    <ul class="plans">
+      <li class="plan">
+        <div>
+          <div class="plan-name">Free</div>
+          <div class="plan-detail">One site. Scan when you ask. No scheduling.</div>
+        </div>
+        <div class="plan-price">&euro;0</div>
+      </li>
+      <li class="plan">
+        <div>
+          <div class="plan-name">Studio</div>
+          <div class="plan-detail">Ten sites, weekly checks, white-label reports.</div>
+        </div>
+        <div class="plan-price">&euro;39<small>/month, or &euro;390 a year</small></div>
+      </li>
+      <li class="plan">
+        <div>
+          <div class="plan-name">Agency</div>
+          <div class="plan-detail">Forty sites, weekly checks, white-label reports.</div>
+        </div>
+        <div class="plan-price">&euro;99<small>/month, or &euro;990 a year</small></div>
+      </li>
+    </ul>
+    <div class="cta-row">
+      <a class="primary" href="/app/#/signup" style="display:inline-block">Create an account</a>
+      <span class="foot-note">The free plan does not ask for a card.</span>
+    </div>
+  </section>
+
+  <section class="wrap" id="permission">
+    <div class="section-rule"><h2>What we will not do</h2></div>
+    <div class="gate">
+      <p class="prose">
+        A full scan probes: it requests paths a site never advertised and tries
+        known vulnerability fingerprints against them. Doing that to a domain
+        uninvited is the thing computer-misuse law was written to describe.
+      </p>
+      <p class="prose">
+        So Glarion will not run one until the domain's owner has proved control of
+        it, by DNS record or by a file on the host. The proof expires and is
+        re-checked before every scheduled scan, because domains change hands. A
+        scanner that points itself anywhere on request is a different product, and
+        we would rather refuse the work than be it.
+      </p>
+      <p class="prose">
+        The check at the top of this page is exempt for a reason that survives
+        scrutiny: it reads only what the site broadcasts to every visitor and to
+        every search engine. Nothing is probed, no path is guessed.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span class="foot-note">Glarion &mdash; security monitoring for the sites you look after.</span>
+    <nav class="foot-links">
+      <a href="/app/#/login">Sign in</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+  </div>
+</footer>
+
+<script type="module">
+/*
+  The free check, wired to the same endpoint the product uses. No build
+  step and no framework: this page has one interaction, and a bundle would
+  put a download in front of the thing it is trying to demonstrate.
+*/
+
+const api = document.querySelector('meta[name="glarion-api"]')?.content?.trim() || '';
+
+const form = document.getElementById('check-form');
+const input = document.getElementById('domain');
+const button = document.getElementById('check-go');
+const note = document.getElementById('check-note');
+const result = document.getElementById('result');
+
+const DEFAULT_NOTE =
+  'No account, no email. This reads only what the site already publishes to every visitor.';
+
+function setNote(text, isError) {
+  note.textContent = text;
+  note.classList.toggle('is-error', Boolean(isError));
+}
+
+/** Text only. Values here come from a third party's headers. */
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const domain = input.value.trim();
+  if (!domain) {
+    setNote('Enter a domain first.', true);
+    input.focus();
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Checking';
+  setNote(DEFAULT_NOTE, false);
+
+  // The checks as they would be listed by someone doing this by hand.
+  // Shown while waiting because the wait is a few seconds and a spinner
+  // would spend them saying nothing.
+  result.hidden = false;
+  result.replaceChildren();
+  const running = el('ul', 'running');
+  for (const step of [
+    'Resolving the domain',
+    'Reading the certificate',
+    'Requesting the front page',
+    'Looking for robots.txt and security.txt',
+  ]) {
+    running.append(el('li', null, step));
+  }
+  result.append(running);
+
+  try {
+    const response = await fetch(`${api}/api/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      result.hidden = true;
+      result.replaceChildren();
+      setNote(payload.message || 'That domain could not be checked.', true);
+      return;
+    }
+
+    render(payload);
+    setNote(DEFAULT_NOTE, false);
+  } catch {
+    result.hidden = true;
+    result.replaceChildren();
+    setNote('The check could not be run. Try again in a moment.', true);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Check';
+  }
+});
+
+function render(payload) {
+  const observations = Array.isArray(payload.observations) ? payload.observations : [];
+  const findings = observations.filter((o) => o.is_finding);
+
+  result.replaceChildren();
+
+  // A sentence that has already done the interpreting, exactly as the
+  // dashboard does it. The count carries the colour; nothing else does.
+  const verdict = el('p', 'verdict');
+  verdict.append(document.createTextNode('On '));
+  verdict.append(el('strong', null, payload.domain || 'that domain'));
+  verdict.append(document.createTextNode(', reading only what it publishes, '));
+
+  if (findings.length === 0) {
+    verdict.append(el('span', 'clear', 'nothing stood out'));
+    verdict.append(document.createTextNode('.'));
+  } else {
+    verdict.append(el('span', findings.length > 2 ? 'alarm' : 'caution',
+      `${findings.length} thing${findings.length === 1 ? '' : 's'}`));
+    verdict.append(document.createTextNode(
+      findings.length === 1 ? ' stood out.' : ' stood out.'));
+  }
+  result.append(verdict);
+
+  result.append(el('p', 'verdict-meta',
+    `${observations.length} check${observations.length === 1 ? '' : 's'} · no account used`));
+
+  const facts = el('div', 'facts');
+  // Findings first: the reader should not have to hunt down a list of
+  // things that are fine to reach the one that is not.
+  for (const observation of [...findings, ...observations.filter((o) => !o.is_finding)]) {
+    const row = el('div', `fact ${observation.is_finding ? 'fact-flagged' : 'fact-ok'}`);
+    row.append(el('span', 'fact-label', observation.label));
+    row.append(el('span', 'fact-value', observation.value));
+    facts.append(row);
+  }
+  result.append(facts);
+
+  for (const text of Array.isArray(payload.notes) ? payload.notes : []) {
+    result.append(el('p', 'caveat', text));
+  }
+
+  if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
+
+  const cta = el('div', 'cta-row');
+  const signup = el('a', 'primary', 'Scan this properly');
+  signup.href = '/app/#/signup';
+  signup.style.display = 'inline-block';
+  cta.append(signup);
+  cta.append(el('span', 'foot-note',
+    'A full scan checks far more, and needs you to prove the domain is yours.'));
+  result.append(cta);
+}
+</script>
+
+</body>
+</html>
