@@ -12,7 +12,7 @@
 ///
 /// All of these are detection-only in the modes we invoke them. Nothing
 /// here attempts exploitation, brute-forcing, or fuzzing.
-pub const ALLOWED_TOOLS: &[&str] = &["nuclei", "testssl", "httpx"];
+pub const ALLOWED_TOOLS: &[&str] = &["nuclei", "tls"];
 
 /// Maximum scans per target per rolling 24 hours.
 pub const MAX_SCANS_PER_TARGET_PER_DAY: i64 = 6;
@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn known_tools_are_allowed() {
         assert!(is_allowed_tool("nuclei"));
-        assert!(is_allowed_tool("testssl"));
+        assert!(is_allowed_tool("tls"));
     }
 
     #[test]
