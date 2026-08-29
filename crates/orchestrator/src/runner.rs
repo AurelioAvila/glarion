@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::finding::Finding;
 use crate::mailer::{change_email, Mailer};
 use crate::schedule::{compare, headline};
-use crate::tools::nuclei;
+use crate::tools::{nuclei, tls};
 use crate::verification::{is_currently_verified, VerificationStatus};
 
 /// How long to wait before polling again when the queue is empty.
@@ -100,6 +100,13 @@ async fn execute(pool: &PgPool, mailer: &Mailer, job: ClaimedJob) -> anyhow::Res
                 return Ok(());
             }
         },
+        "tls" => match tls::run(&domain).await {
+            Ok(findings) => findings,
+            Err(err) => {
+                fail_job(pool, job.id, &err.to_string()).await?;
+                return Ok(());
+            }
+        },
         other => {
             // Unreachable via the API (the allowlist runs there too), but a
             // row could be written by a future code path or by hand.
@@ -110,7 +117,7 @@ async fn execute(pool: &PgPool, mailer: &Mailer, job: ClaimedJob) -> anyhow::Res
 
     // The count that was compared against last time, captured before this
     // job is marked complete so it cannot find itself.
-    let previous = previous_actionable_count(pool, job.target_id, job.id).await?;
+    let previous = previous_actionable_count(pool, job.target_id, &job.tool, job.id).await?;
 
     store_findings(pool, job.id, &findings).await?;
 
@@ -194,15 +201,22 @@ async fn report_change(
 async fn previous_actionable_count(
     pool: &PgPool,
     target_id: Uuid,
+    tool: &str,
     current_job: Uuid,
 ) -> anyhow::Result<Option<i64>> {
+    // Same tool, deliberately. A target is scanned by more than one tool
+    // per run, and they report on different things: comparing a TLS job
+    // against the Nuclei job before it comes out as a change every single
+    // time, and a monitor that cries wolf on every run is worse than no
+    // monitor, because people stop reading it.
     let previous_job: Option<Uuid> = sqlx::query_scalar(
         "select id from scan_jobs
-         where target_id = $1 and id <> $2 and status = 'completed'
+         where target_id = $1 and tool = $2 and id <> $3 and status = 'completed'
          order by completed_at desc nulls last
          limit 1",
     )
     .bind(target_id)
+    .bind(tool)
     .bind(current_job)
     .fetch_optional(pool)
     .await?;

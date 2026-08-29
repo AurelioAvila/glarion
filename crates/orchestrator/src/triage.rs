@@ -242,6 +242,7 @@ fn display_title(
 fn inventory_title(template_id: &str, scanner_title: &str) -> String {
     match template_id {
         "tls-version" => "TLS protocol versions".to_string(),
+        "tls-certificate-expiry" => "Certificate renewal date".to_string(),
         "ssl-issuer" => "Certificate issuer".to_string(),
         "ssl-dns-names" => "Names covered by the certificate".to_string(),
         "wildcard-tls" => "Wildcard certificate in use".to_string(),
@@ -387,6 +388,66 @@ fn classify(
                 (Disposition::Inventory, Priority::None, None)
             }
         }
+
+        // Expiry is the one transport finding with a date attached, so it
+        // is graded by how close that date is rather than by what the
+        // scanner thought. An expired certificate outranks everything else
+        // a scan can find: the site is not weakened, it is unreachable.
+        "tls-certificate-expiry" => match matcher {
+            "expired" => (
+                Disposition::Act,
+                Priority::Urgent,
+                guidance(
+                    "The certificate has already expired. Every mainstream browser now                      shows a full-page security warning instead of the site, so to a                      visitor it is indistinguishable from being offline — and to a                      customer mid-purchase it looks like fraud.",
+                    "Renew the certificate immediately. If it was issued by Let's                      Encrypt or another automated authority, the renewal job has                      stopped: check that it still runs and that port 80 is reachable                      for the renewal challenge.",
+                ),
+            ),
+            "critical" => (
+                Disposition::Act,
+                Priority::Urgent,
+                guidance(
+                    "The certificate expires within a week. When it does, the site stops                      loading for everyone: this is a scheduled outage unless something                      is done before the date.",
+                    "Renew it now rather than waiting for the automation. An automated                      renewal that has not fired with a week to go has already failed                      several times.",
+                ),
+            ),
+            "soon" => (
+                Disposition::Act,
+                Priority::High,
+                guidance(
+                    "The certificate expires within a fortnight. Automated renewal                      normally completes with about thirty days to spare, so passing this                      point usually means the renewal is broken rather than merely late.",
+                    "Check that the renewal process runs and succeeds, and renew by hand                      if it does not.",
+                ),
+            ),
+            "approaching" => (
+                Disposition::Review,
+                Priority::Medium,
+                guidance(
+                    "The certificate expires within a month. This is the window in which                      an automated renewal should already have happened, so it is worth                      confirming one is scheduled rather than assuming it.",
+                    "Confirm the renewal is automated and working. If it is manual, put                      the date in a calendar now.",
+                ),
+            ),
+            // Comfortably valid: the renewal date belongs in the appendix
+            // as evidence the check ran.
+            _ => (Disposition::Inventory, Priority::None, None),
+        },
+
+        "tls-certificate-name-mismatch" => (
+            Disposition::Act,
+            Priority::Urgent,
+            guidance(
+                "The certificate being served does not list this domain among the names                  it covers. Browsers treat that exactly like an expired certificate: a                  full-page warning instead of the site. It usually means a new subdomain                  was pointed at a server whose certificate was never reissued to include                  it.",
+                "Reissue the certificate with this domain included, or point the domain                  at the host whose certificate already covers it.",
+            ),
+        ),
+
+        "tls-certificate-self-signed" => (
+            Disposition::Act,
+            Priority::Urgent,
+            guidance(
+                "The certificate was issued by itself rather than by a recognised                  authority, so no browser trusts it. This is almost always a default                  certificate still in place because the real one was never installed —                  which means nobody has loaded the site in a browser since it was set up.",
+                "Install a certificate from a trusted authority. Let's Encrypt issues                  them free and renews automatically.",
+            ),
+        ),
 
         // --- Exposure ----------------------------------------------------
         "email-extractor" => (
@@ -719,6 +780,88 @@ mod tests {
 
             assert!(!guidance.why.is_empty());
             assert!(!guidance.fix.is_empty());
+        }
+    }
+
+    /// These come from the tls wrapper rather than from Nuclei, and the
+    /// wrapper stamps the same `template-id`/`matcher-name` shape so they
+    /// travel the same path. Asserted here because the two modules are
+    /// coupled only by those strings: rename one and nothing fails to
+    /// compile, it just quietly stops being classified.
+    #[test]
+    fn an_expired_certificate_outranks_everything_else() {
+        let triaged = triage(&finding(
+            Severity::Critical,
+            json!({
+                "template-id": "tls-certificate-expiry",
+                "matcher-name": "expired",
+            }),
+        ));
+
+        assert_eq!(triaged.disposition, Disposition::Act);
+        assert_eq!(
+            triaged.priority,
+            Priority::Urgent,
+            "a site nobody can load is the most urgent thing a scan can find"
+        );
+        assert!(triaged.guidance.is_some());
+    }
+
+    #[test]
+    fn a_certificate_with_time_left_stays_in_the_appendix() {
+        let triaged = triage(&finding(
+            Severity::Info,
+            json!({
+                "template-id": "tls-certificate-expiry",
+                "matcher-name": "valid",
+            }),
+        ));
+
+        assert_eq!(triaged.disposition, Disposition::Inventory);
+        assert_eq!(triaged.title, "Certificate renewal date");
+    }
+
+    #[test]
+    fn every_certificate_band_is_classified_and_explains_itself() {
+        // The wrapper emits exactly these matchers. A band with no rule
+        // would fall through to the unclassified path and lose its
+        // guidance, which is the whole product.
+        for matcher in ["expired", "critical", "soon", "approaching"] {
+            let triaged = triage(&finding(
+                Severity::High,
+                json!({
+                    "template-id": "tls-certificate-expiry",
+                    "matcher-name": matcher,
+                }),
+            ));
+
+            assert_ne!(
+                triaged.disposition,
+                Disposition::Inventory,
+                "{matcher} is a finding, not appendix material"
+            );
+
+            let guidance = triaged
+                .guidance
+                .unwrap_or_else(|| panic!("{matcher} must tell the reader what to do"));
+            assert!(!guidance.why.is_empty());
+            assert!(!guidance.fix.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_name_mismatch_and_a_self_signed_certificate_are_both_actionable() {
+        for template_id in [
+            "tls-certificate-name-mismatch",
+            "tls-certificate-self-signed",
+        ] {
+            let triaged = triage(&finding(
+                Severity::Critical,
+                json!({ "template-id": template_id, "matcher-name": "san" }),
+            ));
+
+            assert_eq!(triaged.disposition, Disposition::Act, "{template_id}");
+            assert!(triaged.guidance.is_some(), "{template_id}");
         }
     }
 }

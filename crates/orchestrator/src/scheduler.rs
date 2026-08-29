@@ -127,9 +127,18 @@ async fn enqueue(pool: &PgPool, candidate: &Candidate, verification_id: Uuid) ->
     .fetch_one(&mut *tx)
     .await?;
 
+    // Both tools, under the one authorization. The certificate check is
+    // the reason a schedule is worth paying for: expiry is the one failure
+    // that is certain, dated, and total, and it is invisible to a scan that
+    // only runs when somebody remembers to press the button. Nuclei does
+    // not report it — see tools::tls.
+    //
+    // Queued as separate jobs rather than one combined scan so a hung
+    // Nuclei run cannot delay the cheap check that matters most, and so a
+    // failure in either is recorded against the tool that failed.
     sqlx::query(
         "insert into scan_jobs (target_id, scan_authorization_id, tool)
-         values ($1, $2, 'nuclei')",
+         select $1, $2, tool from unnest(array['nuclei', 'tls']) as tool",
     )
     .bind(candidate.id)
     .bind(authorization_id)
