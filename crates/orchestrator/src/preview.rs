@@ -119,11 +119,47 @@ pub async fn preview(domain: &str) -> Result<Preview, PreviewError> {
 async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, PreviewError> {
     let mut preview = Preview::default();
 
-    let response = client
-        .get(format!("https://{domain}/"))
-        .send()
-        .await
-        .map_err(|_| PreviewError::Unreachable(domain.to_string()))?;
+    // The certificate and the front page at the same time. The handshake is
+    // its own connection and would otherwise add its latency to a wait
+    // somebody is sitting through.
+    let (response, certificate) = tokio::join!(
+        client.get(format!("https://{domain}/")).send(),
+        crate::tools::tls::inspect(domain),
+    );
+
+    // First, because it is the only thing here with a deadline attached.
+    //
+    // Everything else this reports is a judgement someone could argue with
+    // — whether a header is set tightly enough, whether a file should be
+    // published. A renewal date is not an opinion, it is a date, and it is
+    // the one fact in the free check that says something about *this* site
+    // rather than about sites in general.
+    match certificate {
+        Ok(facts) => {
+            let remaining = crate::tools::tls::days_remaining(facts.not_after, chrono::Utc::now());
+            let expires = facts.not_after.format("%-d %B %Y");
+
+            preview.observations.push(Observation {
+                label: "Certificate".to_string(),
+                value: if remaining < 0 {
+                    format!("Expired on {expires}")
+                } else {
+                    format!("Valid until {expires} ({remaining} days)")
+                },
+                // Flagged on the same threshold the paid scan treats as
+                // late, so the free check and the report never disagree
+                // about the same certificate.
+                is_finding: remaining <= crate::tools::tls::MEDIUM_AFTER_DAYS,
+            });
+        }
+        Err(error) => {
+            preview
+                .notes
+                .push(format!("The certificate could not be read: {error}"));
+        }
+    }
+
+    let response = response.map_err(|_| PreviewError::Unreachable(domain.to_string()))?;
 
     let headers = response.headers().clone();
     let status = response.status();

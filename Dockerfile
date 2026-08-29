@@ -20,6 +20,20 @@ COPY migrations migrations
 # DATABASE_URL pointing at a reachable database instead.
 RUN cargo build --release --bin api --bin runner
 
+# --- the frontend ------------------------------------------------------
+
+# TypeScript straight to ES modules, no bundler: the app is a handful of
+# files the browser can load as they are, and a build step is a thing that
+# breaks for no benefit at this size.
+FROM node:22-bookworm-slim AS web
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/tsconfig.json ./
+COPY web/src src
+RUN npx tsc
+
 # --- runtime -----------------------------------------------------------
 
 FROM debian:bookworm-slim AS runtime
@@ -50,6 +64,13 @@ RUN useradd --system --create-home --home-dir /home/glarion glarion
 WORKDIR /app
 COPY --from=build /app/target/release/api /usr/local/bin/api
 COPY --from=build /app/target/release/runner /usr/local/bin/runner
+
+# The API serves these itself — see with_static_files. One origin for the
+# page and the endpoints it calls means no CORS entry to maintain, and one
+# thing to deploy instead of two.
+COPY web/landing.html web/index.html web/
+COPY --from=web /web/dist web/dist
+
 RUN chown -R glarion:glarion /app
 USER glarion
 ENV HOME=/home/glarion
