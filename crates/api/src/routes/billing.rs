@@ -123,16 +123,17 @@ pub async fn start_checkout(
     let email = account_email(&state, user.id).await?;
     let customer_id = existing_customer(&state, user.id).await?;
 
-    let base = state.mailer.public_url.clone();
+    // Back to the plan page either way: it is the page that shows what
+    // they now have, and after paying that is the only thing they want to
+    // see. (The old destination carried a `subscribed=1` flag nothing ever
+    // read.)
+    let plan_page = state.mailer.app_link("/plan");
     let mut form: Vec<(String, String)> = vec![
         ("mode".into(), "subscription".into()),
         ("line_items[0][price]".into(), price_id),
         ("line_items[0][quantity]".into(), "1".into()),
-        (
-            "success_url".into(),
-            format!("{base}/#/settings?subscribed=1"),
-        ),
-        ("cancel_url".into(), format!("{base}/#/settings")),
+        ("success_url".into(), plan_page.clone()),
+        ("cancel_url".into(), plan_page),
         // Carried through Checkout and returned on the webhook. Matching a
         // Stripe customer back to an account by email would break the
         // moment somebody changes either one.
@@ -190,10 +191,7 @@ pub async fn open_portal(
 
     let form = vec![
         ("customer".to_string(), customer_id),
-        (
-            "return_url".to_string(),
-            format!("{}/#/settings", state.mailer.public_url),
-        ),
+        ("return_url".to_string(), state.mailer.app_link("/plan")),
     ];
 
     let url = stripe_post(

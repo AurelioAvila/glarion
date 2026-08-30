@@ -92,8 +92,23 @@ impl Mailer {
         Ok(())
     }
 
+    /// A link into the dashboard.
+    ///
+    /// The application is served at `/app`; the root serves the marketing
+    /// page, which carries no router. A link built as
+    /// `{public_url}/#/verify/…` therefore lands the reader on the landing
+    /// page, where the fragment means nothing and nothing happens — which
+    /// from their side is indistinguishable from the mail never arriving,
+    /// and leaves an account that can never be confirmed.
+    ///
+    /// Every link into the app goes through here so that path is written
+    /// down once rather than in five places that can drift apart.
+    pub fn app_link(&self, hash_path: &str) -> String {
+        format!("{}/app#{hash_path}", self.public_url)
+    }
+
     pub fn verification_link(&self, token: &str) -> String {
-        format!("{}/#/verify/{token}", self.public_url)
+        self.app_link(&format!("/verify/{token}"))
     }
 }
 
@@ -244,6 +259,43 @@ add you to anything by sending it.
 mod tests {
     use super::*;
 
+    fn mailer() -> Mailer {
+        Mailer {
+            api_key: None,
+            from: "Glarion <hello@example.com>".to_string(),
+            public_url: "https://glarion.example".to_string(),
+        }
+    }
+
+    /// The bug this pins cost a real account: the root serves the marketing
+    /// page, which has no router, so a confirmation link pointing there
+    /// opened a page where nothing happened and left an account that could
+    /// never be confirmed. Nothing failed, nothing logged, and the mail
+    /// showed as delivered — so it read as a spam problem for a day.
+    #[test]
+    fn links_into_the_app_do_not_point_at_the_marketing_page() {
+        let link = mailer().verification_link("abc123");
+
+        assert_eq!(link, "https://glarion.example/app#/verify/abc123");
+        assert!(
+            !link.contains(".example/#/"),
+            "a link to the root lands on the landing page, which cannot route it"
+        );
+    }
+
+    #[test]
+    fn every_app_link_is_built_the_same_way() {
+        let mailer = mailer();
+
+        for path in ["/plan", "/signup", "/settings", "/scans/7"] {
+            let link = mailer.app_link(path);
+            assert!(
+                link.starts_with("https://glarion.example/app#"),
+                "{path} produced {link}"
+            );
+        }
+    }
+
     #[test]
     fn a_name_cannot_inject_markup_into_the_message() {
         let body = verification_email(
@@ -282,7 +334,7 @@ mod tests {
 
         assert_eq!(
             mailer.verification_link("tok"),
-            "https://glarion.app/#/verify/tok"
+            "https://glarion.app/app#/verify/tok"
         );
     }
 

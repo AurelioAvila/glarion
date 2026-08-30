@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security review — pctweaker.app</title>
+<style>
+  :root {
+    --ink: #16191d;
+    --muted: #5c6470;
+    --line: #e2e5ea;
+    --bg: #ffffff;
+    --accent: #1f4ed8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+    max-width: 46rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: .4rem 0 .6rem; }
+  h2 { font-size: 1.15rem; margin: 2.6rem 0 .3rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 1rem; margin: 0; }
+  .cover { border-bottom: 2px solid var(--ink); padding-bottom: 1.6rem; }
+  .logo { max-height: 44px; max-width: 200px; margin-bottom: 1rem; }
+  .by, .date { color: var(--muted); font-size: .85rem; margin: .2rem 0; }
+  .by { text-transform: uppercase; letter-spacing: .07em; }
+  .subject { font-size: 1.05rem; margin: .2rem 0; }
+  .headline { font-size: 1.1rem; font-weight: 600; margin: 1.4rem 0 0; }
+  .tally { display: flex; gap: 2.5rem; margin: 1.2rem 0 0; padding: 0; }
+  .tally div { margin: 0; }
+  .tally dt { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+  .tally dd { margin: .1rem 0 0; font-size: 1.5rem; font-weight: 600; }
+  .blurb { color: var(--muted); font-size: .9rem; margin: .5rem 0 1.4rem; }
+  .empty { color: var(--muted); margin: 1rem 0; }
+  .finding { padding: 1.1rem 0 1.3rem; border-bottom: 1px solid var(--line); }
+  .finding-head { display: flex; align-items: baseline; gap: .7rem; }
+  .pill {
+    flex: none; font-size: .68rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; padding: .2rem .5rem; border-radius: 3px;
+    border: 1px solid currentColor;
+  }
+  .p-urgent { color: #8c1d18; }
+  .p-high   { color: #a03604; }
+  .p-medium { color: #7a5c00; }
+  .p-low    { color: #40566d; }
+  .p-none   { color: var(--muted); }
+  .why { margin: .6rem 0 .5rem; }
+  .fix { margin: .5rem 0; }
+  .fix-label, .evidence-label {
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); margin-right: .35rem;
+  }
+  .seen { color: var(--muted); font-size: .85rem; margin: .35rem 0 0; }
+  .evidence { margin: .5rem 0 0; font-size: .88rem; }
+  code { background: #f4f5f7; padding: .1rem .3rem; border-radius: 3px; word-break: break-all; }
+  .appendix ul { columns: 2; column-gap: 2rem; padding-left: 1.1rem; color: var(--muted); font-size: .88rem; }
+  .appendix li { margin: .15rem 0; break-inside: avoid; }
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  .caveat { font-size: .8rem; }
+  @media print {
+    body { padding: 0; max-width: none; font-size: 11pt; }
+    .finding, .appendix li { break-inside: avoid; }
+    h2 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<header class="cover">
+<p class="by">Prepared by Glarion</p>
+<h1>Website security review</h1>
+<p class="subject"><strong>pctweaker.app</strong> — prepared for pctweaker.app</p>
+<p class="date">Scanned 29 August 2026</p>
+<p class="headline">3 issues need attention.</p>
+<dl class="tally">
+<div><dt>Need attention</dt><dd>3</dd></div>
+<div><dt>Worth a decision</dt><dd>6</dd></div>
+<div><dt>Checked, no issue</dt><dd>20</dd></div>
+</dl>
+</header>
+<section>
+<h2>Needs attention</h2>
+<p class="blurb">Findings with a concrete fix, most important first.</p>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-high">High</span>
+<h3>No Content-Security-Policy header</h3>
+</div>
+<p class="why">Without a Content-Security-Policy, any script that reaches the page can run — including one injected through a comment field, a third-party widget, or a compromised dependency. It is the single control that limits the damage of a cross-site scripting flaw.</p>
+<p class="fix"><span class="fix-label">What to do</span> Add a Content-Security-Policy header. Start in report-only mode to find what the site legitimately loads, then enforce it once the report is quiet.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-medium">Medium</span>
+<h3>HTTPS is not enforced for long enough</h3>
+</div>
+<p class="why">HTTP Strict-Transport-Security is set, but with a short lifetime. Until it expires the browser remembers to use HTTPS; a visitor arriving after that window can still be pushed onto plain HTTP by an attacker on the same network.</p>
+<p class="fix"><span class="fix-label">What to do</span> Raise max-age to at least 31536000 (one year), which is also the threshold for the browser preload list.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>max-age=15552000</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>CDN debug headers exposed in responses</h3>
+</div>
+<p class="seen">Observed 3 times.</p>
+<p class="why">The CDN is returning debug headers describing cache internals. It gives an attacker free reconnaissance about the infrastructure and signals that a debug setting was left on in production.</p>
+<p class="fix"><span class="fix-label">What to do</span> Turn off debug header output in the CDN configuration for production traffic.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+</section>
+<section>
+<h2>Worth a decision</h2>
+<p class="blurb">Whether these matter depends on how the site is used.</p>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Email addresses published in the page source</h3>
+</div>
+<p class="why">Email addresses are published in the page source, where scrapers collect them for spam and for targeting phishing at named staff. Placeholder addresses left in a template also show up here, which is worth checking before a client notices.</p>
+<p class="fix"><span class="fix-label">What to do</span> Confirm each address is meant to be public and is not leftover template text. Use a contact form where an address is not needed.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>your@email.com</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Missing security header: cross-origin-embedder-policy</h3>
+</div>
+<p class="why">These headers isolate the page from other browser contexts. They matter for sites handling sensitive data in the browser, and are often unnecessary for a brochure or marketing site.</p>
+<p class="fix"><span class="fix-label">What to do</span> Worth adding if the site handles logged-in sessions or payment flows. Safe to note and move on otherwise — enabling them can break embedded third-party content.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Missing security header: cross-origin-opener-policy</h3>
+</div>
+<p class="why">These headers isolate the page from other browser contexts. They matter for sites handling sensitive data in the browser, and are often unnecessary for a brochure or marketing site.</p>
+<p class="fix"><span class="fix-label">What to do</span> Worth adding if the site handles logged-in sessions or payment flows. Safe to note and move on otherwise — enabling them can break embedded third-party content.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Missing security header: cross-origin-resource-policy</h3>
+</div>
+<p class="why">These headers isolate the page from other browser contexts. They matter for sites handling sensitive data in the browser, and are often unnecessary for a brochure or marketing site.</p>
+<p class="fix"><span class="fix-label">What to do</span> Worth adding if the site handles logged-in sessions or payment flows. Safe to note and move on otherwise — enabling them can break embedded third-party content.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Missing security header: x-permitted-cross-domain-policies</h3>
+</div>
+<p class="why">This hardening header is not being sent. It is a defence-in-depth                      measure rather than a flaw, and whether it is worth adding depends                      on what the site does.</p>
+<p class="fix"><span class="fix-label">What to do</span> Review against the site&#x27;s needs. Adding it is usually harmless, but                      test first if the site embeds or is embedded by third-party content.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app</code></p>
+</article>
+<article class="finding">
+<div class="finding-head">
+<span class="pill p-low">Low</span>
+<h3>Paths disclosed in robots.txt</h3>
+</div>
+<p class="why">robots.txt lists paths the site asks crawlers to skip. It is public, so any administrative or staging path named there is effectively advertised to anyone looking.</p>
+<p class="fix"><span class="fix-label">What to do</span> Check the listed paths. Anything sensitive needs authentication — excluding it from robots.txt is not protection either way.</p>
+<p class="evidence"><span class="evidence-label">Observed</span> <code>https://pctweaker.app/robots.txt</code></p>
+</article>
+</section>
+<section class="appendix">
+<h2>Also checked</h2>
+<p class="blurb">Verified during this scan and found unremarkable.</p>
+<ul>
+<li>Browser tracking opt-out</li>
+<li>CAA record</li>
+<li>Certificate issuer</li>
+<li>Certificate renewal date</li>
+<li>DMARC record</li>
+<li>DNS TXT records</li>
+<li>DNSSEC</li>
+<li>Detected technologies</li>
+<li>Forms on the page</li>
+<li>IPv6 addresses</li>
+<li>Mail servers</li>
+<li>Name servers</li>
+<li>Names covered by the certificate</li>
+<li>RDAP WHOIS</li>
+<li>SPF record</li>
+<li>TLS protocol versions</li>
+<li>Web application firewall</li>
+<li>Wildcard certificate in use</li>
+<li>robots.txt</li>
+<li>security.txt</li>
+</ul>
+</section>
+<footer>
+<p>Prepared by Glarion for pctweaker.app.</p>
+<p class="caveat">An automated scan reports what it can observe from outside. It is not a substitute for a manual review of the application.</p>
+</footer>
+</body>
+</html>
