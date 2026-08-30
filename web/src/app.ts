@@ -207,8 +207,15 @@ function unconfirmedNotice(email: string): HTMLElement {
   });
 
   wrapper.append(
-    notice("info", "Confirm your email address before signing in. Check your inbox."),
-    resend,
+    notice("info", "Confirm your email address before signing in."),
+    // The spam folder is named before they go looking rather than after
+    // they have given up. Mail from a domain that only recently started
+    // sending is filtered often enough that leaving this to be discovered
+    // turns a working product into a support ticket.
+    el("p", { class: "switch", style: "margin:.9rem 0 2rem" }, [
+      "Check your spam folder — a first message from a new sender often lands there. Still nothing? ",
+      resend,
+    ]),
   );
   return wrapper;
 }
@@ -327,6 +334,15 @@ function renderCheckYourEmail(email: string): void {
       el("p", {
         class: "blurb",
         text: `We sent a link to ${email}. Open it to finish setting up your account.`,
+      }),
+      // See unconfirmedNotice: said up front, because the message being
+      // filtered is the common case rather than the unlucky one.
+      el("p", {
+        class: "muted",
+        style: "margin:-1.5rem 0 2rem",
+        text:
+          "If it is not in your inbox within a minute, look in the spam folder — " +
+          "a first message from a new sender often lands there.",
       }),
       message,
       el("p", { class: "switch" }, ["Nothing arrived? ", resend]),
@@ -480,6 +496,14 @@ function standardCommands(): palette.Command[] {
       label: "Sites",
       run: () => {
         window.location.hash = "#/targets";
+      },
+    },
+    {
+      group: "Go to",
+      label: "Plan",
+      keywords: "billing upgrade subscription pricing invoice",
+      run: () => {
+        window.location.hash = "#/plan";
       },
     },
     {
@@ -1463,16 +1487,8 @@ async function renderSettings(): Promise<void> {
   container.append(skeleton());
 
   let profile = { agency_name: null as string | null, agency_logo_url: null as string | null };
-  let subscription: Subscription | undefined;
   try {
-    const [loadedProfile, loadedSubscription] = await Promise.all([
-      api.profile(),
-      // Billing is optional infrastructure: the rest of settings must
-      // still work on a deployment where Stripe is not configured.
-      api.subscription().catch(() => undefined),
-    ]);
-    profile = loadedProfile;
-    subscription = loadedSubscription;
+    profile = await api.profile();
   } catch (error) {
     clear(container);
     container.append(notice("error", describeError(error)));
@@ -1480,7 +1496,6 @@ async function renderSettings(): Promise<void> {
   }
 
   clear(container);
-  if (subscription) container.append(planSection(subscription));
 
   const message = el("div");
   const name = el("input", { type: "text", value: profile.agency_name ?? "" });
@@ -1521,6 +1536,13 @@ async function renderSettings(): Promise<void> {
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Your details"), form]));
 
+  const plan = el("p", { class: "muted" }, [
+    "Your plan, what it includes, and every other plan: ",
+    el("a", { class: "inline", href: "#/plan", text: "Plan" }),
+    ".",
+  ]);
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Plan"), plan]));
+
   const support = el("p", { class: "muted" }, [
     "Something wrong, or a question about your account? ",
     el("a", { class: "inline", href: "mailto:aurelio_11@outlook.it", text: "aurelio_11@outlook.it" }),
@@ -1529,16 +1551,56 @@ async function renderSettings(): Promise<void> {
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
 }
 
-/// The plan, and the way out of it.
+/// What each plan buys, and what it costs.
 ///
-/// Cancelling goes to Stripe's own portal rather than being reimplemented
-/// here. A subscription somebody can only end by emailing support is a dark
-/// pattern, and the portal already handles cards, invoices and cancellation
-/// properly.
-function planSection(subscription: Subscription): HTMLElement {
+/// One list, rather than figures written into the markup in several
+/// places. These have to match the Stripe catalogue exactly: a page that
+/// quotes one price while checkout charges another is not a display bug,
+/// it is a chargeback. The yearly saving is derived from the two numbers
+/// rather than written down, which is how the old "two months free" label
+/// came to be wrong after the yearly prices changed.
+const PLANS = [
+  { plan: "free", name: "Free", monthly: 0, yearly: 0, sites: 1, scheduling: false },
+  { plan: "studio", name: "Studio", monthly: 39, yearly: 350, sites: 10, scheduling: true },
+  { plan: "agency", name: "Agency", monthly: 99, yearly: 750, sites: 40, scheduling: true },
+] as const;
+
+type PlanOffer = (typeof PLANS)[number];
+
+/// What a plan includes, in the order somebody comparing them cares about.
+function planIncludes(offer: PlanOffer): string {
+  const sites = `${offer.sites} ${offer.sites === 1 ? "site" : "sites"}`;
+  return offer.scheduling
+    ? `${sites} · weekly checks · reports under your name`
+    : `${sites} · scans when you ask`;
+}
+
+/// The plan page.
+///
+/// Its own route rather than a block at the top of Settings. Somebody who
+/// has run out of sites is not looking for the page where they edit their
+/// business name, and hiding the only paid thing in the product behind a
+/// gear icon is how a product with a paid tier never sells one.
+async function renderPlan(): Promise<void> {
+  const container = root();
+  clear(container);
+  container.append(skeleton());
+
+  let subscription: Subscription;
+  try {
+    subscription = await api.subscription();
+  } catch (error) {
+    clear(container);
+    container.append(notice("error", describeError(error)));
+    return;
+  }
+
+  clear(container);
   const message = el("div");
 
-  const usage = el("p", { class: "standing", style: "margin-bottom:.5rem" });
+  // Where they stand, as a sentence that has already done the
+  // interpreting — the same shape as every other page here.
+  const usage = el("p", { class: "standing" });
   usage.append(
     el("strong", { text: subscription.plan_name }),
     " — ",
@@ -1557,12 +1619,26 @@ function planSection(subscription: Subscription): HTMLElement {
     meta.push(subscription.status.replace(/_/g, " "));
   }
 
-  const section = el("div", {}, [
-    sectionRule("Plan"),
+  append(
+    container,
+    el("h1", { text: "Plan" }),
     el("div", { style: "margin-top:1.25rem" }, [usage]),
     meta.length > 0 ? el("p", { class: "standing-meta", text: meta.join(" · ") }) : null,
     message,
-  ]);
+  );
+
+  // Being out of room is the one thing on this page somebody needs told
+  // rather than left to work out from two numbers.
+  if (subscription.targets_used >= subscription.max_targets) {
+    container.append(
+      notice(
+        "info",
+        subscription.plan === "agency"
+          ? "Every site on your plan is in use. Get in touch if you need more than forty."
+          : "Every site on your plan is in use. A larger plan adds room for more.",
+      ),
+    );
+  }
 
   if (subscription.manageable) {
     const manage = el("button", { class: "ghost", type: "button", text: "Manage billing" });
@@ -1576,72 +1652,92 @@ function planSection(subscription: Subscription): HTMLElement {
         }
       });
     });
-    section.append(manage);
+    container.append(el("div", { style: "margin-top:1.5rem" }, [manage]));
   }
 
-  // Anything the account is not already on. Showing the current plan as a
-  // buyable option is how people end up subscribing twice.
-  const offers = [
-    {
-      plan: "studio",
-      name: "Studio",
-      price: "€39",
-      yearly: "€350",
-      detail: "10 sites, weekly checks",
-    },
-    {
-      plan: "agency",
-      name: "Agency",
-      price: "€99",
-      yearly: "€750",
-      detail: "40 sites, weekly checks",
-    },
-  ].filter((offer) => offer.plan !== subscription.plan);
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Every plan")]));
 
-  if (offers.length > 0) {
-    const list = el("ul", { class: "ledger", style: "margin-top:1.5rem" });
+  const list = el("ul", { class: "ledger" });
+  for (const offer of PLANS) list.append(planRow(offer, subscription, message));
+  container.append(list);
 
-    for (const offer of offers) {
-      const monthly = el("button", { class: "primary", type: "button", text: `${offer.price}/mo` });
-      const yearly = el("button", {
-        class: "ghost",
-        type: "button",
-        text: `${offer.yearly}/yr`,
-        title: "Two months free",
+  container.append(
+    el("p", { class: "muted", style: "margin-top:1.5rem" }, [
+      "Prices exclude VAT, which is added at checkout. Cancel whenever you like from Manage billing — ",
+      "the sites stay, the automatic checks stop.",
+    ]),
+  );
+}
+
+/// One plan, as a row on a hairline.
+///
+/// All three are listed, including the one already held: a page that shows
+/// only what you are not on gives no sense of what you would be giving up
+/// or gaining, and showing the current plan as buyable is how people end
+/// up subscribed twice.
+function planRow(
+  offer: PlanOffer,
+  subscription: Subscription,
+  message: HTMLElement,
+): HTMLElement {
+  const current = offer.plan === subscription.plan;
+  const saving = offer.monthly * 12 - offer.yearly;
+
+  const state = el("div", { class: "entry-state" }, [
+    el("span", { text: planIncludes(offer) }),
+  ]);
+
+  const right = el("div", { class: "entry-right" });
+
+  if (current) {
+    // Achromatic, and the spine below stays grey with it. Green here
+    // would read as "this site is fine" — colour in this interface means
+    // security state and nothing else, and spending it on "you are on
+    // this plan" is exactly how a reserved palette stops being read.
+    right.append(el("span", { class: "mono-note", text: "Current plan" }));
+  } else if (offer.monthly === 0) {
+    // Free is not something to buy, and moving down to it is done by
+    // cancelling in Stripe's portal — where it is clear what happens at
+    // the end of the period — rather than by a button here that would
+    // have to decide the fate of the sites over the smaller allowance.
+    right.append(el("span", { class: "mono-note", text: "Cancel to return" }));
+  } else {
+    state.append(
+      el("span", { class: "sep", text: "·" }),
+      el("span", { class: "watching", text: `yearly saves €${saving}` }),
+    );
+
+    const yearly = el("button", {
+      class: "ghost",
+      type: "button",
+      text: `€${offer.yearly}/yr`,
+      title: `€${saving} less than twelve months at €${offer.monthly}`,
+    });
+    const monthly = el("button", { class: "primary", type: "button", text: `€${offer.monthly}/mo` });
+
+    const go = (interval: "monthly" | "yearly", button: HTMLButtonElement) => () => {
+      clear(message);
+      void withPending(button, "Opening…", async () => {
+        try {
+          const result = await api.checkout(offer.plan, interval);
+          window.location.href = result.url;
+        } catch (error) {
+          message.replaceChildren(notice("error", describeError(error)));
+        }
       });
+    };
 
-      const go = (interval: "monthly" | "yearly", button: HTMLButtonElement) => () => {
-        clear(message);
-        void withPending(button, "Opening…", async () => {
-          try {
-            const result = await api.checkout(offer.plan, interval);
-            window.location.href = result.url;
-          } catch (error) {
-            message.replaceChildren(notice("error", describeError(error)));
-          }
-        });
-      };
-
-      on(monthly, "click", go("monthly", monthly));
-      on(yearly, "click", go("yearly", yearly));
-
-      list.append(
-        el("li", {}, [
-          el("div", { class: "entry entry-idle" }, [
-            el("div", {}, [
-              el("div", { class: "entry-name", text: offer.name }),
-              el("div", { class: "entry-state" }, [el("span", { text: offer.detail })]),
-            ]),
-            el("div", { class: "entry-right" }, [yearly, monthly]),
-          ]),
-        ]),
-      );
-    }
-
-    section.append(list);
+    on(monthly, "click", go("monthly", monthly));
+    on(yearly, "click", go("yearly", yearly));
+    right.append(yearly, monthly);
   }
 
-  return section;
+  return el("li", {}, [
+    el("div", { class: "entry entry-idle" }, [
+      el("div", {}, [el("div", { class: "entry-name", text: offer.name }), state]),
+      right,
+    ]),
+  ]);
 }
 
 // --- routing ---------------------------------------------------------------
@@ -1666,6 +1762,7 @@ function renderNav(): void {
   nav.append(
     jump,
     link("#/targets", "Sites", ["targets", "scans", ""]),
+    link("#/plan", "Plan", ["plan"]),
     link("#/settings", "Settings", ["settings"]),
   );
 
@@ -1712,6 +1809,10 @@ function routeInner(): void {
   }
   if (parts[0] === "scans" && parts[1]) {
     void renderScan(parts[1]);
+    return;
+  }
+  if (parts[0] === "plan") {
+    void renderPlan();
     return;
   }
   if (parts[0] === "settings") {
