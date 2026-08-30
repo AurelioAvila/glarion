@@ -247,6 +247,16 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
 .entry-right { display: flex; align-items: center; gap: 1.5rem; }
 
 /*
+  A plan row's price, next to its one button. The billing rhythm lives in
+  the page's toggle now, not in a second button per row, so this only
+  ever states one number — right-aligned so three rows of different
+  amounts still read as a column.
+*/
+.plan-row-price { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.plan-row-amount { font-size: 1.05rem; color: var(--ink); letter-spacing: -.01em; }
+.plan-row-unit { font-size: .78rem; color: var(--ink-3); margin-left: .15rem; }
+
+/*
   How the outstanding work splits by rank, as a stack of short bars.
   "3 to fix" does not say whether that is three trivia or one serious
   problem and two notes, and those need different amounts of somebody's
