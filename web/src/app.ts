@@ -1657,9 +1657,36 @@ async function renderPlan(): Promise<void> {
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Every plan")]));
 
+  // One switch for the whole table rather than two prices crowded into
+  // every row. Monthly and yearly are the same plan, not two different
+  // things to compare — a reader picks a plan first and a billing rhythm
+  // second, and the old layout made them do both at once for each row.
+  let interval: "monthly" | "yearly" = "monthly";
+  const toggleRow = el("div", { class: "tabs", style: "margin-bottom:0" });
+  const monthlyTab = el("button", { class: "tab tab-active", type: "button", text: "Monthly" });
+  const yearlyTab = el("button", { class: "tab", type: "button", text: "Yearly" });
+  toggleRow.append(monthlyTab, yearlyTab);
+
   const list = el("ul", { class: "ledger" });
-  for (const offer of PLANS) list.append(planRow(offer, subscription, message));
-  container.append(list);
+
+  function paintList(): void {
+    clear(list);
+    for (const offer of PLANS) list.append(planRow(offer, subscription, interval, message));
+  }
+
+  function selectInterval(value: "monthly" | "yearly"): void {
+    if (interval === value) return;
+    interval = value;
+    monthlyTab.className = value === "monthly" ? "tab tab-active" : "tab";
+    yearlyTab.className = value === "yearly" ? "tab tab-active" : "tab";
+    paintList();
+  }
+
+  on(monthlyTab, "click", () => selectInterval("monthly"));
+  on(yearlyTab, "click", () => selectInterval("yearly"));
+
+  paintList();
+  container.append(el("div", { style: "margin-top:1.75rem" }, [toggleRow]), list);
 
   container.append(
     el("p", { class: "muted", style: "margin-top:1.5rem" }, [
@@ -1674,10 +1701,13 @@ async function renderPlan(): Promise<void> {
 /// All three are listed, including the one already held: a page that shows
 /// only what you are not on gives no sense of what you would be giving up
 /// or gaining, and showing the current plan as buyable is how people end
-/// up subscribed twice.
+/// up subscribed twice. The price shown follows the page's monthly/yearly
+/// switch, so this never carries its own — a plan does not have an
+/// opinion on billing rhythm, the reader does.
 function planRow(
   offer: PlanOffer,
   subscription: Subscription,
+  interval: "monthly" | "yearly",
   message: HTMLElement,
 ): HTMLElement {
   const current = offer.plan === subscription.plan;
@@ -1688,6 +1718,7 @@ function planRow(
   ]);
 
   const right = el("div", { class: "entry-right" });
+  const price = el("div", { class: "plan-row-price" });
 
   if (current) {
     // Achromatic, and the spine below stays grey with it. Green here
@@ -1702,22 +1733,26 @@ function planRow(
     // have to decide the fate of the sites over the smaller allowance.
     right.append(el("span", { class: "mono-note", text: "Cancel to return" }));
   } else {
-    state.append(
-      el("span", { class: "sep", text: "·" }),
-      el("span", { class: "watching", text: `yearly saves €${saving}` }),
-    );
+    if (interval === "yearly") {
+      price.append(
+        el("span", { class: "plan-row-amount", text: `€${offer.yearly}` }),
+        el("span", { class: "plan-row-unit", text: "/yr" }),
+      );
+      state.append(
+        el("span", { class: "sep", text: "·" }),
+        el("span", { class: "watching", text: `saves €${saving} a year` }),
+      );
+    } else {
+      price.append(
+        el("span", { class: "plan-row-amount", text: `€${offer.monthly}` }),
+        el("span", { class: "plan-row-unit", text: "/mo" }),
+      );
+    }
 
-    const yearly = el("button", {
-      class: "ghost",
-      type: "button",
-      text: `€${offer.yearly}/yr`,
-      title: `€${saving} less than twelve months at €${offer.monthly}`,
-    });
-    const monthly = el("button", { class: "primary", type: "button", text: `€${offer.monthly}/mo` });
-
-    const go = (interval: "monthly" | "yearly", button: HTMLButtonElement) => () => {
+    const subscribe = el("button", { class: "primary", type: "button", text: "Subscribe" });
+    on(subscribe, "click", () => {
       clear(message);
-      void withPending(button, "Opening…", async () => {
+      void withPending(subscribe, "Opening…", async () => {
         try {
           const result = await api.checkout(offer.plan, interval);
           window.location.href = result.url;
@@ -1725,11 +1760,9 @@ function planRow(
           message.replaceChildren(notice("error", describeError(error)));
         }
       });
-    };
+    });
 
-    on(monthly, "click", go("monthly", monthly));
-    on(yearly, "click", go("yearly", yearly));
-    right.append(yearly, monthly);
+    right.append(price, subscribe);
   }
 
   return el("li", {}, [
