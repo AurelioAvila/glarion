@@ -500,8 +500,8 @@ function standardCommands(): palette.Command[] {
     },
     {
       group: "Go to",
-      label: "Plan",
-      keywords: "billing upgrade subscription pricing invoice",
+      label: "Pricing",
+      keywords: "billing upgrade subscription plan invoice",
       run: () => {
         window.location.hash = "#/plan";
       },
@@ -1538,10 +1538,10 @@ async function renderSettings(): Promise<void> {
 
   const plan = el("p", { class: "muted" }, [
     "Your plan, what it includes, and every other plan: ",
-    el("a", { class: "inline", href: "#/plan", text: "Plan" }),
+    el("a", { class: "inline", href: "#/plan", text: "Pricing" }),
     ".",
   ]);
-  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Plan"), plan]));
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Pricing"), plan]));
 
   const support = el("p", { class: "muted" }, [
     "Something wrong, or a question about your account? ",
@@ -1621,7 +1621,7 @@ async function renderPlan(): Promise<void> {
 
   append(
     container,
-    el("h1", { text: "Plan" }),
+    el("h1", { text: "Pricing" }),
     el("div", { style: "margin-top:1.25rem" }, [usage]),
     meta.length > 0 ? el("p", { class: "standing-meta", text: meta.join(" · ") }) : null,
     message,
@@ -1762,7 +1762,7 @@ function renderNav(): void {
   nav.append(
     jump,
     link("#/targets", "Sites", ["targets", "scans", ""]),
-    link("#/plan", "Plan", ["plan"]),
+    link("#/plan", "Pricing", ["plan"]),
     link("#/settings", "Settings", ["settings"]),
   );
 
