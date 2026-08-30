@@ -3,7 +3,8 @@
 Website security scanner. Orchestrates open-source scanning tools behind a
 Rust API and normalizes their output into a single finding model.
 
-Proprietary. Not open-source.
+Proprietary. Not open-source. See [LICENSE](LICENSE) — the source is
+public for reference, not for reuse.
 
 ## The constraint everything else is arranged around
 
