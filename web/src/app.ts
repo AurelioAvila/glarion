@@ -1546,9 +1546,56 @@ async function renderSettings(): Promise<void> {
   const support = el("p", { class: "muted" }, [
     "Something wrong, or a question about your account? ",
     el("a", { class: "inline", href: "mailto:aurelio_11@outlook.it", text: "aurelio_11@outlook.it" }),
+    ". Also see the ",
+    el("a", { class: "inline", href: "/privacy.html", text: "Privacy Policy" }),
+    " and ",
+    el("a", { class: "inline", href: "/terms.html", text: "Terms of Service" }),
     ".",
   ]);
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
+
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Delete account"), deleteAccountSection()]));
+}
+
+/// Asks for the password before doing anything, then does it without a
+/// second confirmation dialog.
+///
+/// The password *is* the confirmation — someone who cannot supply it has
+/// not proven they are the account holder making this decision, and
+/// someone who can has already deliberately typed it into a form labelled
+/// "Delete account". A second "are you sure?" after that would only be
+/// asking them to confirm they meant what they just did.
+function deleteAccountSection(): HTMLElement {
+  const message = el("div");
+  const password = el("input", { type: "password", autocomplete: "current-password" });
+  const button = el("button", { class: "ghost", type: "submit", text: "Delete my account" });
+
+  const form = el("form", { style: "max-width:22rem" }, [
+    el("p", {
+      class: "blurb",
+      style: "margin:0 0 1.1rem",
+      text: "Permanent. Your name, email, and password are removed immediately — this cannot be undone from here.",
+    }),
+    message,
+    field("Confirm your password", password),
+    button,
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+    void withPending(button, "Deleting…", async () => {
+      try {
+        await api.deleteAccount(password.value);
+        session.clear();
+        window.location.hash = "#/signin";
+      } catch (error) {
+        message.replaceChildren(notice("error", describeError(error)));
+      }
+    });
+  });
+
+  return form;
 }
 
 /// What each plan buys, and what it costs.

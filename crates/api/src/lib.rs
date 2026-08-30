@@ -109,6 +109,10 @@ pub fn router(state: AppState) -> Router {
             post(routes::accounts::resend_verification),
         )
         .route(
+            "/api/account",
+            axum::routing::delete(routes::accounts::delete_account),
+        )
+        .route(
             "/api/targets",
             get(routes::targets::list_targets).post(routes::targets::create_target),
         )
