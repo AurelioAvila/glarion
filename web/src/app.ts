@@ -1579,14 +1579,14 @@ function planSection(subscription: Subscription): HTMLElement {
       plan: "studio",
       name: "Studio",
       price: "€39",
-      yearly: "€390",
+      yearly: "€350",
       detail: "10 sites, weekly checks",
     },
     {
       plan: "agency",
       name: "Agency",
       price: "€99",
-      yearly: "€990",
+      yearly: "€750",
       detail: "40 sites, weekly checks",
     },
   ].filter((offer) => offer.plan !== subscription.plan);
