@@ -89,6 +89,37 @@ async fn built_assets_are_served() {
 }
 
 #[tokio::test]
+async fn static_responses_are_never_trusted_without_revalidation() {
+    // A regression, not a preference: every static route was once served
+    // with no Cache-Control header at all, so a browser that had loaded
+    // the app once could keep running yesterday's bundle for hours after
+    // a deploy that curl and the server both confirmed had shipped. Every
+    // route here has to say "no-cache" — asking to revalidate, not asking
+    // to be re-downloaded — so a signed-in browser sees a new deploy on
+    // its very next request.
+    let dir = web_dir();
+
+    for path in ["/", "/app", "/app/", "/dist/app.js"] {
+        let router = with_static_files(Router::new(), &dir);
+        let response = router
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::CACHE_CONTROL)
+                .and_then(|value| value.to_str().ok()),
+            Some("no-cache"),
+            "{path} must revalidate on every load"
+        );
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
 async fn api_routes_still_win_over_the_static_fallback() {
     let dir = web_dir();
 

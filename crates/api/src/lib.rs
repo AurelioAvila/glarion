@@ -155,7 +155,10 @@ pub fn router(state: AppState) -> Router {
 /// reach, and an API deployed without the frontend is a legitimate thing
 /// to want; neither should be a boot error.
 pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
+    use axum::http::header::CACHE_CONTROL;
+    use tower::ServiceBuilder;
     use tower_http::services::{ServeDir, ServeFile};
+    use tower_http::set_header::SetResponseHeaderLayer;
 
     let landing = web_root.join("landing.html");
     let shell = web_root.join("index.html");
@@ -168,20 +171,38 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         return router;
     }
 
+    // Every static response revalidates rather than trusting a cached copy.
+    //
+    // Filenames here never change between deploys (no content hash), and
+    // with no Cache-Control header at all a browser is free to reuse
+    // whatever it already has for hours — which is exactly what happened
+    // the first time this shipped: `flyctl deploy` succeeded, curl proved
+    // the new bundle was live, and a signed-in browser kept running
+    // yesterday's JavaScript regardless. `no-cache` does not mean
+    // uncached — it means every load sends a conditional request, and
+    // ServeFile/ServeDir already answer that with 304 when nothing
+    // changed, so this costs a round trip rather than a full download.
+    let revalidate = ServiceBuilder::new().layer(SetResponseHeaderLayer::overriding(
+        CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("no-cache"),
+    ));
+
     router
         // Explicit, because ServeDir would otherwise answer `/` with
         // index.html — which here is the dashboard shell, not the front
         // door. Getting this wrong shows a signed-out visitor a blank
         // application instead of the page that explains it.
-        .route_service("/", ServeFile::new(&landing))
+        .route_service("/", revalidate.clone().service(ServeFile::new(&landing)))
         // `/app` without a trailing slash, deliberately: the shell asks for
         // /dist/app.js absolutely, but any relative URL a future edit adds
         // would resolve against the wrong base under `/app/`.
-        .route_service("/app", ServeFile::new(&shell))
-        .route_service("/app/", ServeFile::new(&shell))
+        .route_service("/app", revalidate.clone().service(ServeFile::new(&shell)))
+        .route_service("/app/", revalidate.clone().service(ServeFile::new(&shell)))
         .fallback_service(
-            ServeDir::new(web_root)
-                .append_index_html_on_directories(false)
-                .fallback(ServeFile::new(&landing)),
+            revalidate.service(
+                ServeDir::new(web_root)
+                    .append_index_html_on_directories(false)
+                    .fallback(ServeFile::new(&landing)),
+            ),
         )
 }
