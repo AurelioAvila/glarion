@@ -1520,6 +1520,13 @@ async function renderSettings(): Promise<void> {
   });
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Your details"), form]));
+
+  const support = el("p", { class: "muted" }, [
+    "Something wrong, or a question about your account? ",
+    el("a", { class: "inline", href: "mailto:aurelio_11@outlook.it", text: "aurelio_11@outlook.it" }),
+    ".",
+  ]);
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
 }
 
 /// The plan, and the way out of it.
