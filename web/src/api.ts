@@ -342,6 +342,10 @@ export const api = {
     return request<{ url: string }>("POST", "/api/billing/portal", {});
   },
 
+  deleteAccount(password: string) {
+    return request<{ message: string }>("DELETE", "/api/account", { password });
+  },
+
   setCadence(targetId: string, cadence: Cadence) {
     return request<Target>("PUT", `/api/targets/${encodeURIComponent(targetId)}/cadence`, {
       cadence,

@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::sync::OnceLock;
 use uuid::Uuid;
 
-use crate::auth::{hash_password, issue_token, verify_password};
+use crate::auth::{hash_password, issue_token, verify_password, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 use orchestrator::mailer::verification_email;
@@ -346,6 +346,112 @@ pub async fn login(
 
     let token = issue_token(&state.jwt_secret, user_id, token_version)?;
     Ok(Json(TokenResponse { token, user_id }))
+}
+
+#[derive(Deserialize)]
+pub struct DeleteAccountRequest {
+    pub password: String,
+}
+
+/// Erases the account's personal data. Does not delete the row.
+///
+/// The row cannot be deleted outright: `scan_authorizations` references
+/// `users` without `on delete cascade`, deliberately — it is the
+/// immutable record of who authorized a scan against a domain, which is
+/// the legal basis the whole product's ownership gate rests on (see the
+/// module comment on `crate::routes::scans`). Destroying it on request
+/// would remove the one thing that could show a scan was authorised if
+/// its target ever disputed one, which is precisely the record GDPR
+/// Article 17(3)(e) allows a controller to keep — establishment or
+/// defence of legal claims.
+///
+/// So this satisfies the right to erasure the way that exception expects:
+/// every field that identifies *this person* is overwritten, and the row
+/// stays only as the anchor those authorization records point to. `id`
+/// is never reused, so there is nothing to link the anonymised row back
+/// to the person who held it.
+pub async fn delete_account(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<DeleteAccountRequest>,
+) -> ApiResult<Json<MessageResponse>> {
+    let password_hash: Option<String> =
+        sqlx::query_scalar("select password_hash from users where id = $1")
+            .bind(user.id)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    let Some(password_hash) = password_hash else {
+        return Err(ApiError::Unauthorized);
+    };
+
+    // Re-proves the password rather than trusting the bearer token alone.
+    // The token is exactly what a stolen session already has; an
+    // irreversible action needs the one thing it would not also have.
+    if !verify_password(&body.password, &password_hash) {
+        return Err(ApiError::InvalidCredentials);
+    }
+
+    // A live subscription has to end at Stripe first. Cancelling it here
+    // as a side effect of deletion would be a second, undocumented way to
+    // cancel — see `routes::billing::open_portal` for why that path is
+    // deliberately just the one, through Stripe's own portal.
+    let status: Option<String> = sqlx::query_scalar(
+        "select subscription_status from entitlements where user_id = $1 and product = 'glarion'",
+    )
+    .bind(user.id)
+    .fetch_optional(&state.pool)
+    .await?
+    .flatten();
+
+    if status
+        .as_deref()
+        .is_some_and(crate::billing::status_grants_access)
+    {
+        return Err(ApiError::BadRequest(
+            "Cancel your subscription from Manage billing before deleting your account.".into(),
+        ));
+    }
+
+    // A hash of nobody's password, the same way `decoy_hash` is: not left
+    // null, because null would need `login` to special-case it, and not a
+    // constant, because a constant is one shared secret away from being a
+    // password.
+    let unusable_hash = hash_password(&Uuid::new_v4().to_string())?;
+    let placeholder_email = format!("deleted-{}@deleted.invalid", user.id);
+
+    sqlx::query(
+        "update users
+         set email = $2,
+             password_hash = $3,
+             first_name = null,
+             last_name = null,
+             date_of_birth = null,
+             agency_name = null,
+             agency_logo_url = null,
+             email_verified_at = null,
+             verification_token_hash = null,
+             verification_sent_at = null,
+             token_version = token_version + 1
+         where id = $1",
+    )
+    .bind(user.id)
+    .bind(&placeholder_email)
+    .bind(&unusable_hash)
+    .execute(&state.pool)
+    .await?;
+
+    // No legal-retention reason to keep this once the account cannot sign
+    // in: it is billing state for a subscription that, by this point, does
+    // not exist.
+    sqlx::query("delete from entitlements where user_id = $1 and product = 'glarion'")
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+
+    Ok(Json(MessageResponse {
+        message: "Your account has been deleted.".into(),
+    }))
 }
 
 /// Generates a confirmation token and the hash to store for it.

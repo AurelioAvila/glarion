@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Service — Glarion</title>
+<meta name="robots" content="noindex">
+<style>
+:root {
+  --bg: #0b0b0c; --rule: #22232a; --ink: #f0f0f2; --ink-2: #9c9ea8; --ink-3: #7c7e88;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
+a:hover { text-decoration-color: var(--ink); }
+header { border-bottom: 1px solid var(--rule); }
+.top-inner { max-width: 44rem; margin: 0 auto; padding: 0 2rem; height: 54px; display: flex; align-items: center; }
+.wordmark {
+  font-family: var(--mono); font-size: .8rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase;
+}
+main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 2rem 6rem; }
+h1 { font-size: 1.9rem; letter-spacing: -.02em; margin: 0 0 .4rem; }
+.updated {
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 3rem;
+}
+h2 {
+  font-size: .78rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+  margin: 2.75rem 0 1rem; padding-bottom: .6rem; border-bottom: 1px solid var(--rule);
+}
+h2:first-of-type { margin-top: 0; }
+p { color: var(--ink-2); margin: 0 0 1.1rem; }
+ul { color: var(--ink-2); margin: 0 0 1.1rem; padding-left: 1.2rem; }
+li { margin: .4rem 0; }
+strong { color: var(--ink); font-weight: 560; }
+.notice {
+  margin: 0 0 2.5rem; padding-left: .9rem; border-left: 2px solid var(--rule); color: var(--ink-3); font-size: .89rem;
+}
+</style>
+</head>
+<body>
+<header><div class="top-inner"><a class="wordmark" href="/">Glarion</a></div></header>
+<main>
+  <h1>Terms of Service</h1>
+  <p class="updated">Last updated 30 August 2026</p>
+
+  <p class="notice">
+    Glarion is operated by Aurelio Avila, trading as an individual at this
+    stage rather than through a registered company. "We" and "us" below
+    mean the same person named in the Privacy Policy.
+  </p>
+
+  <h2>What Glarion is</h2>
+  <p>
+    Glarion scans websites for security misconfigurations and turns the
+    result into a report. It is aimed at agencies managing sites for
+    clients, not at scanning domains you have no relationship with.
+  </p>
+
+  <h2>Who can use it</h2>
+  <p>
+    You must be at least 18 to open an account — we ask your date of
+    birth at signup and check it. An account is for one person or
+    organization; do not share login credentials across unrelated
+    parties.
+  </p>
+
+  <h2>The one rule everything else depends on</h2>
+  <p>
+    You may only run a scan against a domain you own, or are authorized
+    by its owner to test. Before any scan runs, you prove that by
+    publishing a DNS record or file that only the domain's owner could
+    place there. That proof expires after 30 days and is re-checked
+    before every scheduled scan, because a domain can change hands.
+  </p>
+  <p>
+    We record the IP address, browser identifier, and timestamp behind
+    every authorization, permanently, specifically so that "I didn't
+    authorize that" can be checked against something. Falsely claiming
+    ownership of a domain to run a scan is a breach of these terms and,
+    depending on the outcome, may also be a criminal matter under
+    computer-misuse law in your jurisdiction — that risk is yours, not
+    ours; the verification step exists to keep it that way.
+  </p>
+
+  <h2>What the scans do and do not do</h2>
+  <p>
+    Scans are detection-only: they look for known misconfigurations and
+    fingerprints. Nothing we run attempts to exploit a finding, brute
+    force a credential, or degrade the target's availability. A scan can
+    still generate real traffic against the target, and we rate-limit it
+    for that reason — but you are still responsible for making sure the
+    target can bear a security scan before you authorize one.
+  </p>
+  <p>
+    A clean report is not a guarantee of security. It means the checks we
+    ran found nothing — not that no vulnerability exists. We re-rank
+    findings by real-world severity rather than by scanner label, but
+    that judgment can be wrong, and you are responsible for verifying
+    anything you act on or pass to a client.
+  </p>
+
+  <h2>Your account</h2>
+  <p>
+    You are responsible for what happens under your account, including
+    scans authorized with your credentials. Tell us if you believe your
+    account has been compromised.
+  </p>
+
+  <h2>Subscriptions and billing</h2>
+  <ul>
+    <li>The Free plan needs no payment method and no card.</li>
+    <li>Paid plans (Studio, Agency) are billed monthly or yearly through Stripe. We never see or store your card details.</li>
+    <li>Prices shown exclude VAT, which Stripe calculates and adds at checkout.</li>
+    <li>Cancel any time from Manage billing in Settings. Cancelling stops future charges and the automatic weekly checks; the sites you added and the reports already generated are not deleted.</li>
+    <li>We do not offer refunds for partial billing periods, except where the law requires it.</li>
+  </ul>
+
+  <h2>Ending your account</h2>
+  <p>
+    You can delete your account at any time from Settings, once any paid
+    subscription is cancelled. We can suspend or end an account that
+    breaches these terms — most importantly, the ownership-verification
+    rule above — with or without notice depending on the severity.
+  </p>
+
+  <h2>No warranty, limited liability</h2>
+  <p>
+    Glarion is provided as-is. To the extent the law allows, we are not
+    liable for indirect, incidental, or consequential damages arising
+    from your use of the service, including decisions made on the basis
+    of a scan report. Nothing here limits liability that cannot be
+    limited by law, such as liability for fraud or for death or personal
+    injury caused by negligence.
+  </p>
+
+  <h2>Changes to these terms</h2>
+  <p>
+    If we change these terms in a way that meaningfully affects you, we
+    will say so and update the date at the top rather than let the
+    change pass unannounced.
+  </p>
+
+  <h2>Governing law</h2>
+  <p>These terms are governed by the law of Italy.</p>
+
+  <h2>Contact</h2>
+  <p>
+    <a href="mailto:aurelio_11@outlook.it">aurelio_11@outlook.it</a>
+  </p>
+</main>
+</body>
+</html>
