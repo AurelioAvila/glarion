@@ -187,7 +187,7 @@ async fn report_change(
         }
         None => format!("This scan found {current} to fix."),
     };
-    let link = format!("{}/#/scans/{}", mailer.public_url, job.id);
+    let link = mailer.app_link(&format!("/scans/{}", job.id));
     let body = change_email(&recipient.domain, &summary, &detail, &link);
 
     if let Err(error) = mailer.send(&recipient.email, &summary, &body).await {

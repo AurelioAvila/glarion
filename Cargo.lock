@@ -1452,6 +1452,7 @@ dependencies = [
  "chrono",
  "hickory-resolver",
  "rand",
+ "report",
  "reqwest",
  "rustls 0.23.43",
  "serde",

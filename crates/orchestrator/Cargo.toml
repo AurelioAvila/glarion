@@ -21,3 +21,9 @@ rand.workspace = true
 rustls.workspace = true
 tokio-rustls.workspace = true
 x509-parser.workspace = true
+
+[dev-dependencies]
+# Only for the full_scan example, which renders the same HTML the product
+# emails out. report already depends on orchestrator::triage, so this is
+# example-only and does not create a cycle in the library graph.
+report = { path = "../report" }

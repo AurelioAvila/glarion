@@ -1,57 +1,41 @@
-# Deploy with: fly launch --no-deploy (first time, to create the app) then
-# `fly deploy`. Needs a Postgres database reachable from Fly — either
-# `fly postgres create` or an external one (Neon, Supabase) — and every
-# secret below set with `fly secrets set NAME=value` before the first
-# deploy, since the app refuses to start without DATABASE_URL/JWT_SECRET
-# and billing refuses (but still runs) without the Stripe ones.
+# fly.toml app configuration file generated for glarion-api on 2026-08-29T14:10:13+02:00
 #
-# Required secrets:
-#   DATABASE_URL, JWT_SECRET
-# Optional (billing/email refuse cleanly without these, per api/src/lib.rs
-# and routes/billing.rs):
-#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-#   STRIPE_PRICE_STUDIO_MONTHLY, STRIPE_PRICE_STUDIO_YEARLY,
-#   STRIPE_PRICE_AGENCY_MONTHLY, STRIPE_PRICE_AGENCY_YEARLY,
-#   RESEND_API_KEY, MAIL_FROM, PUBLIC_URL
-# Set as plain config below, not secrets, because it isn't sensitive:
-#   CORS_EXTRA_ORIGINS — the deployed web app's real origin
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "glarion-api"
-primary_region = "cdg"
+app = 'glarion-api'
+primary_region = 'cdg'
 
 [build]
-
 [env]
-PORT = "8080"
-RUST_LOG = "info,sqlx=warn"
+  PORT = '8080'
+  RUST_LOG = 'info,sqlx=warn'
 
-# The web tier. Scanning never competes with it for CPU/memory because it
-# never runs a scan — see runner.rs for why that's a separate process.
 [processes]
-app = "/usr/local/bin/api"
-worker = "/usr/local/bin/runner"
+  app = '/usr/local/bin/api'
+  worker = '/usr/local/bin/runner'
 
 [http_service]
-internal_port = 8080
-force_https = true
-auto_stop_machines = "stop"
-auto_start_machines = true
-min_machines_running = 1
-processes = ["app"]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
 
-[[http_service.checks]]
-interval = "15s"
-timeout = "5s"
-grace_period = "10s"
-method = "GET"
-path = "/health"
-
-[[vm]]
-size = "shared-cpu-1x"
-memory = "512mb"
-processes = ["app"]
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-size = "shared-cpu-1x"
-memory = "1gb"
-processes = ["worker"]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
+  processes = ['worker']

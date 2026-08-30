@@ -121,7 +121,7 @@ pub async fn email_preview(
         })
         .collect();
 
-    let link = format!("{}/#/signup", state.mailer.public_url);
+    let link = state.mailer.app_link("/signup");
     let html = preview_report_email(&domain, &lines, &link);
     let subject = format!("Security check: {domain}");
 
