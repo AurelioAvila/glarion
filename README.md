@@ -1,10 +1,28 @@
-# Glarion
+<h1 align="center">Glarion</h1>
 
-Website security scanner. Orchestrates open-source scanning tools behind a
-Rust API and normalizes their output into a single finding model.
+<p align="center">
+  <strong>Website security monitoring for agencies that manage client sites.</strong><br>
+  Verify ownership, run controlled scans and turn noisy tool output into reports clients can act on.
+</p>
 
-Proprietary. Not open-source. See [LICENSE](LICENSE) — the source is
-public for reference, not for reuse.
+<p align="center">
+  <img src="https://img.shields.io/github/actions/workflow/status/AurelioAvila/glarion/ci.yml?branch=master&style=for-the-badge&label=security%20checks" alt="Security checks status">
+  <img src="https://img.shields.io/badge/tests-208-52C78D?style=for-the-badge" alt="208 automated tests">
+  <img src="https://img.shields.io/badge/API-Rust%20%2B%20Axum-F0F0F2?style=for-the-badge&logo=rust&logoColor=111111" alt="Rust and Axum API">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
+</p>
+
+> **Built around authorization, not assumptions.** Full scans require current DNS or `.well-known` ownership proof, are checked again at execution time, and reject private, loopback and cloud-metadata destinations. Every queued scan retains an authorization trail.
+
+| Proof point | What is enforced |
+|---|---|
+| **Target authorization** | Two independent ownership gates, including expiry at execution time |
+| **SSRF resistance** | Resolved-address validation and address pinning close DNS-rebinding paths |
+| **Safe scan policy** | Detection-only allowlist, rate limits and no fuzzing, brute force or denial-of-service templates |
+| **Verified quality** | 208 tests, including live-database integration and mutation checks for the authorization gate |
+| **Actionable output** | Findings are normalized and triaged into self-contained client reports |
+
+The source is public for technical review and transparency, not for reuse. Glarion is proprietary software; see [LICENSE](LICENSE).
 
 ## The constraint everything else is arranged around
 
