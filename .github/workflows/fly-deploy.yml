@@ -6,6 +6,12 @@ on:
     branches:
       - main
       - master
+
+# Deployment authenticates to Fly with FLY_API_TOKEN, so the workflow token
+# only ever needs to read the checkout.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy app
