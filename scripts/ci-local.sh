@@ -25,6 +25,18 @@ cargo fmt --all -- --check
 step "Clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
+step "Dependency vulnerabilities"
+# Skipped rather than failed when the tool is not installed, same as the
+# frontend check below — but worth having: this is what caught rsa-mysql
+# and the old rustls-webpki duplication (see audit.toml for the one
+# advisory that stays ignored, and why). Requires `cargo install
+# cargo-audit`.
+if command -v cargo-audit >/dev/null 2>&1; then
+    cargo audit --ignore RUSTSEC-2023-0071
+else
+    echo "skipped — run 'cargo install cargo-audit' to include this"
+fi
+
 step "Frontend types and tests"
 # Skipped rather than failed when dependencies are not installed: the
 # backend checks should still be runnable without a Node toolchain.

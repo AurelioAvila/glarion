@@ -97,8 +97,9 @@ pub fn expiry_from(now: DateTime<Utc>) -> DateTime<Utc> {
 /// Vec (not an error) when the record simply doesn't exist yet — that is
 /// an expected, common state (user hasn't added it yet), not a failure.
 pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError> {
-    use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-    use hickory_resolver::TokioAsyncResolver;
+    use hickory_resolver::config::{ResolverConfig, CLOUDFLARE};
+    use hickory_resolver::net::runtime::TokioRuntimeProvider;
+    use hickory_resolver::TokioResolver;
 
     // Public resolvers rather than the host's configuration, deliberately.
     //
@@ -108,7 +109,15 @@ pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError
     // advertised an IPv6 link-local nameserver whose scope id made every
     // response get discarded, so all lookups timed out and every
     // verification attempt failed with an opaque error.
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), ResolverOpts::default());
+    // build() only fails while reading the host's own resolver
+    // configuration, which this deliberately never does (see above) — a
+    // fixed, hard-coded config cannot produce that error.
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::udp_and_tcp(&CLOUDFLARE),
+        TokioRuntimeProvider::default(),
+    )
+    .build()
+    .expect("a hard-coded resolver config cannot fail to build");
     let name = dns_txt_record_name(domain);
 
     let lookup = tokio::time::timeout(
@@ -118,9 +127,18 @@ pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError
     .await;
 
     match lookup {
+        // 0.26 replaced the typed `TxtLookup` with the same `Lookup` every
+        // query type returns, so what was TXT-only iteration is now a
+        // filter over every answer's `RData`.
         Ok(Ok(txt)) => Ok(txt
+            .answers()
             .iter()
-            .map(|record| record.to_string().trim_matches('"').to_string())
+            .filter_map(|record| match &record.data {
+                hickory_resolver::proto::rr::RData::TXT(txt) => {
+                    Some(txt.to_string().trim_matches('"').to_string())
+                }
+                _ => None,
+            })
             .collect()),
         // The record simply is not there yet. Expected and common — the
         // user has probably not finished adding it.
