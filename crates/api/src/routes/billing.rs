@@ -395,6 +395,22 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
 
     let subscription_id = subscription.get("id").and_then(|value| value.as_str());
 
+    // Read the plan this account is on before the update overwrites it, so a
+    // first paid subscription can be told apart from a renewal. Stripe sends
+    // customer.subscription.updated on every renewal and every card change,
+    // and welcoming someone once a month is not a welcome.
+    let previous: Option<(Option<String>, Option<Uuid>, Option<String>)> = sqlx::query_as(
+        "select e.plan, e.user_id, u.email
+           from entitlements e
+           left join users u on u.id = e.user_id
+          where e.product = 'glarion'
+            and (e.stripe_customer_id = $1 or e.user_id = $2)",
+    )
+    .bind(customer)
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
     sqlx::query(
         "update entitlements
          set stripe_customer_id = $1,
@@ -415,6 +431,22 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     .bind(user_id)
     .execute(&state.pool)
     .await?;
+
+    // Welcome only on the crossing from unpaid to paid. A row that was
+    // already on a paid plan is renewing, and one that has just dropped to
+    // free is not a moment to congratulate anyone.
+    if plan.allows_scheduling() {
+        let was_paid = previous
+            .as_ref()
+            .and_then(|(stored, _, _)| stored.as_deref())
+            .map(|stored| Plan::from_db_str(stored).allows_scheduling())
+            .unwrap_or(false);
+        if !was_paid {
+            if let Some((_, _, Some(email))) = previous.as_ref() {
+                send_subscription_welcome(state, email, plan).await;
+            }
+        }
+    }
 
     // Losing the paid plan has to switch off what the paid plan bought,
     // otherwise a cancelled account keeps being scanned every week for
@@ -448,6 +480,35 @@ fn stripe_secret() -> ApiResult<String> {
             tracing::error!("STRIPE_SECRET_KEY is unset");
             ApiError::Internal(anyhow::anyhow!("billing is not configured"))
         })
+}
+
+/// Best-effort welcome after a first payment.
+///
+/// Never returns an error: the plan is already granted by the time this runs,
+/// and failing the webhook over an email would have Stripe retry the whole
+/// delivery and re-apply work that already succeeded.
+async fn send_subscription_welcome(state: &AppState, email: &str, plan: Plan) {
+    let first_name: Option<String> =
+        sqlx::query_scalar("select first_name from users where email = $1")
+            .bind(email)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+    let html = orchestrator::mailer::subscription_email(
+        first_name.as_deref().unwrap_or(""),
+        plan.display_name(),
+        plan.max_targets(),
+        plan.allows_scheduling(),
+        &state.mailer.app_link(""),
+    );
+    if let Err(error) = state
+        .mailer
+        .send(email, "Your Glarion plan is active", &html)
+        .await
+    {
+        tracing::warn!(%error, "could not send the subscription welcome");
+    }
 }
 
 async fn account_email(state: &AppState, user_id: Uuid) -> ApiResult<String> {

@@ -161,6 +161,47 @@ pub fn verification_email(first_name: &str, link: &str) -> String {
     )
 }
 
+/// The message sent when an account first becomes a paying one.
+///
+/// Nothing was sent before: someone paid and heard from Stripe's receipt and
+/// from nobody else. A receipt is an accounting document — it does not say
+/// what the plan allows or where to go next, which is the only thing the
+/// person actually wants to know at that moment.
+///
+/// Deliberately states the two limits that change with the plan, because
+/// those are what someone compares against what they thought they bought.
+pub fn subscription_email(
+    first_name: &str,
+    plan_name: &str,
+    max_targets: i32,
+    scheduling: bool,
+    link: &str,
+) -> String {
+    let name = escape(first_name.trim());
+    let greeting = if name.is_empty() {
+        "Hello,".to_string()
+    } else {
+        format!("Hello {name},")
+    };
+    let safe_plan = escape(plan_name);
+    let safe_link = escape(link);
+    let cadence = if scheduling {
+        "Your sites are re-checked on a schedule, without you asking."
+    } else {
+        "Scans stay manual on this plan."
+    };
+
+    format!(
+        r#"<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#16191d">
+<p>{greeting}</p>
+<p>Your Glarion {safe_plan} plan is active. Nothing else needs setting up.</p>
+<p style="color:#5c6470;font-size:14px">Up to {max_targets} sites monitored. {cadence}</p>
+<p><a href="{safe_link}" style="display:inline-block;background:#1f4ed8;color:#ffffff;padding:10px 18px;border-radius:6px;text-decoration:none">Open Glarion</a></p>
+<p style="color:#5c6470;font-size:13px">You can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately.</p>
+</div>"#
+    )
+}
+
 /// The message sent when a monitored site changes.
 ///
 /// Deliberately short and specific. This is the only email an agency gets
@@ -446,5 +487,38 @@ mod tests {
         };
 
         assert!(!mailer.verification_link("tok").contains("app//"));
+    }
+
+    #[test]
+    fn the_subscription_email_states_the_limits_that_changed() {
+        // The two numbers someone checks against what they thought they were
+        // buying. A welcome that does not mention them is a welcome that
+        // gets a support ticket in reply.
+        let html = subscription_email("Marco", "Agency", 40, true, "https://glarion.app/app");
+        assert!(html.contains("Agency"));
+        assert!(html.contains("40 sites"));
+        assert!(html.contains("re-checked on a schedule"));
+        assert!(html.contains("Hello Marco,"));
+    }
+
+    #[test]
+    fn a_plan_without_scheduling_does_not_claim_it() {
+        let html = subscription_email("", "Studio", 10, false, "https://glarion.app/app");
+        assert!(html.contains("Scans stay manual"));
+        assert!(!html.contains("re-checked on a schedule"));
+        // No name is not an error; it just loses the name.
+        assert!(html.contains("Hello,"));
+    }
+
+    #[test]
+    fn a_name_cannot_carry_markup_into_the_message() {
+        let html = subscription_email(
+            "<script>x</script>",
+            "Studio",
+            10,
+            false,
+            "https://glarion.app",
+        );
+        assert!(!html.contains("<script>"));
     }
 }
