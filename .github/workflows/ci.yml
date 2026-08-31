@@ -8,6 +8,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# The build only reads the repository: no releases, comments or package writes.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
