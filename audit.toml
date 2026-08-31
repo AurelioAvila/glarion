@@ -1,0 +1,21 @@
+# Read automatically by `cargo audit`.
+[advisories]
+ignore = [
+    # rsa 0.9.10 — Marvin Attack timing side-channel, no fix available.
+    #
+    # This is sqlx-mysql's dependency for MySQL's sha256_password auth.
+    # sqlx lists it as an optional dependency of the `sqlx` crate itself,
+    # so Cargo.lock always resolves and lists it — for every consumer of
+    # sqlx, not just ones that enable MySQL — regardless of which sqlx
+    # features are actually turned on. This is an upstream sqlx
+    # dependency-declaration choice, not something a feature flag on our
+    # side can remove.
+    #
+    # We only ever enable the `postgres` feature (see the comment on the
+    # sqlx dependency in the workspace Cargo.toml). Verified empirically:
+    # a clean `cargo build` after `cargo clean` produces no `librsa*`
+    # artifact at all — the crate is listed in the lock file's resolved
+    # graph but never actually compiled into either binary. There is no
+    # code path in this codebase that can reach it.
+    "RUSTSEC-2023-0071",
+]
