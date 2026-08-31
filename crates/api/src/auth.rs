@@ -6,14 +6,27 @@
 //! column invalidates every token previously issued to that user — this is
 //! how password changes and "log out everywhere" revoke access without
 //! needing a token blocklist. (Same scheme as the PC Tweaker backend.)
+//!
+//! The JWT itself is written by hand rather than taken from a library, for
+//! a reason that only became concrete once, not a preference stated in
+//! advance: the crate previously used here (`jsonwebtoken`) has to support
+//! RSA and EdDSA as well as HMAC, and pulling in the RSA implementation to
+//! get HS256 dragged an unrelated, unfixed timing-side-channel advisory
+//! (RUSTSEC-2023-0071) into a binary that never signs or verifies an RSA
+//! token. HS256 is four lines of HMAC-SHA256 over base64url — see
+//! `routes::billing::verify_signature` for the same call already made
+//! about Stripe's webhook signature, and the same reasoning applies here.
 
 use argon2::Argon2;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine as _;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use hmac::{Hmac, Mac};
 use password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
@@ -22,6 +35,11 @@ use crate::state::AppState;
 /// Access token lifetime. Short enough that a leaked token has limited
 /// value, long enough to avoid re-auth churn in a dashboard session.
 const TOKEN_TTL_HOURS: i64 = 12;
+
+/// The header is fixed rather than parsed: `alg` is pinned to HS256 by
+/// construction, so there is no `alg: none` or algorithm-confusion case
+/// to defend against, because there is no code path that reads one.
+const HEADER_JSON: &str = r#"{"alg":"HS256","typ":"JWT"}"#;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -61,29 +79,69 @@ pub fn issue_token(secret: &str, user_id: Uuid, token_version: i32) -> ApiResult
         exp: (now + Duration::hours(TOKEN_TTL_HOURS)).timestamp(),
     };
 
-    encode(
-        &Header::new(Algorithm::HS256),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|err| ApiError::Internal(anyhow::anyhow!("token encoding failed: {err}")))
+    let claims_json = serde_json::to_string(&claims)
+        .map_err(|err| ApiError::Internal(anyhow::anyhow!("token encoding failed: {err}")))?;
+
+    let signing_input = format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(HEADER_JSON),
+        URL_SAFE_NO_PAD.encode(&claims_json),
+    );
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|err| ApiError::Internal(anyhow::anyhow!("bad JWT secret: {err}")))?;
+    mac.update(signing_input.as_bytes());
+    let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+
+    Ok(format!("{signing_input}.{signature}"))
 }
 
 /// Decodes and validates a token's signature and expiry. Does *not* check
 /// `token_version` — that requires a DB read and happens in the extractor.
 pub fn decode_token(secret: &str, token: &str) -> Result<Claims, ApiError> {
-    // Pin the algorithm. Without this, a token could assert `alg: none` or a
-    // different algorithm and bypass signature verification.
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_required_spec_claims(&["exp", "sub"]);
+    let mut parts = token.split('.');
+    let (Some(header_b64), Some(claims_b64), Some(signature_b64), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(ApiError::Unauthorized);
+    };
 
-    decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map(|data| data.claims)
-    .map_err(|_| ApiError::Unauthorized)
+    // The header is not parsed, only checked byte-for-byte against the one
+    // this module ever issues. A token whose header claims a different
+    // algorithm is rejected here rather than by inspecting `alg` — nothing
+    // downstream ever asks what algorithm a token claims to use.
+    if URL_SAFE_NO_PAD
+        .decode(header_b64)
+        .is_ok_and(|decoded| decoded != HEADER_JSON.as_bytes())
+    {
+        return Err(ApiError::Unauthorized);
+    }
+
+    let signature = URL_SAFE_NO_PAD
+        .decode(signature_b64)
+        .map_err(|_| ApiError::Unauthorized)?;
+
+    let signing_input = format!("{header_b64}.{claims_b64}");
+
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|err| ApiError::Internal(anyhow::anyhow!("bad JWT secret: {err}")))?;
+    mac.update(signing_input.as_bytes());
+    // Constant-time by construction — the whole reason to route the
+    // comparison through the Mac type rather than `==` on two Vecs.
+    mac.verify_slice(&signature)
+        .map_err(|_| ApiError::Unauthorized)?;
+
+    let claims_bytes = URL_SAFE_NO_PAD
+        .decode(claims_b64)
+        .map_err(|_| ApiError::Unauthorized)?;
+    let claims: Claims =
+        serde_json::from_slice(&claims_bytes).map_err(|_| ApiError::Unauthorized)?;
+
+    if claims.exp < Utc::now().timestamp() {
+        return Err(ApiError::Unauthorized);
+    }
+
+    Ok(claims)
 }
 
 /// An authenticated user. Extracting this in a handler signature is what
@@ -170,5 +228,66 @@ mod tests {
     fn garbage_token_is_rejected() {
         assert!(decode_token(SECRET, "not.a.token").is_err());
         assert!(decode_token(SECRET, "").is_err());
+    }
+
+    #[test]
+    fn a_tampered_payload_is_rejected() {
+        // The signature must cover the payload, not just the header — a
+        // token whose middle segment is swapped out has to fail even
+        // though the signature segment "looks" well-formed.
+        let token = issue_token(SECRET, Uuid::new_v4(), 0).unwrap();
+        let mut segments: Vec<&str> = token.split('.').collect();
+        let other = issue_token(SECRET, Uuid::new_v4(), 0).unwrap();
+        let other_claims = other.split('.').nth(1).unwrap();
+        segments[1] = other_claims;
+        let tampered = segments.join(".");
+
+        assert!(decode_token(SECRET, &tampered).is_err());
+    }
+
+    #[test]
+    fn an_expired_token_is_rejected() {
+        let now = Utc::now();
+        let claims = Claims {
+            sub: Uuid::new_v4(),
+            token_version: 0,
+            iat: (now - Duration::hours(TOKEN_TTL_HOURS + 1)).timestamp(),
+            exp: (now - Duration::hours(1)).timestamp(),
+        };
+        let claims_json = serde_json::to_string(&claims).unwrap();
+        let signing_input = format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(HEADER_JSON),
+            URL_SAFE_NO_PAD.encode(&claims_json),
+        );
+        let mut mac = Hmac::<Sha256>::new_from_slice(SECRET.as_bytes()).unwrap();
+        mac.update(signing_input.as_bytes());
+        let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+        let expired_token = format!("{signing_input}.{signature}");
+
+        assert!(decode_token(SECRET, &expired_token).is_err());
+    }
+
+    #[test]
+    fn a_token_claiming_a_different_algorithm_is_rejected() {
+        // The header is never trusted for what algorithm to use — HS256 is
+        // the only one this module ever verifies with — but a token that
+        // lies about its header should still be refused outright rather
+        // than silently accepted with the header ignored.
+        let claims = Claims {
+            sub: Uuid::new_v4(),
+            token_version: 0,
+            iat: Utc::now().timestamp(),
+            exp: (Utc::now() + Duration::hours(1)).timestamp(),
+        };
+        let claims_json = serde_json::to_string(&claims).unwrap();
+        let fake_header = URL_SAFE_NO_PAD.encode(r#"{"alg":"none","typ":"JWT"}"#);
+        let signing_input = format!("{fake_header}.{}", URL_SAFE_NO_PAD.encode(&claims_json));
+        let mut mac = Hmac::<Sha256>::new_from_slice(SECRET.as_bytes()).unwrap();
+        mac.update(signing_input.as_bytes());
+        let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+        let token = format!("{signing_input}.{signature}");
+
+        assert!(decode_token(SECRET, &token).is_err());
     }
 }
