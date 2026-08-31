@@ -13,19 +13,28 @@ tokio = { version = "1", features = ["full"] }
 axum = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "migrate"] }
+# default-features off, deliberately: the default set includes `any`,
+# which builds in every driver sqlx supports — including MySQL, which we
+# never use — for its driver-agnostic AnyConnection. That pulled in
+# sqlx-mysql's `rsa` dependency (for MySQL's sha256_password auth) into a
+# binary that only ever speaks Postgres, carrying an unfixed timing-attack
+# advisory (RUSTSEC-2023-0071) for code that can never run. Every feature
+# below is one this codebase actually uses: `macros` for #[derive(FromRow)],
+# `json` for the one jsonb column (`scan_results.raw_output`), `migrate`
+# for `sqlx::migrate!`.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "chrono", "migrate", "macros", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-hickory-resolver = "0.24"
+hickory-resolver = "0.26"
 reqwest = { version = "0.12", features = ["json"] }
 rand = "0.8"
 sha2 = "0.10"
 hmac = "0.12"
-jsonwebtoken = "9"
+base64 = "0.22"
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["rand_core"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs", "set-header"] }
