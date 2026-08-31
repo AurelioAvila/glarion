@@ -30,37 +30,48 @@ const AA_BODY_TEXT = 4.5;
 const TEXT_TOKENS = ["ink", "ink-2", "ink-3"];
 
 function pages(): string[] {
-  return readdirSync(WEB).filter((f) => f.endsWith(".html"));
+  return readdirSync(WEB).filter((name) => name.endsWith(".html"));
 }
 
 /// The :root custom properties declared inside a page's <style> blocks.
 function tokensOf(page: string): Map<string, string> {
   const html = readFileSync(join(WEB, page), "utf8");
   const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
-    .map((m) => m[1])
+    .map((match) => match[1] ?? "")
     .join("\n");
+
   const found = new Map<string, string>();
   for (const block of styles.matchAll(/:root\s*\{([\s\S]*?)\}/g)) {
-    for (const [, name, value] of block[1].matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-      found.set(name, value.trim());
+    const body = block[1] ?? "";
+    for (const declaration of body.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+      const name = declaration[1];
+      const value = declaration[2];
+      if (name && value) found.set(name, value.trim());
     }
   }
   return found;
 }
 
 function relativeLuminance(hex: string): number {
-  const h = hex.replace("#", "");
-  const full = h.length === 3 ? [...h].map((c) => c + c).join("") : h;
-  const channels = [0, 2, 4].map((i) => {
-    const c = parseInt(full.slice(i, i + 2), 16) / 255;
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  const digits = hex.replace("#", "");
+  const full = digits.length === 3 ? [...digits].map((c) => c + c).join("") : digits;
+
+  // Written as a function of the offset rather than an array lookup: under
+  // noUncheckedIndexedAccess every index is possibly undefined, and coercing
+  // that away would hide a genuinely malformed colour instead of failing on it.
+  const channel = (offset: number): number => {
+    const value = parseInt(full.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+  };
+
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
 }
 
 function contrast(a: string, b: string): number {
-  const [x, y] = [relativeLuminance(a), relativeLuminance(b)];
-  const [light, dark] = x > y ? [x, y] : [y, x];
+  const first = relativeLuminance(a);
+  const second = relativeLuminance(b);
+  const light = Math.max(first, second);
+  const dark = Math.min(first, second);
   return (light + 0.05) / (dark + 0.05);
 }
 
@@ -68,8 +79,9 @@ test("a token declared on more than one page has one value", () => {
   const seen = new Map<string, Map<string, string>>();
   for (const page of pages()) {
     for (const [name, value] of tokensOf(page)) {
-      if (!seen.has(name)) seen.set(name, new Map());
-      seen.get(name)!.set(page, value);
+      const byPage = seen.get(name) ?? new Map<string, string>();
+      byPage.set(page, value);
+      seen.set(name, byPage);
     }
   }
 
@@ -89,11 +101,11 @@ test("text tokens are legible on the background they sit on", () => {
   for (const page of pages()) {
     const tokens = tokensOf(page);
     const background = tokens.get("bg");
-    if (!background) continue;
+    if (background === undefined || !background.startsWith("#")) continue;
 
     for (const name of TEXT_TOKENS) {
       const colour = tokens.get(name);
-      if (!colour || !colour.startsWith("#")) continue;
+      if (colour === undefined || !colour.startsWith("#")) continue;
 
       const ratio = contrast(colour, background);
       assert.ok(
