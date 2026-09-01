@@ -10,6 +10,10 @@ primary_region = 'cdg'
 [env]
   PORT = '8080'
   RUST_LOG = 'info,sqlx=warn'
+  # [http_service] means fly-proxy terminates every connection and sets
+  # Fly-Client-IP itself, so it is the only address that identifies a caller.
+  # Without this the rate limiters bucket the entire internet together.
+  TRUST_PROXY_CLIENT_IP = '1'
 
 [processes]
   app = '/usr/local/bin/api'
