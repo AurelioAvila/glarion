@@ -12,6 +12,8 @@
 
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use sqlx::PgPool;
+use uuid::Uuid;
 
 /// What somebody is entitled to.
 ///
@@ -61,6 +63,16 @@ impl Plan {
         !matches!(self, Plan::Free)
     }
 
+    /// Whether reports may carry the agency's own name and logo.
+    ///
+    /// Sold as part of Studio and Agency, and the pricing note says so in
+    /// as many words, so it has to be enforced: an unbranded report is
+    /// still useful internally, while a branded one is the thing the agency
+    /// hands to a client and charges for.
+    pub fn allows_branding(&self) -> bool {
+        !matches!(self, Plan::Free)
+    }
+
     pub fn display_name(&self) -> &'static str {
         match self {
             Plan::Free => "Free",
@@ -68,6 +80,21 @@ impl Plan {
             Plan::Agency => "Agency",
         }
     }
+}
+
+/// The plan an account is on right now.
+///
+/// One place, because every gate has to read it the same way: no row is the
+/// free plan and so is an unrecognised value, both fail-closed.
+pub async fn current_plan(pool: &PgPool, user_id: Uuid) -> Result<Plan, sqlx::Error> {
+    let stored: Option<String> = sqlx::query_scalar(
+        "select plan from entitlements where user_id = $1 and product = 'glarion'",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(Plan::from_db_str(stored.as_deref().unwrap_or("free")))
 }
 
 /// Monthly or yearly.
@@ -357,6 +384,19 @@ mod tests {
         assert!(!Plan::Free.allows_scheduling());
         assert!(Plan::Studio.allows_scheduling());
         assert!(Plan::Agency.allows_scheduling());
+    }
+
+    #[test]
+    fn only_paid_plans_brand_the_report() {
+        // The pricing page sells white-label reports as part of Studio and
+        // Agency and says paid reports carry the agency's name, so a free
+        // account producing branded documents is revenue given away.
+        assert!(!Plan::Free.allows_branding());
+        assert!(Plan::Studio.allows_branding());
+        assert!(Plan::Agency.allows_branding());
+
+        // A plan string nobody recognises must not unlock it either.
+        assert!(!Plan::from_db_str("enterprise-trial").allows_branding());
     }
 
     #[test]

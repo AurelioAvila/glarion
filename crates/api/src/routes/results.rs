@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
+use crate::billing::current_plan;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -172,12 +173,20 @@ pub async fn get_scan_report(
         ));
     }
 
-    let profile: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("select agency_name, agency_logo_url from users where id = $1")
-            .bind(user.id)
-            .fetch_optional(&state.pool)
-            .await?;
-    let (agency_name, agency_logo_url) = profile.unwrap_or((None, None));
+    // Read the plan first: branding is what the paid tiers are sold on, and
+    // a free account that kept its stored name after a downgrade must not
+    // keep shipping branded documents.
+    let (agency_name, agency_logo_url) =
+        if current_plan(&state.pool, user.id).await?.allows_branding() {
+            let profile: Option<(Option<String>, Option<String>)> =
+                sqlx::query_as("select agency_name, agency_logo_url from users where id = $1")
+                    .bind(user.id)
+                    .fetch_optional(&state.pool)
+                    .await?;
+            profile.unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
 
     let client_name: Option<String> =
         sqlx::query_scalar("select client_name from targets where id = $1")

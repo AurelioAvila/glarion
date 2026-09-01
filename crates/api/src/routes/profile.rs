@@ -5,6 +5,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::AuthUser;
+use crate::billing::current_plan;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -45,6 +46,17 @@ pub async fn update_profile(
 ) -> ApiResult<Json<Profile>> {
     let agency_name = normalize(body.agency_name, MAX_AGENCY_NAME, "agency name")?;
     let agency_logo_url = normalize(body.agency_logo_url, MAX_LOGO_URL, "logo URL")?;
+
+    // Refused for the same reason an unsafe logo URL is refused below: on a
+    // free account the renderer leaves the branding out, so saving it would
+    // be a setting that silently does nothing.
+    if (agency_name.is_some() || agency_logo_url.is_some())
+        && !current_plan(&state.pool, user.id).await?.allows_branding()
+    {
+        return Err(ApiError::PlanLimit(
+            "reports carry your agency name and logo on the paid plans".into(),
+        ));
+    }
 
     // Rejected here as well as at render time. The renderer drops an unsafe
     // URL silently, which is the right behaviour when producing a document
