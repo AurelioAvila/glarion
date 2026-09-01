@@ -333,7 +333,11 @@ pub async fn check_verification(
     // This handler causes outbound traffic to a host the caller chose, so
     // it is metered even though the caller is authenticated and owns the
     // target record.
-    if !state.verification_limiter.check(peer.ip()) {
+    if !state
+        .verification_limiter
+        .check_shared(&state.pool, "verification", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
