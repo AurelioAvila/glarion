@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/glarion-mark.png" width="112" height="112" alt="Glarion verification aperture mark">
+</p>
+
 <h1 align="center">Glarion</h1>
 
 <p align="center">
@@ -10,13 +14,8 @@
 </p>
 
 <p align="center">
-  <!--
-    No Actions badge here on purpose. GitHub Actions cannot run on this
-    repository until the account's Actions billing is configured — see
-    "Testing" below — so a workflow-status badge would sit permanently at
-    "no status", which is a worse signal than no badge at all.
-  -->
-  <img src="https://img.shields.io/badge/checks-cargo%20audit%20%2B%20clippy%20%2B%20230%20tests%2C%20local-52C78D?style=for-the-badge" alt="230 automated tests, cargo audit and clippy, enforced locally">
+  <a href="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml"><img src="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml/badge.svg" alt="Continuous integration status"></a>
+  <img src="https://img.shields.io/badge/tests-234%20passing-52C78D?style=for-the-badge" alt="234 automated tests passing">
   <img src="https://img.shields.io/badge/API-Rust%20%2B%20Axum-F0F0F2?style=for-the-badge&logo=rust&logoColor=111111" alt="Rust and Axum API">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
 </p>

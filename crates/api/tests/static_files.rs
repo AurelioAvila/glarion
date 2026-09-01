@@ -27,6 +27,7 @@ fn web_dir() -> std::path::PathBuf {
     std::fs::write(dir.join("sitemap.xml"), "<urlset></urlset>").unwrap();
     std::fs::write(dir.join("landing.js"), "// landing interaction").unwrap();
     std::fs::write(dir.join("glarion-mark.png"), "PNG BRAND MARK").unwrap();
+    std::fs::write(dir.join("site.webmanifest"), "GLARION MANIFEST").unwrap();
     std::fs::write(dir.join("dist/app.js"), "// built app").unwrap();
     dir
 }
@@ -105,6 +106,7 @@ async fn public_documents_are_served_instead_of_the_landing_page() {
         ("/sitemap.xml", "<urlset>"),
         ("/landing.js", "landing interaction"),
         ("/glarion-mark.png", "PNG BRAND MARK"),
+        ("/site.webmanifest", "GLARION MANIFEST"),
     ] {
         let router = with_static_files(Router::new(), &dir);
         let (status, body) = body_of(router, path).await;
