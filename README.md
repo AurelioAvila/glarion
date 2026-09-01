@@ -10,12 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://glarion-api.fly.dev"><strong>glarion-api.fly.dev</strong></a>
+  <a href="https://glarion.app"><strong>glarion.app</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml"><img src="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml/badge.svg" alt="Continuous integration status"></a>
-  <img src="https://img.shields.io/badge/tests-234%20passing-52C78D?style=for-the-badge" alt="234 automated tests passing">
+  <a href="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/AurelioAvila/glarion/ci.yml?style=for-the-badge&label=CI&color=52C78D" alt="Continuous integration status"></a>
   <img src="https://img.shields.io/badge/API-Rust%20%2B%20Axum-F0F0F2?style=for-the-badge&logo=rust&logoColor=111111" alt="Rust and Axum API">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
 </p>
@@ -27,7 +26,7 @@
 | **Target authorization** | Two independent ownership gates, including expiry at execution time |
 | **SSRF resistance** | Resolved-address validation and address pinning close DNS-rebinding paths |
 | **Safe scan policy** | Detection-only allowlist, rate limits and no fuzzing, brute force or denial-of-service templates |
-| **Verified quality** | 230 tests, including live-database integration and mutation checks for the authorization gate |
+| **Verified quality** | Live-database integration tests and mutation checks over the authorization gate |
 | **Actionable output** | Findings are normalized and triaged into self-contained client reports |
 
 The source is public for technical review and transparency, not for reuse. Glarion is proprietary software; see [LICENSE](LICENSE).
@@ -139,7 +138,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 230 tests at present.
+the whole suite with the integration tests active. 270 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -244,7 +243,7 @@ a command line, where they end up in shell history. With none of it set the
 billing endpoints refuse rather than granting anything, and the rest of the
 product works unchanged.
 
-Live at [glarion-api.fly.dev](https://glarion-api.fly.dev), including paid
+Live at [glarion.app](https://glarion.app), including paid
 checkout. A subscription is continuous business activity, which in Italy
 needs a P.IVA and VAT handling — Stripe Tax computes the rates, but the
 filing obligation is not something software solves, and is being handled

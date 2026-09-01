@@ -65,7 +65,7 @@ magick -size 1200x630 xc:white \
     -annotate +112+525 "clear" \
     -annotate +270+525 "worth fixing" \
     -annotate +490+525 "act now" \
-    -annotate +900+525 "glarion-api.fly.dev" \
+    -annotate +968+525 "glarion.app" \
     -depth 8 -strip "${OUT}"
 
 magick identify "${OUT}"
