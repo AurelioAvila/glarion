@@ -305,6 +305,17 @@ export const api = {
     return request<{ message: string }>("POST", "/api/auth/resend-verification", { email });
   },
 
+  changeEmail(newEmail: string, password: string) {
+    return request<{ message: string }>("POST", "/api/account/email", {
+      new_email: newEmail,
+      password,
+    });
+  },
+
+  confirmEmailChange(token: string) {
+    return request<{ message: string }>("POST", "/api/auth/confirm-email-change", { token });
+  },
+
   forgotPassword(email: string) {
     return request<{ message: string }>("POST", "/api/auth/forgot-password", { email });
   },

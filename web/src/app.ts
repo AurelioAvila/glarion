@@ -1724,7 +1724,99 @@ async function renderSettings(): Promise<void> {
   ]);
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
 
+  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Email address"), changeEmailSection()]));
+
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Delete account"), deleteAccountSection()]));
+}
+
+/// Moving the account to a different mailbox.
+///
+/// The password is asked for here for the same reason it is asked for to
+/// delete: a stolen session already has the token, and an action that hands
+/// the account to a different mailbox is a complete takeover. It needs the
+/// one thing a stolen session would not also have.
+///
+/// The confirmation shown afterwards is deliberately the same sentence
+/// whatever happened, including when the address is already registered. The
+/// API answers that way so a signed-in account cannot be used to enumerate
+/// the others, and a screen that said "that address is taken" would hand
+/// back exactly what the API withheld.
+function changeEmailSection(): HTMLElement {
+  const message = el("div");
+  const address = el("input", { type: "email", required: true, autocomplete: "email" });
+  const password = el("input", { type: "password", required: true, autocomplete: "current-password" });
+  const button = submitButton("Send the confirmation link");
+
+  const form = el("form", { style: "max-width:22rem" }, [
+    el("p", {
+      class: "blurb",
+      style: "margin:0 0 1.1rem",
+      text: "The new address has to confirm before anything moves. Until it does, this account keeps the address it has.",
+    }),
+    message,
+    field("New email", address),
+    field("Confirm your password", password),
+    button,
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+    void withPending(button, "Sending…", async () => {
+      try {
+        const result = await api.changeEmail(address.value, password.value);
+        message.replaceChildren(notice("ok", result.message));
+        address.value = "";
+        password.value = "";
+      } catch (error) {
+        message.replaceChildren(notice("error", describeError(error)));
+      }
+    });
+  });
+
+  return form;
+}
+
+/// Landing page for the link in the change-of-address email.
+///
+/// Signs the session out on success rather than carrying it forward: the
+/// server has just invalidated every token for this account, which is the
+/// point — if the move was made by somebody who should not have been signed
+/// in, that bump is what removes them.
+function renderConfirmEmailChange(token: string): void {
+  const container = root();
+  clear(container);
+  container.append(el("p", { class: "loading", text: "Confirming" }));
+
+  void (async () => {
+    try {
+      const result = await api.confirmEmailChange(token);
+      session.clear();
+      clear(container);
+      container.append(
+        el("div", { class: "auth" }, [
+          el("h1", { text: "Address changed" }),
+          notice("ok", result.message),
+          el("p", { class: "switch" }, [
+            el("a", { class: "inline", href: "#/signin", text: "Sign in" }),
+          ]),
+        ]),
+      );
+    } catch (error) {
+      clear(container);
+      container.append(
+        el("div", { class: "auth" }, [
+          el("h1", { text: "That link did not work" }),
+          notice("error", describeError(error)),
+          el("p", { class: "switch" }, [
+            "Links expire after an hour. Sign in and request the change again from ",
+            el("a", { class: "inline", href: "#/settings", text: "your account" }),
+            ".",
+          ]),
+        ]),
+      );
+    }
+  })();
 }
 
 /// Asks for the password before doing anything, then does it without a
@@ -2050,6 +2142,14 @@ function routeInner(): void {
   }
   if (parts[0] === "forgot") {
     renderForgotPassword();
+    return;
+  }
+
+  // Followed from the new mailbox, which is by definition not where the
+  // session is — and often while signed in as the account being moved. The
+  // token decides, not the session.
+  if (parts[0] === "confirm-email" && parts[1]) {
+    renderConfirmEmailChange(parts[1]);
     return;
   }
 
