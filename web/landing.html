@@ -3,16 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Glarion — security monitoring for the sites you look after</title>
-<meta name="description" content="Security scanning for web agencies. One account covers every client site, with a report you can hand the client and a weekly check that only writes to you when something changes.">
+<meta name="theme-color" content="#0b0b0c">
+<title>Glarion — Website Security Monitoring for Agencies</title>
+<meta name="description" content="Monitor client websites, verify ownership, triage actionable security findings and deliver white-label reports without scanner noise.">
 
 <!-- Empty means same origin. Set this to point at a backend elsewhere. -->
 <meta name="glarion-api" content="">
 
-<link rel="canonical" href="https://glarion.com/">
+<link rel="canonical" href="https://glarion-api.fly.dev/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Glarion — security monitoring for the sites you look after">
-<meta property="og:description" content="Check any domain now, without an account. One subscription covers every client site.">
+<meta property="og:site_name" content="Glarion">
+<meta property="og:url" content="https://glarion-api.fly.dev/">
+<meta property="og:title" content="Glarion — Website Security Monitoring for Agencies">
+<meta property="og:description" content="Check any domain without an account, then monitor verified client sites and deliver clear white-label reports.">
+<meta property="og:image" content="https://glarion-api.fly.dev/glarion-mark.png">
+<meta property="og:image:width" content="1254">
+<meta property="og:image:height" content="1254">
+<meta property="og:image:alt" content="Glarion verification aperture mark">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Glarion — Website Security Monitoring for Agencies">
+<meta name="twitter:description" content="Monitor verified client websites and turn scanner noise into clear, actionable reports.">
+<meta name="twitter:image" content="https://glarion-api.fly.dev/glarion-mark.png">
+<link rel="icon" type="image/png" href="/glarion-mark.png">
+<link rel="apple-touch-icon" href="/glarion-mark.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Glarion",
+  "applicationCategory": "SecurityApplication",
+  "operatingSystem": "Web",
+  "url": "https://glarion-api.fly.dev/",
+  "description": "Website security monitoring for agencies that manage client sites.",
+  "offers": [
+    { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR" },
+    { "@type": "Offer", "name": "Studio", "price": "39", "priceCurrency": "EUR" },
+    { "@type": "Offer", "name": "Agency", "price": "99", "priceCurrency": "EUR" }
+  ]
+}
+</script>
 
 <!--
   A landing page for an instrument.
@@ -98,12 +127,16 @@ header.top { border-bottom: 1px solid var(--rule); }
   gap: 2rem;
 }
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
   font-family: var(--mono);
   font-size: .8rem;
   font-weight: 500;
   letter-spacing: .22em;
   text-transform: uppercase;
 }
+.brand-mark { width: 26px; height: 26px; object-fit: contain; flex: 0 0 auto; }
 .top-nav { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; }
 .top-nav a {
   font-family: var(--mono);
@@ -397,6 +430,7 @@ footer {
 }
 .foot-inner { display: flex; gap: 2rem; align-items: baseline; flex-wrap: wrap; }
 .foot-note { font-size: .82rem; color: var(--ink-3); }
+.foot-brand { display: inline-flex; align-items: center; gap: .55rem; }
 .foot-links { margin-left: auto; display: flex; gap: 1.5rem; }
 .foot-links a {
   font-family: var(--mono);
@@ -433,7 +467,7 @@ footer {
 
 <header class="top">
   <div class="top-inner">
-    <a class="wordmark" href="/">Glarion</a>
+    <a class="wordmark" href="/"><img class="brand-mark" src="/glarion-mark.png" alt="" width="26" height="26"><span>Glarion</span></a>
     <nav class="top-nav">
       <a href="#pricing">Pricing</a>
       <a href="/app/#/signin">Sign in</a>
@@ -605,7 +639,7 @@ footer {
 
 <footer>
   <div class="wrap foot-inner">
-    <span class="foot-note">Glarion &mdash; security monitoring for the sites you look after.</span>
+    <span class="foot-note foot-brand"><img class="brand-mark" src="/glarion-mark.png" alt="" width="26" height="26">Glarion &mdash; security monitoring for the sites you look after.</span>
     <nav class="foot-links">
       <a href="/app/#/signin">Sign in</a>
       <a href="#pricing">Pricing</a>
@@ -616,149 +650,7 @@ footer {
   </div>
 </footer>
 
-<script type="module">
-/*
-  The free check, wired to the same endpoint the product uses. No build
-  step and no framework: this page has one interaction, and a bundle would
-  put a download in front of the thing it is trying to demonstrate.
-*/
-
-const api = document.querySelector('meta[name="glarion-api"]')?.content?.trim() || '';
-
-const form = document.getElementById('check-form');
-const input = document.getElementById('domain');
-const button = document.getElementById('check-go');
-const note = document.getElementById('check-note');
-const result = document.getElementById('result');
-
-const DEFAULT_NOTE =
-  'No account, no email. This reads only what the site already publishes to every visitor.';
-
-function setNote(text, isError) {
-  note.textContent = text;
-  note.classList.toggle('is-error', Boolean(isError));
-}
-
-/** Text only. Values here come from a third party's headers. */
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-
-  const domain = input.value.trim();
-  if (!domain) {
-    setNote('Enter a domain first.', true);
-    input.focus();
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = 'Checking';
-  setNote(DEFAULT_NOTE, false);
-
-  // The checks as they would be listed by someone doing this by hand.
-  // Shown while waiting because the wait is a few seconds and a spinner
-  // would spend them saying nothing.
-  result.hidden = false;
-  result.replaceChildren();
-  const running = el('ul', 'running');
-  for (const step of [
-    'Resolving the domain',
-    'Reading the certificate',
-    'Requesting the front page',
-    'Looking for robots.txt and security.txt',
-  ]) {
-    running.append(el('li', null, step));
-  }
-  result.append(running);
-
-  try {
-    const response = await fetch(`${api}/api/preview`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain }),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      result.hidden = true;
-      result.replaceChildren();
-      setNote(payload.message || 'That domain could not be checked.', true);
-      return;
-    }
-
-    render(payload);
-    setNote(DEFAULT_NOTE, false);
-  } catch {
-    result.hidden = true;
-    result.replaceChildren();
-    setNote('The check could not be run. Try again in a moment.', true);
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Check';
-  }
-});
-
-function render(payload) {
-  const observations = Array.isArray(payload.observations) ? payload.observations : [];
-  const findings = observations.filter((o) => o.is_finding);
-
-  result.replaceChildren();
-
-  // A sentence that has already done the interpreting, exactly as the
-  // dashboard does it. The count carries the colour; nothing else does.
-  const verdict = el('p', 'verdict');
-  verdict.append(document.createTextNode('On '));
-  verdict.append(el('strong', null, payload.domain || 'that domain'));
-  verdict.append(document.createTextNode(', reading only what it publishes, '));
-
-  if (findings.length === 0) {
-    verdict.append(el('span', 'clear', 'nothing stood out'));
-    verdict.append(document.createTextNode('.'));
-  } else {
-    verdict.append(el('span', findings.length > 2 ? 'alarm' : 'caution',
-      `${findings.length} thing${findings.length === 1 ? '' : 's'}`));
-    verdict.append(document.createTextNode(
-      findings.length === 1 ? ' stood out.' : ' stood out.'));
-  }
-  result.append(verdict);
-
-  result.append(el('p', 'verdict-meta',
-    `${observations.length} check${observations.length === 1 ? '' : 's'} · no account used`));
-
-  const facts = el('div', 'facts');
-  // Findings first: the reader should not have to hunt down a list of
-  // things that are fine to reach the one that is not.
-  for (const observation of [...findings, ...observations.filter((o) => !o.is_finding)]) {
-    const row = el('div', `fact ${observation.is_finding ? 'fact-flagged' : 'fact-ok'}`);
-    row.append(el('span', 'fact-label', observation.label));
-    row.append(el('span', 'fact-value', observation.value));
-    facts.append(row);
-  }
-  result.append(facts);
-
-  for (const text of Array.isArray(payload.notes) ? payload.notes : []) {
-    result.append(el('p', 'caveat', text));
-  }
-
-  if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
-
-  const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Scan this properly');
-  signup.href = '/app/#/signup';
-  signup.style.display = 'inline-block';
-  cta.append(signup);
-  cta.append(el('span', 'foot-note',
-    'A full scan checks far more, and needs you to prove the domain is yours.'));
-  result.append(cta);
-}
-</script>
+<script type="module" src="/landing.js"></script>
 
 </body>
 </html>
