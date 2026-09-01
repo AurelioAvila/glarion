@@ -6,8 +6,17 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/AurelioAvila/glarion/ci.yml?branch=master&style=for-the-badge&label=security%20checks" alt="Security checks status">
-  <img src="https://img.shields.io/badge/tests-208-52C78D?style=for-the-badge" alt="208 automated tests">
+  <a href="https://glarion-api.fly.dev"><strong>glarion-api.fly.dev</strong></a>
+</p>
+
+<p align="center">
+  <!--
+    No Actions badge here on purpose. GitHub Actions cannot run on this
+    repository until the account's Actions billing is configured — see
+    "Testing" below — so a workflow-status badge would sit permanently at
+    "no status", which is a worse signal than no badge at all.
+  -->
+  <img src="https://img.shields.io/badge/checks-cargo%20audit%20%2B%20clippy%20%2B%20230%20tests%2C%20local-52C78D?style=for-the-badge" alt="230 automated tests, cargo audit and clippy, enforced locally">
   <img src="https://img.shields.io/badge/API-Rust%20%2B%20Axum-F0F0F2?style=for-the-badge&logo=rust&logoColor=111111" alt="Rust and Axum API">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
 </p>
@@ -19,7 +28,7 @@
 | **Target authorization** | Two independent ownership gates, including expiry at execution time |
 | **SSRF resistance** | Resolved-address validation and address pinning close DNS-rebinding paths |
 | **Safe scan policy** | Detection-only allowlist, rate limits and no fuzzing, brute force or denial-of-service templates |
-| **Verified quality** | 208 tests, including live-database integration and mutation checks for the authorization gate |
+| **Verified quality** | 230 tests, including live-database integration and mutation checks for the authorization gate |
 | **Actionable output** | Findings are normalized and triaged into self-contained client reports |
 
 The source is public for technical review and transparency, not for reuse. Glarion is proprietary software; see [LICENSE](LICENSE).
@@ -131,7 +140,7 @@ bash scripts/dev-db.sh test
 ```
 
 Creates and starts a Postgres cluster dedicated to this project, then runs
-the whole suite with the integration tests active. 208 tests at present.
+the whole suite with the integration tests active. 230 tests at present.
 
 Plain `cargo test --workspace` also works, but the integration tests in
 `crates/api/tests/scan_gate.rs` **skip silently** without a database, so a
@@ -142,11 +151,13 @@ exercised. Before pushing, run the full set of checks:
 bash scripts/ci-local.sh
 ```
 
-That mirrors the hosted workflow — formatting, clippy, the suite with
-integration tests active, and an assertion that the gate tests ran rather
-than skipped. It is currently the only thing enforcing those checks:
-GitHub Actions will not start on this repository until the account has
-Actions billing configured.
+That mirrors the hosted workflow — formatting, clippy, `cargo audit`
+(when installed) against every dependency, the suite with integration
+tests active, and an assertion that the gate tests ran rather than
+skipped. It is currently the only thing enforcing those checks: GitHub
+Actions will not start on this repository until the account has Actions
+billing configured. One advisory is deliberately ignored rather than
+silently absent from the count — see [`audit.toml`](audit.toml).
 
 ### The development database
 
@@ -212,8 +223,8 @@ sender, and then the message that mattered goes unread too.
 | Plan | Price | Sites | Automatic checks |
 |---|---|---|---|
 | Free | — | 1 | No |
-| Studio | 39 EUR / month, 390 / year | 10 | Weekly or monthly |
-| Agency | 99 EUR / month, 990 / year | 40 | Weekly or monthly |
+| Studio | 39 EUR / month, 350 / year | 10 | Weekly or monthly |
+| Agency | 99 EUR / month, 750 / year | 40 | Weekly or monthly |
 
 Priced per account with a site allowance, not per site. The competition
 charges from about 90 USD per application, which is a sensible model for a
@@ -234,11 +245,24 @@ a command line, where they end up in shell history. With none of it set the
 billing endpoints refuse rather than granting anything, and the rest of the
 product works unchanged.
 
-**Before taking money:** a subscription is continuous business activity,
-which in Italy needs a P.IVA and VAT handling. Stripe Tax computes the
-rates; the filing obligation is not something software solves.
+Live at [glarion-api.fly.dev](https://glarion-api.fly.dev), including paid
+checkout. A subscription is continuous business activity, which in Italy
+needs a P.IVA and VAT handling — Stripe Tax computes the rates, but the
+filing obligation is not something software solves, and is being handled
+outside this repository rather than a blocker on shipping.
 
-Not built yet: the testssl/httpx/subfinder wrappers.
+A [Privacy Policy](web/privacy.html) and [Terms of Service](web/terms.html)
+cover what the product collects and why. Deleting an account
+(`DELETE /api/account`) anonymizes rather than removes the row: the audit
+trail described above — who authorized a scan, and when — has to survive
+the account that authorized it, which is exactly the retention GDPR
+Article 17(3)(e) allows for establishing or defending a legal claim.
+
+Not built yet: the httpx/subfinder tool wrappers. Certificate expiry —
+originally planned as a testssl.sh wrapper — is read directly over a raw
+TLS handshake instead (`crates/orchestrator/src/tools/tls.rs`), which
+avoids both the shell dependency and duplicating what Nuclei's own
+`ssl-*` templates already report.
 
 ### Known limits
 
