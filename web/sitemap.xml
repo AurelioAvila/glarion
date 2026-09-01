@@ -1,8 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Every page that exists to be read. The dashboard behind /app is
+  deliberately absent: it renders nothing without a session, so a crawler
+  that follows it indexes an empty shell.
+
+  The two legal pages were missing while being linked from the home page and
+  carrying their own title, description and canonical — crawlable, but left
+  out of the one file that says what this site consists of.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://glarion-api.fly.dev/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://glarion-api.fly.dev/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://glarion-api.fly.dev/terms.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>
