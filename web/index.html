@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0b0c">
+<meta name="robots" content="noindex, nofollow">
 <title>Glarion</title>
+<link rel="icon" type="image/png" href="/glarion-mark.png">
+<link rel="apple-touch-icon" href="/glarion-mark.png">
 <!-- Empty means same origin. Set this to point at a backend elsewhere. -->
 <meta name="glarion-api" content="">
 <style>
@@ -84,6 +88,9 @@ header.top { border-bottom: 1px solid var(--rule); }
   gap: 2rem;
 }
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
   font-family: var(--mono);
   font-size: .8rem;
   font-weight: 500;
@@ -91,6 +98,7 @@ header.top { border-bottom: 1px solid var(--rule); }
   text-transform: uppercase;
   color: var(--ink);
 }
+.brand-mark { width: 26px; height: 26px; object-fit: contain; flex: 0 0 auto; }
 
 #nav-links { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; }
 #nav-links a, #nav-links button {
@@ -842,7 +850,7 @@ kbd {
 <body>
 <header class="top">
   <div class="top-inner">
-    <a class="wordmark" href="#/targets">Glarion</a>
+    <a class="wordmark" href="#/targets"><img class="brand-mark" src="/glarion-mark.png" alt="" width="26" height="26"><span>Glarion</span></a>
     <nav id="nav-links"></nav>
   </div>
 </header>
