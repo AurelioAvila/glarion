@@ -116,6 +116,16 @@ pub fn router(state: AppState) -> Router {
             "/api/auth/resend-verification",
             post(routes::accounts::resend_verification),
         )
+        // Unauthenticated by necessity: someone who cannot sign in is
+        // precisely who these are for.
+        .route(
+            "/api/auth/forgot-password",
+            post(routes::accounts::forgot_password),
+        )
+        .route(
+            "/api/auth/reset-password",
+            post(routes::accounts::reset_password),
+        )
         .route(
             "/api/account",
             axum::routing::delete(routes::accounts::delete_account),
