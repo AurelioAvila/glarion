@@ -215,7 +215,7 @@ const ALARM: &str = "#ff6b57";
 /// the product never moved: the day a real domain is pointed at this app and
 /// PUBLIC_URL is updated, the button in an email would lead to the new host
 /// while the logo above it and every link below it still advertised
-/// glarion-api.fly.dev. Two answers to "where does this product live", in one
+/// glarion.app. Two answers to "where does this product live", in one
 /// message, is the sort of thing a reader notices and a sender does not.
 ///
 /// Resolved once. The value cannot change without a restart, and a mail
@@ -224,7 +224,7 @@ fn site_url() -> &'static str {
     static SITE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     SITE.get_or_init(|| {
         std::env::var("PUBLIC_URL")
-            .unwrap_or_else(|_| "https://glarion-api.fly.dev".to_string())
+            .unwrap_or_else(|_| "https://glarion.app".to_string())
             .trim_end_matches('/')
             .to_string()
     })
