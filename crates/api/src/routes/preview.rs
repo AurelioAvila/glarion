@@ -81,7 +81,11 @@ pub async fn email_preview(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<EmailPreviewRequest>,
 ) -> ApiResult<Json<MessageResponse>> {
-    if !state.verification_limiter.check(peer.ip()) {
+    if !state
+        .verification_limiter
+        .check_shared(&state.pool, "preview", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -194,7 +198,11 @@ pub async fn run_preview(
     // The verification budget, not the auth one: this endpoint causes
     // outbound traffic to a host the caller named, which is the same shape
     // of abuse the ownership check has to be protected from.
-    if !state.verification_limiter.check(peer.ip()) {
+    if !state
+        .verification_limiter
+        .check_shared(&state.pool, "preview", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
