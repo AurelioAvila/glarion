@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - master
+  release:
+    types: [published]
 
 # Deployment authenticates to Fly with FLY_API_TOKEN, so the workflow token
 # only ever needs to read the checkout.
@@ -15,6 +17,7 @@ permissions:
 jobs:
   deploy:
     name: Deploy app
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     env:
@@ -30,22 +33,27 @@ jobs:
         if: ${{ env.FLY_API_TOKEN != '' }}
         run: flyctl deploy --remote-only
 
-      # No GitHub Releases here — Glarion deploys on every push to main — so
-      # this announces the deploy itself instead of a release, using the
-      # triggering commit as the "what's new" line.
+  # Every push deploys, but not every push is a release worth telling anyone
+  # about. This only fires when a GitHub Release is actually published —
+  # create one (with a tag) when there's something worth announcing.
+  announce:
+    name: Announce release to Discord
+    if: ${{ github.event_name == 'release' }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Announce to Discord
-        if: ${{ success() }}
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          COMMIT_URL: ${{ github.event.head_commit.url }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
         run: |
           if [ -z "$WEBHOOK" ]; then
             echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping announcement"
             exit 0
           fi
-          CONTENT=$(jq -n --arg msg "$COMMIT_MESSAGE" --arg url "$COMMIT_URL" \
-            '"@everyone Glarion just shipped:\n\n" + $msg + "\n\n" + $url')
+          CONTENT=$(jq -n --arg name "$RELEASE_NAME" --arg body "$RELEASE_BODY" --arg url "$RELEASE_URL" \
+            '"@everyone Glarion \($name) just shipped:\n\n\($body)\n\n\($url)"')
           PAYLOAD=$(jq -n --argjson content "$CONTENT" \
             '{content: $content, allowed_mentions: {parse: ["everyone"]}}')
           curl -sf --show-error -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK"
