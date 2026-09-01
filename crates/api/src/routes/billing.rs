@@ -495,18 +495,14 @@ async fn send_subscription_welcome(state: &AppState, email: &str, plan: Plan) {
             .await
             .ok()
             .flatten();
-    let html = orchestrator::mailer::subscription_email(
+    let message = orchestrator::mailer::subscription_email(
         first_name.as_deref().unwrap_or(""),
         plan.display_name(),
         plan.max_targets(),
         plan.allows_scheduling(),
         &state.mailer.app_link(""),
     );
-    if let Err(error) = state
-        .mailer
-        .send(email, "Your Glarion plan is active", &html)
-        .await
-    {
+    if let Err(error) = state.mailer.send(email, &message).await {
         tracing::warn!(%error, "could not send the subscription welcome");
     }
 }
