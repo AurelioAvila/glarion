@@ -7,6 +7,7 @@ pub mod routes;
 pub mod state;
 
 use anyhow::{Context, Result};
+use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
 use axum::Router;
 use sqlx::postgres::PgPoolOptions;
@@ -75,7 +76,8 @@ pub async fn run() -> Result<()> {
     // development and /app in the container. Overridable because neither
     // assumption should be load-bearing.
     let web_root = std::env::var("WEB_ROOT").unwrap_or_else(|_| "web".to_string());
-    let app = with_static_files(app, std::path::Path::new(&web_root));
+    let app = with_static_files(app, std::path::Path::new(&web_root))
+        .layer(axum::middleware::from_fn(redirect_www_to_apex));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -90,6 +92,26 @@ pub async fn run() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+/// Keeps one public origin for search engines, cookies and shared links while
+/// preserving the exact path and query a visitor requested.
+async fn redirect_www_to_apex(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let is_www = request
+        .headers()
+        .get(axum::http::header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|host| host.eq_ignore_ascii_case("www.glarion.app"));
+
+    if is_www {
+        let destination = format!("https://glarion.app{}", request.uri());
+        return axum::response::Redirect::permanent(&destination).into_response();
+    }
+
+    next.run(request).await
 }
 
 pub fn router(state: AppState) -> Router {
