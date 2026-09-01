@@ -55,13 +55,14 @@ impl Mailer {
     /// what to tell the user, but note that signup deliberately does not
     /// fail when delivery fails — see the call site for why.
     pub async fn send(&self, to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
+        let branded_html = self.with_glarion_header(html);
         let Some(api_key) = &self.api_key else {
             tracing::warn!(
                 to = %to,
                 subject = %subject,
                 "email not sent: RESEND_API_KEY is unset. Body follows for development."
             );
-            tracing::info!("{html}");
+            tracing::info!("{branded_html}");
             return Ok(());
         };
 
@@ -69,7 +70,7 @@ impl Mailer {
             from: &self.from,
             to: [to],
             subject,
-            html,
+            html: &branded_html,
         };
 
         let response = reqwest::Client::new()
@@ -90,6 +91,16 @@ impl Mailer {
         }
 
         Ok(())
+    }
+
+    /// Adds the approved product mark to Glarion-owned transactional mail.
+    /// Client reports are rendered by the separate `report` crate and remain
+    /// white-label, carrying the agency identity instead of ours.
+    fn with_glarion_header(&self, body: &str) -> String {
+        let mark = escape(&format!("{}/glarion-mark.png", self.public_url));
+        format!(
+            r#"<div style="margin:0 0 22px"><img src="{mark}" width="36" height="36" alt="Glarion" style="display:block;width:36px;height:36px;object-fit:contain"></div>{body}"#
+        )
     }
 
     /// A link into the dashboard.
@@ -487,6 +498,15 @@ mod tests {
         };
 
         assert!(!mailer.verification_link("tok").contains("app//"));
+    }
+
+    #[test]
+    fn transactional_mail_uses_the_approved_product_mark() {
+        let html = mailer().with_glarion_header("<p>Hello</p>");
+
+        assert!(html.contains("https://glarion.example/glarion-mark.png"));
+        assert!(html.contains("width=\"36\""));
+        assert!(html.ends_with("<p>Hello</p>"));
     }
 
     #[test]
