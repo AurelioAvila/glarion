@@ -149,6 +149,10 @@ function renderSignIn(): void {
   });
   const password = el("input", { type: "password", required: true, autocomplete: "current-password" });
   const remember = el("input", { type: "checkbox", checked: saved !== null });
+  const reveal = el("input", { type: "checkbox" });
+  on(reveal, "change", () => {
+    password.type = reveal.checked ? "text" : "password";
+  });
   const button = submitButton("Sign in");
 
   const form = el("form", { class: "auth" }, [
@@ -156,6 +160,7 @@ function renderSignIn(): void {
     message,
     field("Email", email),
     field("Password", password),
+    el("label", { class: "checkbox checkbox-compact" }, [reveal, "Show password"]),
     el("label", { class: "checkbox" }, [remember, "Remember my email on this device"]),
     button,
     el("p", { class: "switch" }, [
@@ -238,7 +243,15 @@ function renderSignUp(): void {
     minlength: 12,
   });
   const confirmation = el("input", { type: "password", required: true, autocomplete: "new-password" });
+  const reveal = el("input", { type: "checkbox" });
+  const acceptedTerms = el("input", { type: "checkbox", required: true });
   const button = submitButton("Create account");
+
+  on(reveal, "change", () => {
+    const type = reveal.checked ? "text" : "password";
+    password.type = type;
+    confirmation.type = type;
+  });
 
   // Checked as the user types rather than only on submit, so a mismatch is
   // caught before the form is sent and everything has to be retyped.
@@ -261,11 +274,25 @@ function renderSignUp(): void {
     field(
       "Date of birth",
       dateOfBirth,
-      el("span", { class: "hint", text: "You must be 18 or over to open an account." }),
+      el("span", {
+        class: "hint",
+        text: "Required only to confirm that you can enter a commercial contract. It is not shown publicly and is removed when the account is deleted.",
+      }),
     ),
     field("Email", email),
     field("Password", password, el("span", { class: "hint", text: "At least 12 characters." })),
     field("Repeat password", confirmation, mismatch),
+    el("label", { class: "checkbox checkbox-compact" }, [reveal, "Show passwords"]),
+    el("label", { class: "checkbox terms-check" }, [
+      acceptedTerms,
+      el("span", {}, [
+        "I agree to the ",
+        el("a", { class: "inline", href: "/terms.html", text: "Terms" }),
+        " and acknowledge the ",
+        el("a", { class: "inline", href: "/privacy.html", text: "Privacy Notice" }),
+        ".",
+      ]),
+    ]),
     button,
     el("p", { class: "switch" }, [
       "Already have an account? ",

@@ -351,6 +351,56 @@ section { padding-top: 5.5rem; }
 }
 .column p { margin: 0; color: var(--ink-2); font-size: .92rem; }
 
+/* --- product proof ----------------------------------------------------- */
+.proof-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(15rem, .75fr);
+  gap: 2.5rem;
+  align-items: start;
+}
+.report-preview {
+  background: var(--sink);
+  border: 1px solid var(--rule);
+  padding: 1.35rem;
+}
+.report-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.report-client { font-weight: 560; }
+.report-date, .report-kicker {
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.report-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); margin-top: 1rem; }
+.report-metric { background: var(--sink); padding: 1rem; }
+.report-metric strong { display: block; font: 1.35rem/1 var(--mono); margin-bottom: .35rem; }
+.report-metric span { color: var(--ink-3); font-size: .78rem; }
+.report-finding { display: grid; grid-template-columns: 1.5rem 1fr auto; gap: .8rem; padding: .85rem 0; border-bottom: 1px solid var(--rule-soft); }
+.report-finding:last-child { border-bottom: 0; }
+.finding-number { color: var(--ink-3); font-family: var(--mono); }
+.finding-copy strong { display: block; font-size: .88rem; font-weight: 560; }
+.finding-copy span { color: var(--ink-3); font-size: .79rem; }
+.finding-state { font: .65rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.finding-state.fix { color: var(--alarm); }
+.finding-state.review { color: var(--caution); }
+.finding-state.clear { color: var(--clear); }
+.proof-notes { margin: 0; padding: 0; list-style: none; }
+.proof-notes li { padding: .85rem 0; border-bottom: 1px solid var(--rule-soft); }
+.proof-notes strong { display: block; font-size: .9rem; margin-bottom: .2rem; }
+.proof-notes span { color: var(--ink-2); font-size: .84rem; }
+
+.trust-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 2.5rem; margin: 0; }
+.trust-item { padding: 1rem 0; border-bottom: 1px solid var(--rule-soft); }
+.trust-item dt { font-weight: 560; font-size: .92rem; }
+.trust-item dd { margin: .25rem 0 0; color: var(--ink-2); font-size: .86rem; }
+
 /* --- the difference table ---------------------------------------------- */
 
 /*
@@ -406,8 +456,12 @@ section { padding-top: 5.5rem; }
   border-radius: 1px;
   background: var(--rule);
 }
+.plan-recommended { background: linear-gradient(90deg, rgba(82, 199, 141, .055), transparent 72%); }
+.plan-recommended::before { background: var(--clear); }
+.plan-badge { display: inline-block; margin-left: .65rem; color: var(--clear); font: .62rem var(--mono); letter-spacing: .11em; text-transform: uppercase; }
 .plan-name { font-family: var(--mono); font-size: .97rem; letter-spacing: -.01em; }
 .plan-detail { color: var(--ink-2); font-size: .88rem; margin-top: .3rem; }
+.plan-includes { color: var(--ink-3); font-size: .78rem; margin-top: .35rem; }
 .plan-price { font-family: var(--mono); font-size: .97rem; text-align: right; white-space: nowrap; }
 .plan-price small { display: block; color: var(--ink-3); font-size: .74rem; margin-top: .2rem; }
 
@@ -454,12 +508,20 @@ footer {
   h1 { font-size: 1.9rem; }
   section { padding-top: 4rem; }
   .columns { grid-template-columns: 1fr; gap: 2rem; }
+  .proof-grid, .trust-list { grid-template-columns: 1fr; }
+  .report-summary { grid-template-columns: 1fr; }
   .check-row { flex-direction: column; align-items: stretch; gap: .9rem; }
   .fact { flex-direction: column; gap: .2rem; }
   .fact-label { width: auto; }
   .plan { grid-template-columns: 1fr; }
   .plan-price { text-align: left; }
-  .compare th:nth-child(3), .compare td:nth-child(3) { display: none; }
+  .compare thead { display: none; }
+  .compare, .compare tbody, .compare tr, .compare td { display: block; width: 100%; }
+  .compare tr { padding: .75rem 0; border-bottom: 1px solid var(--rule); }
+  .compare td { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; gap: 1rem; border: 0; padding: .3rem 0; white-space: normal; }
+  .compare td:first-child { display: block; color: var(--ink); font-weight: 560; padding-bottom: .55rem; }
+  .compare td:nth-child(2)::before { content: "Glarion"; color: var(--ink-3); font: .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .compare td:nth-child(3)::before { content: "Per application"; color: var(--ink-3); font: .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 }
 </style>
 </head>
@@ -546,6 +608,41 @@ footer {
     </div>
   </section>
 
+  <section class="wrap" id="product-proof">
+    <div class="section-rule"><h2>What the client receives</h2></div>
+    <div class="proof-grid">
+      <div class="report-preview" aria-label="Sanitised example of a Glarion client report">
+        <div class="report-head">
+          <div><div class="report-kicker">Weekly security review</div><div class="report-client">Northstar Studio · example.com</div></div>
+          <div class="report-date">Sanitised sample</div>
+        </div>
+        <div class="report-summary">
+          <div class="report-metric"><strong>3</strong><span>Actions to take</span></div>
+          <div class="report-metric"><strong>2</strong><span>Items to review</span></div>
+          <div class="report-metric"><strong>27</strong><span>Checked, no action</span></div>
+        </div>
+        <div class="report-finding"><span class="finding-number">01</span><div class="finding-copy"><strong>Renew the TLS certificate</strong><span>Expires in 18 days · owner: hosting provider</span></div><span class="finding-state fix">Fix</span></div>
+        <div class="report-finding"><span class="finding-number">02</span><div class="finding-copy"><strong>Add a content security policy</strong><span>Reduces the impact of injected browser code</span></div><span class="finding-state review">Review</span></div>
+        <div class="report-finding"><span class="finding-number">03</span><div class="finding-copy"><strong>Ownership remains verified</strong><span>DNS proof rechecked before the scheduled scan</span></div><span class="finding-state clear">Clear</span></div>
+      </div>
+      <ul class="proof-notes">
+        <li><strong>A worklist, not raw output.</strong><span>Every finding includes the business reason, the next action and enough context to assign it.</span></li>
+        <li><strong>Your identity stays in front.</strong><span>Paid reports carry your agency name and logo, ready to print or save as PDF.</span></li>
+        <li><strong>Nothing is staged for this preview.</strong><span>The layout mirrors the report model used by Glarion; the client and domain above are deliberately fictional.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap" id="trust">
+    <div class="section-rule"><h2>Trust, in verifiable terms</h2></div>
+    <dl class="trust-list">
+      <div class="trust-item"><dt>Ownership before active scanning</dt><dd>DNS or hosted-file proof is required and checked again before every scheduled scan.</dd></div>
+      <div class="trust-item"><dt>Constrained scanning</dt><dd>Tools and templates are allowlisted; attacking tags, callbacks and private-network targets are refused.</dd></div>
+      <div class="trust-item"><dt>Change-focused reporting</dt><dd>Weekly monitoring surfaces what changed instead of making clients reread the same inventory.</dd></div>
+      <div class="trust-item"><dt>Tested release gates</dt><dd>Backend, frontend, formatting and static-route checks run before production deployment.</dd></div>
+    </dl>
+  </section>
+
   <section class="wrap" id="arithmetic">
     <div class="section-rule"><h2>The arithmetic</h2></div>
     <p class="claim">Twenty client sites.</p>
@@ -591,10 +688,11 @@ footer {
         </div>
         <div class="plan-price">&euro;0</div>
       </li>
-      <li class="plan">
+      <li class="plan plan-recommended">
         <div>
-          <div class="plan-name">Studio</div>
+          <div class="plan-name">Studio <span class="plan-badge">Recommended</span></div>
           <div class="plan-detail">Ten sites, weekly checks, white-label reports.</div>
+          <div class="plan-includes">For independent consultants and small agency portfolios.</div>
         </div>
         <div class="plan-price">&euro;39<small>/month &middot; &euro;350 a year, saving &euro;118</small></div>
       </li>
@@ -602,6 +700,7 @@ footer {
         <div>
           <div class="plan-name">Agency</div>
           <div class="plan-detail">Forty sites, weekly checks, white-label reports.</div>
+          <div class="plan-includes">For established teams managing multiple retained clients.</div>
         </div>
         <div class="plan-price">&euro;99<small>/month &middot; &euro;750 a year, saving &euro;438</small></div>
       </li>
