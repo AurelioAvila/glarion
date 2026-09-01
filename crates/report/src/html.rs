@@ -106,13 +106,19 @@ pub fn render_html(meta: &ReportMeta, scan: &TriagedScan) -> String {
     html.push_str("<!doctype html>\n<html lang=\"en\">\n<head>\n");
     html.push_str("<meta charset=\"utf-8\">\n");
     html.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+    // Every browser proposes `document.title` as the filename when the reader
+    // saves the page as a PDF. Naming the client and the date here is the
+    // difference between an attachment called "Security review.pdf" and one
+    // the agency can drop straight into a client folder without renaming it.
     html.push_str(&format!(
-        "<title>Security review — {}</title>\n",
-        escape(&meta.target_domain)
+        "<title>Security review — {} — {}</title>\n",
+        escape(&meta.target_domain),
+        escape(meta.scanned_at.format("%e %B %Y").to_string().trim())
     ));
     html.push_str(STYLES);
     html.push_str("</head>\n<body>\n");
 
+    render_save_bar(&mut html);
     render_header(&mut html, meta, scan);
     render_section(
         &mut html,
@@ -130,9 +136,38 @@ pub fn render_html(meta: &ReportMeta, scan: &TriagedScan) -> String {
     );
     render_inventory(&mut html, scan);
     render_footer(&mut html, meta);
+    render_running_footer(&mut html, meta);
 
     html.push_str("</body>\n</html>\n");
     html
+}
+
+/// The one line of interface in an otherwise inert document.
+///
+/// The report is already the client-ready artefact — self-contained, no
+/// external requests, the agency's name on it — but agencies send PDFs, not
+/// HTML files, and until this said so the reader had to work out for
+/// themselves that printing was how they got one.
+///
+/// Deliberately not a server-rendered PDF. Producing one would mean either a
+/// headless browser in the deploy image, which roughly triples it and adds a
+/// browser's patch cadence to a security product's attack surface, or a Rust
+/// PDF library whose CSS support would quietly render a different document
+/// from the one that was reviewed. The browser already has an excellent
+/// renderer for exactly this page, and the print stylesheet below is what
+/// makes its output worth handing to a client.
+///
+/// `onclick` rather than a listener: this file is opened from disk as often
+/// as it is served, and a report that carries a script block is a report an
+/// email gateway is entitled to be suspicious of. One attribute, no script.
+fn render_save_bar(html: &mut String) {
+    html.push_str(
+        "<div class=\"save\">\n\
+         <button type=\"button\" onclick=\"window.print()\">Save as PDF</button>\n\
+         <span>Choose &ldquo;Save as PDF&rdquo; as the destination. \
+         Turn off headers and footers for a clean document.</span>\n\
+         </div>\n",
+    );
 }
 
 fn render_header(html: &mut String, meta: &ReportMeta, scan: &TriagedScan) {
@@ -265,6 +300,24 @@ fn render_inventory(html: &mut String, scan: &TriagedScan) {
     html.push_str("</ul>\n</section>\n");
 }
 
+/// The line that repeats at the foot of every printed page.
+///
+/// Printed reports get separated. Page four on its own is otherwise an
+/// anonymous list of somebody's security weaknesses, with nothing on it
+/// saying whose site it describes, who produced it, or how old it is — and
+/// that is a document nobody should be circulating.
+///
+/// Rendered last so it sits outside the flowed content, and hidden on screen,
+/// where a fixed bar would only float over the page it is describing.
+fn render_running_footer(html: &mut String, meta: &ReportMeta) {
+    html.push_str(&format!(
+        "<div class=\"running\">{} &middot; prepared by {} &middot; {}</div>\n",
+        escape(&meta.target_domain),
+        escape(&meta.agency_name),
+        escape(meta.scanned_at.format("%e %B %Y").to_string().trim())
+    ));
+}
+
 fn render_footer(html: &mut String, meta: &ReportMeta) {
     html.push_str("<footer>\n");
     html.push_str(&format!(
@@ -339,11 +392,66 @@ const STYLES: &str = r#"<style>
   .appendix li { margin: .15rem 0; break-inside: avoid; }
   footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
   .caveat { font-size: .8rem; }
-  @media print {
-    body { padding: 0; max-width: none; font-size: 11pt; }
-    .finding, .appendix li { break-inside: avoid; }
-    h2 { break-after: avoid; }
+  .save {
+    display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+    margin: 0 0 2.2rem; padding: .8rem 1rem;
+    border: 1px solid var(--line); border-radius: 6px; background: #f8f9fb;
   }
+  .save button {
+    font: inherit; font-size: .88rem; font-weight: 600;
+    padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 4px;
+    background: var(--ink); color: #fff; cursor: pointer;
+  }
+  .save span { color: var(--muted); font-size: .82rem; }
+
+  /* What turns this page into a document an agency can send a client.
+     Everything here exists because the default browser output gets one of
+     these wrong. */
+  @page {
+    size: A4;
+    /* Room at the foot for the running identifier below. */
+    margin: 16mm 15mm 22mm;
+  }
+  @media print {
+    body { padding: 0; max-width: none; font-size: 10.5pt; }
+
+    /* The severity pills carry their meaning in colour, and browsers drop
+       colour when printing unless told not to. A report whose "urgent" and
+       "low" print as identical grey text is a report that has lost the one
+       distinction it exists to draw. */
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* The button is interface, not content. */
+    .save { display: none; }
+
+    /* A finding split across a page break separates a problem from its fix,
+       which is exactly the pairing the reader is scanning for. */
+    .finding, .appendix li, .tally { break-inside: avoid; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    p { orphans: 3; widows: 3; }
+
+    /* The inventory is reference material. Starting it on its own page keeps
+       it from swallowing the tail of the findings, which is the part anyone
+       actually reads. */
+    .appendix { break-before: page; }
+
+    /* Repeats on every printed page in every current browser: this is the
+       one way to get a running footer without a paged-media engine. It is
+       what stops page four of a printout, once it has been separated from
+       page one, from being an anonymous list of somebody's vulnerabilities. */
+    .running {
+        display: block;
+        position: fixed;
+        bottom: -14mm; left: 0; right: 0;
+        border-top: 1px solid var(--line);
+        padding-top: 2mm;
+        color: var(--muted); font-size: 8pt;
+    }
+  }
+  /* Hidden on screen: on a scrolling page a fixed footer is a floating bar
+     over the content, and the same information is already in the footer. */
+  .running { display: none; }
 </style>
 "#;
 
@@ -585,5 +693,95 @@ mod tests {
         let html = render_html(&meta(), &scan);
 
         assert!(!html.contains("<script>alert"));
+    }
+
+    /// The report is the thing an agency hands a client, and they hand over
+    /// PDFs. These pin the handful of print rules that decide whether the
+    /// browser's own output is worth sending — each one is here because the
+    /// default gets it wrong.
+    #[test]
+    fn the_document_is_set_up_to_print_as_a_deliverable() {
+        let html = render_html(&meta(), &csp_scan());
+
+        assert!(
+            html.contains("@page"),
+            "no page box means the browser's default margins"
+        );
+        assert!(
+            html.contains("print-color-adjust: exact"),
+            "browsers drop colour when printing, and the severity pills are colour"
+        );
+        assert!(
+            html.contains(".save { display: none; }"),
+            "the print button must not print"
+        );
+        assert!(
+            html.contains("break-before: page"),
+            "the inventory should not swallow the tail of the findings"
+        );
+        assert!(html.contains("orphans: 3"));
+    }
+
+    #[test]
+    fn the_saved_file_names_itself() {
+        // Browsers propose the title as the PDF filename. "Security review.pdf"
+        // in a folder of client work is a file nobody can identify later.
+        let html = render_html(&meta(), &csp_scan());
+        let title = html
+            .split("<title>")
+            .nth(1)
+            .and_then(|rest| rest.split("</title>").next())
+            .expect("the document has a title");
+
+        assert!(title.contains("example.com"), "title was {title:?}");
+        assert!(title.contains("2026"), "title was {title:?}");
+    }
+
+    #[test]
+    fn a_separated_page_still_says_whose_report_it_is() {
+        // A printed report gets split up. Page four alone is otherwise an
+        // anonymous list of somebody's security weaknesses.
+        let html = render_html(&meta(), &csp_scan());
+        let running = html
+            .split("<div class=\"running\">")
+            .nth(1)
+            .and_then(|rest| rest.split("</div>").next())
+            .expect("a running footer is rendered");
+
+        assert!(running.contains("example.com"));
+        assert!(running.contains("Northgate Studio"));
+        assert!(
+            html.contains("position: fixed"),
+            "only a fixed element repeats on every printed page"
+        );
+    }
+
+    #[test]
+    fn the_print_button_does_not_make_it_a_scripted_document() {
+        // An HTML attachment carrying a script block is one an email gateway
+        // is entitled to strip or quarantine — and this report is sent as an
+        // attachment. One inline attribute is the whole budget.
+        let html = render_html(&meta(), &csp_scan());
+
+        assert!(html.contains("window.print()"));
+        assert!(!html.contains("<script"), "no script block may appear");
+        assert_eq!(
+            html.matches("onclick").count(),
+            1,
+            "one handler, on the one control"
+        );
+    }
+
+    #[test]
+    fn a_hostile_agency_name_cannot_escape_the_running_footer() {
+        // The running footer is a third place the agency's own strings are
+        // interpolated, and it was written after the two that already had
+        // tests. Same rule: the agency is a customer, not an author.
+        let mut m = meta();
+        m.agency_name = "</div><script>alert(1)</script>".to_string();
+        let html = render_html(&m, &csp_scan());
+
+        assert!(!html.contains("<script>alert(1)</script>"));
+        assert!(html.contains("&lt;script&gt;"));
     }
 }
