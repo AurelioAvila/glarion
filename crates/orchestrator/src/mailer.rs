@@ -12,6 +12,7 @@
 //! assuming delivery happened.
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Mailer {
     api_key: Option<String>,
@@ -28,6 +29,14 @@ pub struct Mailer {
     /// nowhere — the person doing the right thing, quickly, reaches a bin.
     /// Set MAIL_REPLY_TO to a monitored inbox.
     reply_to: Option<String>,
+    /// Whether the last attempt reached the provider.
+    ///
+    /// Deliberately global rather than per-recipient. Signup answers a taken
+    /// address exactly as it answers a new one, so that it cannot be used to
+    /// test who has an account; a per-address delivery result would
+    /// reintroduce that difference the moment delivery started failing. This
+    /// says only "mail is working", which is the same for every caller.
+    last_send_ok: AtomicBool,
 }
 
 #[derive(Serialize)]
@@ -73,11 +82,23 @@ impl Mailer {
                 .ok()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty()),
+            // Optimistic until something fails: a process that has sent
+            // nothing yet has no reason to tell a visitor mail is broken.
+            last_send_ok: AtomicBool::new(true),
         }
     }
 
     pub fn is_configured(&self) -> bool {
         self.api_key.is_some()
+    }
+
+    /// Whether the most recent attempt reached the provider.
+    ///
+    /// Lets a handler tell a visitor the truth instead of "check your inbox"
+    /// when nothing was sent. See `last_send_ok` for why this is not
+    /// per-recipient.
+    pub fn last_send_ok(&self) -> bool {
+        self.last_send_ok.load(Ordering::Relaxed)
     }
 
     /// Sends a message, or logs it when no provider is configured.
@@ -86,6 +107,14 @@ impl Mailer {
     /// what to tell the user, but note that signup deliberately does not
     /// fail when delivery fails — see the call site for why.
     pub async fn send(&self, to: &str, message: &Message) -> anyhow::Result<()> {
+        let outcome = self.deliver(to, message).await;
+        self.last_send_ok.store(outcome.is_ok(), Ordering::Relaxed);
+        outcome
+    }
+
+    /// The attempt itself. Split out so every exit path, including the `?` on
+    /// a transport error, is recorded by `send` rather than by each branch.
+    async fn deliver(&self, to: &str, message: &Message) -> anyhow::Result<()> {
         let Some(api_key) = &self.api_key else {
             tracing::warn!(
                 to = %to,
@@ -694,6 +723,7 @@ mod tests {
             from: "Glarion <hello@example.com>".to_string(),
             public_url: "https://glarion.example".to_string(),
             reply_to: None,
+            last_send_ok: AtomicBool::new(true),
         }
     }
 
@@ -762,6 +792,7 @@ mod tests {
             from: "x@example.com".into(),
             public_url: "https://glarion.app".into(),
             reply_to: None,
+            last_send_ok: AtomicBool::new(true),
         };
 
         assert_eq!(
@@ -879,6 +910,7 @@ mod tests {
             from: "x@example.com".into(),
             public_url: "https://glarion.app/".trim_end_matches('/').to_string(),
             reply_to: None,
+            last_send_ok: AtomicBool::new(true),
         };
 
         assert!(!mailer.verification_link("tok").contains("app//"));
@@ -1075,6 +1107,7 @@ mod tests {
             from: "Glarion <noreply@example.com>".to_string(),
             public_url: "https://glarion.example".to_string(),
             reply_to: Some("security@example.com".to_string()),
+            last_send_ok: AtomicBool::new(true),
         };
         assert_eq!(configured.reply_to.as_deref(), Some("security@example.com"));
 

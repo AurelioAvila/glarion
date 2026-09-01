@@ -287,7 +287,7 @@ async function request<T>(
 
 export const api = {
   signup(details: SignupDetails) {
-    return request<{ email: string; message: string }>("POST", "/api/auth/signup", {
+    return request<{ email: string; message: string; delivered: boolean }>("POST", "/api/auth/signup", {
       first_name: details.firstName,
       last_name: details.lastName,
       date_of_birth: details.dateOfBirth,

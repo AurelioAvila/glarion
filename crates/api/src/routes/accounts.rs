@@ -91,6 +91,11 @@ pub struct SignupResponse {
     /// so returning a session here would contradict that.
     pub email: String,
     pub message: String,
+    /// Whether the confirmation message actually left. Signup still succeeds
+    /// when it did not — the account exists — but telling someone to check an
+    /// inbox nothing was sent to is how a broken mail path stays invisible
+    /// while every new account silently fails to confirm.
+    pub delivered: bool,
 }
 
 #[derive(Deserialize)]
@@ -224,10 +229,7 @@ pub async fn signup(
     // endpoint is careful not to leak. The real owner is told nothing new;
     // someone probing learns nothing either.
     let Some(user_id) = user_id else {
-        return Ok(Json(SignupResponse {
-            email,
-            message: "Check your email to confirm your address.".into(),
-        }));
+        return Ok(Json(signup_answer(&state, email)));
     };
 
     sqlx::query(
@@ -241,24 +243,46 @@ pub async fn signup(
 
     send_verification(&state, &email, &first_name, &token).await;
 
-    Ok(Json(SignupResponse {
+    Ok(Json(signup_answer(&state, email)))
+}
+
+/// The one answer signup gives, whichever branch produced it.
+///
+/// Built in a single place on purpose: a new address and an address already
+/// registered must be indistinguishable, or signup becomes a way to test who
+/// has an account. `delivered` therefore reports the mailer's state, which is
+/// the same for both, and never this recipient's own result.
+fn signup_answer(state: &AppState, email: String) -> SignupResponse {
+    let delivered = state.mailer.last_send_ok();
+
+    SignupResponse {
         email,
-        message: "Check your email to confirm your address.".into(),
-    }))
+        message: if delivered {
+            "Check your email to confirm your address.".into()
+        } else {
+            "Your account exists, but the confirmation email could not be sent.              Try the resend link in a few minutes, or use the contact address on glarion.app."
+                .into()
+        },
+        delivered,
+    }
 }
 
 /// Sends the confirmation message, logging rather than failing on error.
 ///
-/// The account already exists at this point. Returning an error would tell
-/// the user signup failed when it did not, and leave them unable to retry
-/// because the address is now taken. A failure here is recoverable through
-/// the resend endpoint; a misleading error is not.
-async fn send_verification(state: &AppState, email: &str, first_name: &str, token: &str) {
+/// Never fails signup: the account already exists at this point, so returning
+/// an error would tell the user signup failed when it did not, and leave them
+/// unable to retry because the address is now taken. Whether it arrived is
+/// reported through `signup_answer`, from the mailer's own state.
+async fn send_verification(state: &AppState, email: &str, first_name: &str, token: &str) -> bool {
     let link = state.mailer.verification_link(token);
     let message = verification_email(first_name, &link);
 
-    if let Err(error) = state.mailer.send(email, &message).await {
-        tracing::error!(error = ?error, "could not send the confirmation email");
+    match state.mailer.send(email, &message).await {
+        Ok(()) => true,
+        Err(error) => {
+            tracing::error!(error = ?error, "could not send the confirmation email");
+            false
+        }
     }
 }
 
