@@ -126,10 +126,9 @@ pub async fn email_preview(
         .collect();
 
     let link = state.mailer.app_link("/signup");
-    let html = preview_report_email(&domain, &lines, &link);
-    let subject = format!("Security check: {domain}");
+    let message = preview_report_email(&domain, &lines, &link);
 
-    if let Err(error) = state.mailer.send(&email, &subject, &html).await {
+    if let Err(error) = state.mailer.send(&email, &message).await {
         // Logged rather than surfaced: the caller cannot act on our mail
         // provider having a bad minute, and telling them the address
         // specifically failed would leak that it exists.
