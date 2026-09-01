@@ -4,7 +4,7 @@
 // Findings, evidence and domains all originate from a scanner pointed at
 // somebody else's website, so treating any of it as markup would put script
 // from a scanned site into the agency's dashboard — on the same origin as
-// their session token. Text always goes through `textContent`, which the
+// their authenticated session. Text always goes through `textContent`, which the
 // browser cannot interpret as markup.
 
 type Attrs = Record<string, string | number | boolean | undefined>;

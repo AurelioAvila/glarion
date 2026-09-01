@@ -175,9 +175,9 @@ function renderSignIn(): void {
 
     void withPending(button, "Signing in…", async () => {
       try {
-        const result = await api.login(email.value, password.value);
+        await api.login(email.value, password.value);
         rememberedEmail.set(remember.checked ? email.value.trim() : null);
-        session.set(result.token);
+        session.set();
         window.location.hash = "#/targets";
       } catch (error) {
         // An unconfirmed address is not a dead end: offer the way out
@@ -394,10 +394,10 @@ async function renderVerify(token: string): Promise<void> {
   container.append(el("p", { class: "loading", text: "Confirming" }));
 
   try {
-    const result = await api.verifyEmail(token);
+    await api.verifyEmail(token);
     // Signed in straight away: they have just proved they control the
     // address, so asking for the password again adds nothing.
-    session.set(result.token);
+    session.set();
     window.location.hash = "#/targets";
   } catch (error) {
     clear(container);
@@ -1875,8 +1875,10 @@ function renderNav(): void {
 
   const signOut = el("button", { type: "button", text: "Sign out" });
   on(signOut, "click", () => {
-    session.clear();
-    window.location.hash = "#/signin";
+    void api.logout().finally(() => {
+      session.clear();
+      window.location.hash = "#/signin";
+    });
   });
   nav.append(signOut);
 }

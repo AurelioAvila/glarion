@@ -143,6 +143,7 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = "glarion.token";
+const SESSION_MARKER_KEY = "glarion.session";
 const REMEMBERED_EMAIL_KEY = "glarion.email";
 
 /// The address to prefill on the sign-in form.
@@ -169,11 +170,9 @@ export const rememberedEmail = {
   },
 };
 
-// The bearer token lives in localStorage so a refresh does not sign the
-// user out. That trades off against script injection: anything able to run
-// JavaScript on this origin can read it. The mitigation is upstream — this
-// app never assigns untrusted data to innerHTML, and every value from the
-// API reaches the page through textContent. See dom.ts.
+// New sessions live exclusively in an HttpOnly cookie. `token()` only reads
+// the former localStorage key so sessions created before this migration keep
+// working until they expire; `set()` removes that legacy credential.
 export const session = {
   token(): string | null {
     try {
@@ -185,9 +184,12 @@ export const session = {
     }
   },
 
-  set(token: string): void {
+  set(_token?: string): void {
     try {
-      localStorage.setItem(TOKEN_KEY, token);
+      // Authentication now lives in an HttpOnly cookie. Keep only a
+      // non-sensitive UI marker and remove any legacy readable token.
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.setItem(SESSION_MARKER_KEY, "1");
     } catch {
       // Ignored: the user stays signed in for this page view only.
     }
@@ -196,13 +198,18 @@ export const session = {
   clear(): void {
     try {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(SESSION_MARKER_KEY);
     } catch {
       // Nothing useful to do.
     }
   },
 
   get isSignedIn(): boolean {
-    return this.token() !== null;
+    try {
+      return this.token() !== null || localStorage.getItem(SESSION_MARKER_KEY) === "1";
+    } catch {
+      return false;
+    }
   },
 };
 
@@ -237,12 +244,14 @@ async function request<T>(
   const token = session.token();
   if (token) headers["authorization"] = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers["x-glarion-csrf"] = "1";
 
   let response: Response;
   try {
     response = await fetch(`${apiBase()}${path}`, {
       method,
       headers,
+      credentials: "include",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -264,6 +273,7 @@ async function request<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 401) session.clear();
     const detail = payload as { error?: string; message?: string } | null;
     throw new ApiError(
       response.status,
@@ -288,7 +298,7 @@ export const api = {
   },
 
   verifyEmail(token: string) {
-    return request<{ token: string; user_id: string }>("POST", "/api/auth/verify", { token });
+    return request<{ user_id: string }>("POST", "/api/auth/verify", { token });
   },
 
   resendVerification(email: string) {
@@ -296,10 +306,14 @@ export const api = {
   },
 
   login(email: string, password: string) {
-    return request<{ token: string; user_id: string }>("POST", "/api/auth/login", {
+    return request<{ user_id: string }>("POST", "/api/auth/login", {
       email,
       password,
     });
+  },
+
+  logout() {
+    return request<void>("POST", "/api/auth/logout");
   },
 
   profile() {
@@ -394,7 +408,10 @@ export const api = {
     const token = session.token();
     const response = await fetch(
       `${apiBase()}/api/scans/${encodeURIComponent(scanId)}/report`,
-      { headers: token ? { authorization: `Bearer ${token}` } : {} },
+      {
+        credentials: "include",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      },
     );
 
     if (!response.ok) {
