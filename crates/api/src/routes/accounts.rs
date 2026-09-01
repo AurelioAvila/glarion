@@ -14,7 +14,8 @@ use crate::auth::{hash_password, issue_token, verify_password, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 use orchestrator::mailer::{
-    password_changed_email, password_reset_email, verification_email, welcome_email,
+    email_change_alert, email_change_confirmation, password_changed_email, password_reset_email,
+    verification_email, welcome_email,
 };
 
 /// Minimum password length. Deliberately a length floor rather than a
@@ -54,6 +55,13 @@ const RESET_VALID_MINUTES: i64 = 60;
 
 /// How long before another reset email may be requested for the same account.
 const RESET_COOLDOWN_MINUTES: i64 = 2;
+
+/// How long a change-of-address link stays usable.
+///
+/// Same hour a reset link gets, and for the same reason: while it lives, it
+/// is the account. A confirmation link only proves an address; this one moves
+/// where every future reset link will be sent.
+const EMAIL_CHANGE_VALID_MINUTES: i64 = 60;
 
 #[derive(Deserialize)]
 pub struct SignupRequest {
@@ -608,6 +616,163 @@ pub async fn reset_password(
         session_header(&state, &token)?,
         Json(SessionResponse { user_id }),
     ))
+}
+
+#[derive(Deserialize)]
+pub struct ChangeEmailRequest {
+    pub new_email: String,
+    /// Re-proves the account holder, exactly as deleting does. The bearer
+    /// token is the one thing a stolen session already has; an action that
+    /// hands the account to a different mailbox needs the one thing it would
+    /// not also have.
+    pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct ConfirmEmailChangeRequest {
+    pub token: String,
+}
+
+/// Starts a change of address.
+///
+/// Two messages go out, and the second is what makes this safe to offer at
+/// all. A stolen session plus a change of address is a complete takeover —
+/// the thief redirects every future reset link to themselves — so the
+/// address currently on the account is told while the move can still be
+/// stopped. The confirmation link goes only to the new address, because the
+/// single question it settles is whether mail can be received there.
+///
+/// The answer is the same whether or not the requested address is already
+/// registered. Saying "that email is taken" would turn a signed-in account
+/// into an oracle for enumerating every other one — which, for a product
+/// sold to agencies, is a list of who their competitors' customers are.
+pub async fn change_email(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ChangeEmailRequest>,
+) -> ApiResult<Json<MessageResponse>> {
+    let new_email = normalize_email(&body.new_email)?;
+
+    let row: Option<(String, String, Option<String>)> =
+        sqlx::query_as("select email, password_hash, first_name from users where id = $1")
+            .bind(user.id)
+            .fetch_optional(&state.pool)
+            .await?;
+    let Some((current_email, password_hash, first_name)) = row else {
+        return Err(ApiError::Unauthorized);
+    };
+
+    if !verify_password(&body.password, &password_hash) {
+        return Err(ApiError::InvalidCredentials);
+    }
+
+    if new_email == current_email {
+        return Err(ApiError::BadRequest(
+            "that is already the address on this account".into(),
+        ));
+    }
+
+    let answer = Ok(Json(MessageResponse {
+        message: "If that address can be used, a link to confirm it is on its way.".into(),
+    }));
+
+    // Taken addresses stop here, after the same work and with the same
+    // answer. Nothing is written and no link is issued, so a request aimed at
+    // somebody else's address cannot even generate mail to them.
+    let taken: Option<Uuid> = sqlx::query_scalar("select id from users where email = $1")
+        .bind(&new_email)
+        .fetch_optional(&state.pool)
+        .await?;
+    if taken.is_some() {
+        return answer;
+    }
+
+    let (token, token_hash) = new_verification_token();
+    sqlx::query(
+        "update users
+         set pending_email = $2, email_change_token_hash = $3, email_change_sent_at = now()
+         where id = $1",
+    )
+    .bind(user.id)
+    .bind(&new_email)
+    .bind(&token_hash)
+    .execute(&state.pool)
+    .await?;
+
+    let link = state.mailer.app_link(&format!("/confirm-email/{token}"));
+    let confirmation = email_change_confirmation(
+        first_name.as_deref().unwrap_or(""),
+        &link,
+        EMAIL_CHANGE_VALID_MINUTES,
+    );
+    if let Err(error) = state.mailer.send(&new_email, &confirmation).await {
+        tracing::error!(error = ?error, "could not send the change-of-address confirmation");
+    }
+
+    // To the address being left behind, always, and even if the one above
+    // failed: being told is the whole protection.
+    let alert = email_change_alert(first_name.as_deref().unwrap_or(""), &new_email);
+    if let Err(error) = state.mailer.send(&current_email, &alert).await {
+        tracing::warn!(error = ?error, "could not warn the old address of a change");
+    }
+
+    answer
+}
+
+/// Finishes a change of address.
+///
+/// Unauthenticated by necessity — the link is followed from whatever mailbox
+/// received it, which by design is not where the session is. The token is the
+/// authorization, and it is consumed in the statement that reads it so a
+/// second request finds no row.
+///
+/// `token_version` is bumped, which signs out everything. That is not tidiness:
+/// if this move was made by somebody who should not have been signed in, the
+/// bump is what removes them, and the person who confirmed from the new
+/// mailbox is the one who signs back in.
+pub async fn confirm_email_change(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Json(body): Json<ConfirmEmailChangeRequest>,
+) -> ApiResult<Json<MessageResponse>> {
+    if !state.auth_limiter.check(peer.ip()) {
+        return Err(ApiError::TooManyRequests);
+    }
+
+    let token_hash = hash_token(body.token.trim());
+    let cutoff = Utc::now() - Duration::minutes(EMAIL_CHANGE_VALID_MINUTES);
+
+    // `where not exists` rather than a check beforehand: between a check and
+    // an update, the address could be registered by somebody else, and the
+    // unique constraint would surface as a 500 instead of a refusal.
+    let changed: Option<(Uuid,)> = sqlx::query_as(
+        "update users
+         set email = pending_email,
+             pending_email = null,
+             email_change_token_hash = null,
+             email_change_sent_at = null,
+             email_verified_at = coalesce(email_verified_at, now()),
+             token_version = token_version + 1
+         where email_change_token_hash = $1
+           and email_change_sent_at > $2
+           and pending_email is not null
+           and not exists (select 1 from users other where other.email = users.pending_email)
+         returning id",
+    )
+    .bind(&token_hash)
+    .bind(cutoff)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    if changed.is_none() {
+        return Err(ApiError::BadRequest(
+            "This link is no longer valid. Request the change again from your account.".into(),
+        ));
+    }
+
+    Ok(Json(MessageResponse {
+        message: "Your address has been changed. Sign in again with the new one.".into(),
+    }))
 }
 
 #[derive(Deserialize)]

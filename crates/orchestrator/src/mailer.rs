@@ -397,6 +397,73 @@ pub fn subscription_email(
     }
 }
 
+/// The link that moves an account to a new address.
+///
+/// Sent to the new address, never to the old one: the whole question this
+/// message settles is whether the person asking can actually receive mail
+/// there, and a link sent anywhere else answers a different question.
+pub fn email_change_confirmation(first_name: &str, link: &str, valid_minutes: i64) -> Message {
+    let hello = greeting(first_name);
+    let safe_link = escape(link);
+    let tail = format!(
+        r#"<p style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.</p>"#
+    );
+    Message {
+        subject: "Confirm your new Glarion address".to_string(),
+        html: chrome(Chrome {
+            preview: "Confirm this address to finish moving your Glarion account to it",
+            eyebrow: "Confirm the change",
+            heading: "Confirm your new address.",
+            body: &format!(
+                "{}{}{tail}",
+                para(&hello),
+                para("Someone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out."),
+            ),
+            cta: Some(("Confirm this address", link)),
+            footer: "If you were not expecting this, ignore it — nothing changes until the link is followed, and whoever asked cannot read this message.",
+        }),
+        text: format!(
+            "{hello}\n\nSomeone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.\n\nIf you were not expecting this, ignore it - nothing changes until the link is followed."
+        ),
+    }
+}
+
+/// The warning sent to the address being left behind.
+///
+/// This is the half that makes the flow safe. A stolen session plus a
+/// change of address is a complete account takeover — the thief redirects
+/// every future reset link to themselves — so the address currently on the
+/// account is told the moment a move is requested, while it can still be
+/// stopped, and told again nowhere else.
+///
+/// It carries no link, deliberately. Whoever reads it is the person being
+/// pushed out, at their most alarmed, and a button in this message is the
+/// single most valuable thing an attacker could forge. Getting in touch
+/// cannot be forged.
+pub fn email_change_alert(first_name: &str, new_email: &str) -> Message {
+    let hello = greeting(first_name);
+    let safe_new = escape(new_email);
+    Message {
+        subject: "Someone asked to change your Glarion address".to_string(),
+        html: chrome(Chrome {
+            preview: "A request was made to move your Glarion account to another address",
+            eyebrow: "Security notice",
+            heading: "A change of address was requested.",
+            body: &format!(
+                "{}{}<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px\"><tr><td style=\"padding:17px;color:{INK_2};font-size:14px;line-height:1.7\">Requested new address<br><strong style=\"color:{INK}\">{safe_new}</strong></td></tr></table>{}",
+                para(&hello),
+                para("Your Glarion account is being moved to another address. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's."),
+                para("If this was you, nothing else is needed. If it was not, change your password now — someone is signed in who should not be — and reply to this message."),
+            ),
+            cta: None,
+            footer: "This security notice is sent to the address currently on the account whenever a change is requested, and cannot be turned off.",
+        }),
+        text: format!(
+            "{hello}\n\nYour Glarion account is being moved to {new_email}. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's.\n\nIf this was you, nothing else is needed. If it was not, change your password now - someone is signed in who should not be - and reply to this message."
+        ),
+    }
+}
+
 /// The message sent when a paid plan stops.
 ///
 /// Nothing was sent before. The account dropped to free, scheduled scanning

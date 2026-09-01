@@ -126,6 +126,15 @@ pub fn router(state: AppState) -> Router {
             "/api/auth/reset-password",
             post(routes::accounts::reset_password),
         )
+        // Authenticated: starting a move needs the account and its password.
+        .route("/api/account/email", post(routes::accounts::change_email))
+        // Unauthenticated by necessity: the link is followed from the new
+        // mailbox, which by design is not where the session is. The token is
+        // the authorization.
+        .route(
+            "/api/auth/confirm-email-change",
+            post(routes::accounts::confirm_email_change),
+        )
         .route(
             "/api/account",
             axum::routing::delete(routes::accounts::delete_account),
