@@ -70,9 +70,13 @@ COPY --from=build /app/target/release/runner /usr/local/bin/runner
 # The API serves these itself — see with_static_files. One origin for the
 # page and the endpoints it calls means no CORS entry to maintain, and one
 # thing to deploy instead of two.
+#
+# glarion-mark.png is no longer referenced by any page, but emails already
+# in inboxes hotlink it, so the image keeps serving it.
 COPY web/landing.html web/index.html web/privacy.html web/terms.html \
      web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js \
-     web/glarion-mark.png web/og.png web/
+     web/glarion-mark-64.png web/glarion-mark-180.png \
+     web/glarion-mark-192.png web/glarion-mark-512.png web/glarion-mark.png web/og.png web/
 COPY --from=web /web/dist web/dist
 
 RUN chown -R glarion:glarion /app
