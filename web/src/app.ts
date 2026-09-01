@@ -323,7 +323,7 @@ function renderSignUp(): void {
           password: password.value,
           passwordConfirmation: confirmation.value,
         });
-        renderCheckYourEmail(result.email);
+        renderCheckYourEmail(result.email, result.delivered);
       } catch (error) {
         message.replaceChildren(notice("error", describeError(error)));
       }
@@ -339,7 +339,7 @@ function renderSignUp(): void {
 /// The account exists but cannot be used yet, so this says what happened
 /// and what to do about it rather than dropping the user back at a sign-in
 /// form that would refuse them.
-function renderCheckYourEmail(email: string): void {
+function renderCheckYourEmail(email: string, delivered: boolean): void {
   const container = root();
   clear(container);
 
@@ -361,19 +361,32 @@ function renderCheckYourEmail(email: string): void {
   container.append(
     el("div", { class: "auth" }, [
       el("h1", { text: "Confirm your email" }),
-      el("p", {
-        class: "blurb",
-        text: `We sent a link to ${email}. Open it to finish setting up your account.`,
-      }),
-      // See unconfirmedNotice: said up front, because the message being
-      // filtered is the common case rather than the unlucky one.
-      el("p", {
-        class: "muted",
-        style: "margin:-1.5rem 0 2rem",
-        text:
-          "If it is not in your inbox within a minute, look in the spam folder — " +
-          "a first message from a new sender often lands there.",
-      }),
+      ...(delivered
+        ? [
+            el("p", {
+              class: "blurb",
+              text: `We sent a link to ${email}. Open it to finish setting up your account.`,
+            }),
+            // See unconfirmedNotice: said up front, because the message being
+            // filtered is the common case rather than the unlucky one.
+            el("p", {
+              class: "muted",
+              style: "margin:-1.5rem 0 2rem",
+              text:
+                "If it is not in your inbox within a minute, look in the spam folder — " +
+                "a first message from a new sender often lands there.",
+            }),
+          ]
+        : [
+            // Nothing was sent, so telling somebody to watch their inbox
+            // would leave them waiting on a message that is not coming.
+            notice(
+              "error",
+              `We could not send the link to ${email}. The account exists — ` +
+                "try again in a few minutes, or use the contact address at the " +
+                "foot of glarion.app.",
+            ),
+          ]),
       message,
       el("p", { class: "switch" }, ["Nothing arrived? ", resend]),
       // A way out.
