@@ -15,10 +15,10 @@
 //! **Residual risk, stated plainly:** DNS can change between the check and
 //! the connection (rebinding). For our own HTTP fetches we close that
 //! window by pinning the connection to the address we validated. For an
-//! external scanner process we cannot pin the address, so the check happens
-//! immediately before the process is spawned and the window is small but
-//! non-zero. Ownership verification and per-target rate limits are what
-//! bound the damage in that case.
+//! external scanner process we cannot pin the address ourselves, so the
+//! check happens immediately before the process is spawned. Nuclei is also
+//! launched with its own local-network restriction, which closes that
+//! boundary again inside the process if DNS changes after our lookup.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
