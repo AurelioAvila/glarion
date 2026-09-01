@@ -19,6 +19,7 @@ use std::net::SocketAddr;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+use api::auth::issue_token;
 use api::state::AppState;
 
 const JWT_SECRET: &str = "integration-test-secret-long-enough-for-hs256";
@@ -119,10 +120,20 @@ async fn signup(app: &axum::Router, pool: &PgPool, email: &str) -> (String, Uuid
     )
     .await;
     assert_eq!(status, StatusCode::OK, "login failed: {body}");
+    assert!(
+        body.get("token").is_none(),
+        "session credentials must never be exposed to browser JavaScript"
+    );
 
+    let user_id = Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap();
+    let token_version: i32 = sqlx::query_scalar("select token_version from users where id = $1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
     (
-        body["token"].as_str().unwrap().to_string(),
-        Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap(),
+        issue_token(JWT_SECRET, user_id, token_version).unwrap(),
+        user_id,
     )
 }
 
