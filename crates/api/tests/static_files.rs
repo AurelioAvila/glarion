@@ -21,6 +21,12 @@ fn web_dir() -> std::path::PathBuf {
     std::fs::create_dir_all(dir.join("dist")).unwrap();
     std::fs::write(dir.join("landing.html"), "THE LANDING PAGE").unwrap();
     std::fs::write(dir.join("index.html"), "THE DASHBOARD SHELL").unwrap();
+    std::fs::write(dir.join("privacy.html"), "THE PRIVACY POLICY").unwrap();
+    std::fs::write(dir.join("terms.html"), "THE TERMS").unwrap();
+    std::fs::write(dir.join("robots.txt"), "User-agent: *\nAllow: /").unwrap();
+    std::fs::write(dir.join("sitemap.xml"), "<urlset></urlset>").unwrap();
+    std::fs::write(dir.join("landing.js"), "// landing interaction").unwrap();
+    std::fs::write(dir.join("glarion-mark.png"), "PNG BRAND MARK").unwrap();
     std::fs::write(dir.join("dist/app.js"), "// built app").unwrap();
     dir
 }
@@ -84,6 +90,79 @@ async fn built_assets_are_served() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("built app"));
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn public_documents_are_served_instead_of_the_landing_page() {
+    let dir = web_dir();
+
+    for (path, expected) in [
+        ("/privacy.html", "THE PRIVACY POLICY"),
+        ("/terms.html", "THE TERMS"),
+        ("/robots.txt", "User-agent: *"),
+        ("/sitemap.xml", "<urlset>"),
+        ("/landing.js", "landing interaction"),
+        ("/glarion-mark.png", "PNG BRAND MARK"),
+    ] {
+        let router = with_static_files(Router::new(), &dir);
+        let (status, body) = body_of(router, path).await;
+
+        assert_eq!(status, StatusCode::OK, "{path}");
+        assert!(body.contains(expected), "wrong body for {path}: {body}");
+        assert!(!body.contains("THE LANDING PAGE"), "{path} fell back to / ");
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn an_unknown_public_path_is_a_real_404() {
+    let dir = web_dir();
+    let router = with_static_files(Router::new(), &dir);
+
+    let (status, body) = body_of(router, "/this-page-does-not-exist").await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(!body.contains("THE LANDING PAGE"));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn browser_security_headers_are_present() {
+    let dir = web_dir();
+    let router = with_static_files(Router::new(), &dir);
+    let response = router
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let headers = response.headers();
+
+    assert_eq!(
+        headers
+            .get(axum::http::header::STRICT_TRANSPORT_SECURITY)
+            .and_then(|value| value.to_str().ok()),
+        Some("max-age=31536000; includeSubDomains")
+    );
+    assert_eq!(
+        headers
+            .get(axum::http::header::X_CONTENT_TYPE_OPTIONS)
+            .and_then(|value| value.to_str().ok()),
+        Some("nosniff")
+    );
+    assert_eq!(
+        headers
+            .get(axum::http::header::X_FRAME_OPTIONS)
+            .and_then(|value| value.to_str().ok()),
+        Some("DENY")
+    );
+    let csp = headers
+        .get(axum::http::header::CONTENT_SECURITY_POLICY)
+        .and_then(|value| value.to_str().ok())
+        .expect("CSP must be present");
+    assert!(csp.contains("frame-ancestors 'none'"));
+    assert!(csp.contains("object-src 'none'"));
 
     std::fs::remove_dir_all(&dir).ok();
 }

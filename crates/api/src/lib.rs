@@ -159,7 +159,11 @@ pub fn router(state: AppState) -> Router {
 /// reach, and an API deployed without the frontend is a legitimate thing
 /// to want; neither should be a boot error.
 pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
-    use axum::http::header::CACHE_CONTROL;
+    use axum::http::header::{
+        CACHE_CONTROL, CONTENT_SECURITY_POLICY, REFERRER_POLICY, STRICT_TRANSPORT_SECURITY,
+        X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+    };
+    use axum::http::{HeaderName, HeaderValue};
     use tower::ServiceBuilder;
     use tower_http::services::{ServeDir, ServeFile};
     use tower_http::set_header::SetResponseHeaderLayer;
@@ -191,6 +195,40 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         axum::http::HeaderValue::from_static("no-cache"),
     ));
 
+    let permissions_policy = HeaderName::from_static("permissions-policy");
+    let opener_policy = HeaderName::from_static("cross-origin-opener-policy");
+    let security_headers = ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::overriding(
+            STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(
+                "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-N+xaTeCDA8wjkvbTZ+/lxDmcQp1jBxLpAaSrBNojwpI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests",
+            ),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            permissions_policy,
+            HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=()"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            opener_policy,
+            HeaderValue::from_static("same-origin"),
+        ));
+
     router
         // Explicit, because ServeDir would otherwise answer `/` with
         // index.html — which here is the dashboard shell, not the front
@@ -203,10 +241,7 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         .route_service("/app", revalidate.clone().service(ServeFile::new(&shell)))
         .route_service("/app/", revalidate.clone().service(ServeFile::new(&shell)))
         .fallback_service(
-            revalidate.service(
-                ServeDir::new(web_root)
-                    .append_index_html_on_directories(false)
-                    .fallback(ServeFile::new(&landing)),
-            ),
+            revalidate.service(ServeDir::new(web_root).append_index_html_on_directories(false)),
         )
+        .layer(security_headers)
 }
