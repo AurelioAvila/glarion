@@ -610,13 +610,48 @@ footer {
         </p>
       </div>
       <div class="column">
-        <h3>The report has your name on it.</h3>
+        <h3>It asks the site. It does not look up a version number.</h3>
         <p>
-          Findings come out as a numbered worklist with a plain-English reason and
-          a fix, under your agency's name and logo, printable to PDF. It is
-          written for the client to read, not for the person who ran the scan.
+          Tools in this bracket usually detect vulnerabilities by comparing the
+          versions installed against a database. Glarion requests paths the site
+          never advertised and tries known fingerprints against them, from the
+          outside, once you have proved the domain is yours. The findings come out
+          as a numbered worklist with a plain-English reason and a fix, under your
+          agency's name and logo, written for the client to read.
         </p>
       </div>
+    </div>
+  </section>
+
+  <!--
+    The objection the page used to leave standing.
+
+    An agency arriving here already pays for a maintenance dashboard that
+    updates plugins, takes backups and emails a client-branded report every
+    month. Until this section existed, nothing on the page told them why this
+    is not the thing they already have, and the honest answer is not "ours is
+    better" — it is that the two look for different things.
+  -->
+  <section class="wrap" id="already-paying">
+    <div class="section-rule"><h2>If you already pay for a maintenance dashboard</h2></div>
+    <div class="gate">
+      <p class="prose">
+        Keep it. It updates plugins, takes backups and watches uptime. Glarion does
+        none of that and is not trying to replace it.
+      </p>
+      <p class="prose">
+        What that kind of tool usually calls a security check is a version
+        comparison: it reads which plugins and which core are installed, and looks
+        them up in a vulnerability database. That finds the plugin everyone already
+        knows is bad. It does not find the path that answers when it should not, the
+        certificate expiring in three weeks, or the header that was never set —
+        because none of those are in the database. They are found by asking the
+        site, from the outside.
+      </p>
+      <p class="prose">
+        So the two answer different questions, and the second one is the question
+        your client asks the week somebody else's site gets defaced.
+      </p>
     </div>
   </section>
 
@@ -724,7 +759,7 @@ footer {
   </section>
 
   <section class="wrap" id="permission">
-    <div class="section-rule"><h2>What we will not do</h2></div>
+    <div class="section-rule"><h2>What a scan does, and what it will not touch</h2></div>
     <div class="gate">
       <p class="prose">
         A full scan probes: it requests paths a site never advertised and tries
