@@ -3,4 +3,4 @@ Allow: /
 Disallow: /app
 Disallow: /api/
 
-Sitemap: https://glarion-api.fly.dev/sitemap.xml
+Sitemap: https://glarion.app/sitemap.xml
