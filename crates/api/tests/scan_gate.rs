@@ -48,7 +48,7 @@ async fn test_pool() -> Option<PgPool> {
         .expect("migrations failed");
 
     // Fresh state per test run. Cascade because everything hangs off users.
-    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements cascade")
+    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements, rate_limit_buckets cascade")
         .execute(&pool)
         .await
         .expect("truncate failed");

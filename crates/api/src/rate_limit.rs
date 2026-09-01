@@ -5,13 +5,11 @@
 //! bounded, and an attacker with a credential-stuffing list only needs
 //! throughput, not cleverness.
 //!
-//! This is an in-process fixed-window counter, which means two things
-//! worth being honest about:
+//! Production handlers use a PostgreSQL-backed fixed-window counter, so all
+//! API replicas enforce the same budget. The in-process implementation is
+//! retained for deterministic policy tests and isolated callers.
 //!
-//!  * With more than one API instance the effective limit multiplies by the
-//!    instance count. It is a speed bump sized for a single-node
-//!    deployment; a shared store is the fix when we scale out.
-//!  * A fixed window allows a burst of up to 2× the limit across a window
+//! A fixed window allows a burst of up to 2× the limit across a window
 //!    boundary. Acceptable here — the goal is to make sustained guessing
 //!    impractical, not to police individual bursts.
 //!
@@ -23,6 +21,8 @@
 //! attacker-controlled, so it would let one client mint a fresh bucket per
 //! request and remove the limit entirely.
 
+use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
@@ -145,6 +145,38 @@ impl RateLimiter {
         buckets.insert(client, updated);
 
         allowed
+    }
+
+    /// Records the attempt in PostgreSQL so every API replica enforces one
+    /// shared budget. The client address is stored only as a one-way hash.
+    /// Database errors fail closed: an unavailable limiter must never turn
+    /// an authentication endpoint into an unlimited password oracle.
+    pub async fn check_shared(&self, pool: &PgPool, scope: &str, client: IpAddr) -> bool {
+        let client_key = format!("{:x}", Sha256::digest(client.to_string().as_bytes()));
+        let window_secs = self.window.as_secs().min(i32::MAX as u64) as i32;
+        let limit = i64::from(self.limit);
+
+        let count: Result<i64, _> = sqlx::query_scalar(
+            "insert into rate_limit_buckets (scope, client_key, window_started_at, attempt_count)
+             values ($1, $2, now(), 1)
+             on conflict (scope, client_key) do update set
+               attempt_count = case
+                 when rate_limit_buckets.window_started_at <= now() - ($3 * interval '1 second') then 1
+                 else least(rate_limit_buckets.attempt_count + 1, 9223372036854775807)
+               end,
+               window_started_at = case
+                 when rate_limit_buckets.window_started_at <= now() - ($3 * interval '1 second') then now()
+                 else rate_limit_buckets.window_started_at
+               end
+             returning attempt_count",
+        )
+        .bind(scope)
+        .bind(client_key)
+        .bind(window_secs)
+        .fetch_one(pool)
+        .await;
+
+        matches!(count, Ok(value) if value <= limit)
     }
 }
 
