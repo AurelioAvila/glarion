@@ -117,4 +117,87 @@ function render(payload) {
   cta.append(el('span', 'foot-note',
     'A full scan checks far more, and needs you to prove the domain is yours.'));
   result.append(cta);
+
+  result.append(emailCapture(payload.domain));
+}
+
+/*
+  A way to leave with the result instead of leaving with nothing.
+
+  Signing up is four steps and an email round-trip; somebody who has just
+  watched a check run on a client's domain is warm now, and asking for one
+  field is the smallest thing that keeps the conversation open. The endpoint
+  behind it answers identically whatever happens, so nothing here can be
+  used to test which addresses exist.
+*/
+function emailCapture(domain) {
+  const form = el('form', 'check');
+  const row = el('div', 'check-row');
+  const field = el('div', 'check-field');
+
+  const label = el('label', 'check-label', 'Email me this report');
+  label.htmlFor = 'preview-email';
+
+  const email = document.createElement('input');
+  email.id = 'preview-email';
+  email.type = 'email';
+  email.required = true;
+  email.autocomplete = 'email';
+  email.placeholder = 'you@agency.example';
+
+  const send = el('button', 'ghost', 'Send it');
+  send.type = 'submit';
+
+  const note = el('p', 'check-note foot-note',
+    'One message with what you just saw. No account, and nothing follows it.');
+
+  field.append(label, email);
+  row.append(field, send);
+  form.append(row, note);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const address = email.value.trim();
+    if (!address) {
+      note.textContent = 'Enter an address first.';
+      note.classList.add('is-error');
+      email.focus();
+      return;
+    }
+
+    send.disabled = true;
+    send.textContent = 'Sending';
+    note.classList.remove('is-error');
+
+    try {
+      const response = await fetch(`${api}/api/preview/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, email: address }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        note.textContent = payload.message || 'That could not be sent. Try again in a moment.';
+        note.classList.add('is-error');
+        send.disabled = false;
+        send.textContent = 'Send it';
+        return;
+      }
+
+      // The success answer is deliberately non-committal — see the endpoint.
+      // Replacing the form rather than leaving it armed: a second identical
+      // send would be refused by the cooldown, and offering an action that
+      // is going to be refused reads as a broken page.
+      form.replaceChildren(el('p', 'foot-note',
+        payload.message || 'If that address can receive it, the report is on its way.'));
+    } catch {
+      note.textContent = 'That could not be sent. Try again in a moment.';
+      note.classList.add('is-error');
+      send.disabled = false;
+      send.textContent = 'Send it';
+    }
+  });
+
+  return form;
 }

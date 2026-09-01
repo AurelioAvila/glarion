@@ -91,6 +91,18 @@ pub async fn email_preview(
 
     let email = normalize_email(&body.email)?;
 
+    // Refuse rather than promise. The answer below is deliberately
+    // non-committal, but "on its way" is still a claim, and when the last
+    // attempt to reach the provider failed it is a false one — so the caller
+    // gets an error they can act on instead. Read from the mailer's own
+    // state, not from anything about this address, so the response still
+    // carries no information about who has been sent what.
+    if !state.mailer.last_send_ok() {
+        return Err(ApiError::Internal(anyhow::anyhow!(
+            "refusing to promise delivery: the last message to the provider failed"
+        )));
+    }
+
     // The same answer whatever happens next.
     //
     // Saying "we sent it" versus "that address is rate limited" would turn
