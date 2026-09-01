@@ -46,9 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # not yet built — see the orchestrator's tool wrappers). Pinned rather than
 # tracking latest, so a template-format change upstream can't break scans
 # on a redeploy nobody triggered.
-ARG NUCLEI_VERSION=3.3.7
+ARG NUCLEI_VERSION=3.11.1
+ARG NUCLEI_SHA256=ea63d4ae232808cd7c6bc00d0142428e231fab59dae01042246097d195835ab6
 RUN curl -fsSL -o /tmp/nuclei.zip \
     "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    && echo "${NUCLEI_SHA256}  /tmp/nuclei.zip" | sha256sum --check --strict \
     && apt-get update && apt-get install -y --no-install-recommends unzip \
     && unzip -o /tmp/nuclei.zip -d /usr/local/bin nuclei \
     && chmod +x /usr/local/bin/nuclei \

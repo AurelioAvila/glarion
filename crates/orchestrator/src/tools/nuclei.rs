@@ -73,6 +73,10 @@ pub fn build_args(domain: &str) -> Vec<String> {
         // updates mid-run (which would make scans non-reproducible).
         "-no-interactsh",
         "-disable-update-check",
+        // Enforce the boundary again inside the scanner. The resolver check
+        // above protects the initial lookup; this blocks private and local
+        // destinations if DNS changes after that check.
+        "-restrict-local-network-access",
         // Quiet the banner/progress so stdout is pure JSONL.
         "-silent",
     ]
@@ -145,8 +149,9 @@ pub async fn run(domain: &str) -> Result<Vec<Finding>, NucleiError> {
     // A syntactically public hostname can still resolve to a private or
     // link-local address, which would point the scanner at our own network
     // or at the cloud metadata endpoint. Checked here, as late as possible,
-    // because the scanner resolves the name again itself and we cannot pin
-    // the address for an external process.
+    // because the scanner resolves the name again itself. The mandatory
+    // local-network restriction in `build_args` independently enforces the
+    // same boundary inside that process.
     net_guard::resolve_public_addresses(&domain)
         .await
         .map_err(|err| NucleiError::Refused(err.to_string()))?;
@@ -223,6 +228,11 @@ mod tests {
     #[test]
     fn args_disable_interactsh_callbacks() {
         assert!(build_args("example.com").contains(&"-no-interactsh".to_string()));
+    }
+
+    #[test]
+    fn args_block_local_network_access_inside_the_scanner() {
+        assert!(build_args("example.com").contains(&"-restrict-local-network-access".to_string()));
     }
 
     #[test]
