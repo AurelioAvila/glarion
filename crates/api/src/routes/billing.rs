@@ -435,16 +435,44 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     // Welcome only on the crossing from unpaid to paid. A row that was
     // already on a paid plan is renewing, and one that has just dropped to
     // free is not a moment to congratulate anyone.
-    if plan.allows_scheduling() {
-        let was_paid = previous
-            .as_ref()
-            .and_then(|(stored, _, _)| stored.as_deref())
-            .map(|stored| Plan::from_db_str(stored).allows_scheduling())
-            .unwrap_or(false);
-        if !was_paid {
-            if let Some((_, _, Some(email))) = previous.as_ref() {
-                send_subscription_welcome(state, email, plan).await;
-            }
+    // Whether this account was on a paid plan a moment ago. Both directions
+    // of the crossing need it: one to welcome, one to explain the loss.
+    let was_paid = previous
+        .as_ref()
+        .and_then(|(stored, _, _)| stored.as_deref())
+        .map(|stored| Plan::from_db_str(stored).allows_scheduling())
+        .unwrap_or(false);
+    let previous_plan = previous
+        .as_ref()
+        .and_then(|(stored, _, _)| stored.as_deref())
+        .map(Plan::from_db_str)
+        .unwrap_or(Plan::Free);
+
+    if plan.allows_scheduling() && !was_paid {
+        if let Some((_, _, Some(email))) = previous.as_ref() {
+            send_subscription_welcome(state, email, plan).await;
+        }
+    }
+
+    // The other direction, which said nothing at all before. The account
+    // dropped to free, scheduled scanning was switched off below, and the
+    // first the agency knew was noticing a client site had not been checked
+    // in a fortnight — on a security product, the worst thing to find late.
+    if !plan.allows_scheduling() && was_paid {
+        if let Some((_, _, Some(email))) = previous.as_ref() {
+            // Stripe says why itself when it knows. A subscription cancelled
+            // after dunning gives cancellation_details.reason, which is the
+            // difference between "your card needs updating" and "you chose to
+            // leave" — and getting that backwards reads as a company not
+            // paying attention.
+            let reason = subscription
+                .get("cancellation_details")
+                .and_then(|details| details.get("reason"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+            let payment_problem = reason == "payment_failure"
+                || matches!(status, "unpaid" | "incomplete_expired" | "incomplete");
+            send_subscription_ended(state, email, previous_plan, payment_problem).await;
         }
     }
 
@@ -480,6 +508,31 @@ fn stripe_secret() -> ApiResult<String> {
             tracing::error!("STRIPE_SECRET_KEY is unset");
             ApiError::Internal(anyhow::anyhow!("billing is not configured"))
         })
+}
+
+/// Best-effort notice that a paid plan has stopped.
+///
+/// Never returns an error, for the same reason the welcome does not: the
+/// entitlement has already been written by the time this runs, and failing
+/// the webhook over an email would have Stripe retry the whole delivery and
+/// re-apply work that already succeeded.
+async fn send_subscription_ended(state: &AppState, email: &str, plan: Plan, payment_problem: bool) {
+    let first_name: Option<String> =
+        sqlx::query_scalar("select first_name from users where email = $1")
+            .bind(email)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+    let message = orchestrator::mailer::subscription_ended_email(
+        first_name.as_deref().unwrap_or(""),
+        plan.display_name(),
+        payment_problem,
+        &state.mailer.app_link("/plan"),
+    );
+    if let Err(error) = state.mailer.send(email, &message).await {
+        tracing::warn!(%error, "could not send the subscription-ended notice");
+    }
 }
 
 /// Best-effort welcome after a first payment.

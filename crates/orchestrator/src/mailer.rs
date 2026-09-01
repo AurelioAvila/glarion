@@ -397,6 +397,67 @@ pub fn subscription_email(
     }
 }
 
+/// The message sent when a paid plan stops.
+///
+/// Nothing was sent before. The account dropped to free, scheduled scanning
+/// was switched off, and the first the agency knew of it was noticing that a
+/// client site had not been checked in a fortnight — on a security product,
+/// which is the worst possible thing to discover late.
+///
+/// The two cases are worded differently on purpose. A failed payment is a
+/// card that expired and is fixed in a minute; a cancellation is a decision
+/// somebody made. Telling a customer who chose to leave that their "payment
+/// did not go through" reads as a company that was not paying attention, and
+/// telling someone whose card bounced that their subscription "has ended"
+/// makes a recoverable problem sound final.
+pub fn subscription_ended_email(
+    first_name: &str,
+    plan_name: &str,
+    payment_problem: bool,
+    link: &str,
+) -> Message {
+    let hello = greeting(first_name);
+    let heading = if payment_problem {
+        "Your payment did not go through."
+    } else {
+        "Your plan has ended."
+    };
+    let explain = if payment_problem {
+        format!("We could not take payment for your Glarion {plan_name} plan, so scheduled scanning is paused and your account is back on the free plan. Updating the card puts it back exactly as it was.")
+    } else {
+        format!("Your Glarion {plan_name} plan has ended, so scheduled scanning is off and your account is back on the free plan. Subscribing again turns it back on.")
+    };
+    let action = if payment_problem {
+        "Update your card"
+    } else {
+        "Subscribe again"
+    };
+    let kept = "Nothing has been deleted. Your sites, their verifications and every report stay exactly where they are, and start being checked again the moment the plan does.";
+
+    Message {
+        subject: if payment_problem {
+            "Your Glarion payment did not go through".to_string()
+        } else {
+            "Your Glarion plan has ended".to_string()
+        },
+        html: chrome(Chrome {
+            preview: if payment_problem {
+                "Scheduled scanning is paused until the card is updated"
+            } else {
+                "Scheduled scanning is off until the plan is renewed"
+            },
+            eyebrow: if payment_problem { "Payment failed" } else { "Plan ended" },
+            heading,
+            body: &format!("{}{}{}", para(&hello), para(&explain), para(kept)),
+            cta: Some((action, link)),
+            footer: "This email is sent when a Glarion plan changes state. Stripe holds the payment record.",
+        }),
+        text: format!(
+            "{hello}\n\n{explain}\n\n{kept}\n\n{action}: {link}"
+        ),
+    }
+}
+
 /// The message sent when a monitored site changes.
 ///
 /// Deliberately short and specific. This is the only email an agency gets
@@ -954,5 +1015,50 @@ mod tests {
         // Reply-To pointing somewhere nobody reads is the same failure with
         // extra steps.
         assert!(mailer().reply_to.is_none());
+    }
+
+    /// A plan that stops has to say so, and has to say which kind of stop.
+    ///
+    /// Telling a customer who chose to leave that their payment "did not go
+    /// through" reads as a company not paying attention; telling someone
+    /// whose card bounced that their plan "has ended" makes a recoverable
+    /// problem sound final. The two wordings must not leak into each other.
+    #[test]
+    fn a_stopped_plan_says_which_kind_of_stop_it_was() {
+        let failed =
+            subscription_ended_email("Ada", "Agency", true, "https://glarion.example/app#/plan");
+        let chosen =
+            subscription_ended_email("Ada", "Agency", false, "https://glarion.example/app#/plan");
+
+        assert!(failed.subject.contains("did not go through"));
+        assert!(failed.html.contains("Updating the card"));
+        assert!(!failed.html.contains("has ended"));
+
+        assert!(chosen.subject.contains("has ended"));
+        assert!(chosen.html.contains("Subscribing again"));
+        assert!(!chosen.html.contains("did not go through"));
+    }
+
+    /// The sentence that stops a cancellation becoming a support ticket.
+    ///
+    /// An agency whose scanning has just switched off needs to know its
+    /// sites, verifications and reports are still there. Ownership
+    /// verification in particular is slow to redo, and someone who thinks
+    /// they have lost it does not come back.
+    #[test]
+    fn a_stopped_plan_promises_nothing_was_destroyed() {
+        for payment_problem in [true, false] {
+            let message = subscription_ended_email(
+                "Ada",
+                "Studio",
+                payment_problem,
+                "https://glarion.example/app",
+            );
+            assert!(
+                message.text.contains("Nothing has been deleted"),
+                "the reader must be told their work survives"
+            );
+            assert!(message.text.contains("verifications"));
+        }
     }
 }
