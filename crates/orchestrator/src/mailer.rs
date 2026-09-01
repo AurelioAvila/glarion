@@ -190,7 +190,28 @@ const INK_2: &str = "#9c9ea8";
 const INK_3: &str = "#7c7e88";
 const CLEAR: &str = "#52c78d";
 const ALARM: &str = "#ff6b57";
-const SITE: &str = "https://glarion-api.fly.dev";
+/// Where the chrome's own links point: the wordmark, the mark, and the three
+/// in the footer.
+///
+/// Read from the same PUBLIC_URL the action links are built from, not written
+/// down a second time. It was a constant, which was fine only for as long as
+/// the product never moved: the day a real domain is pointed at this app and
+/// PUBLIC_URL is updated, the button in an email would lead to the new host
+/// while the logo above it and every link below it still advertised
+/// glarion-api.fly.dev. Two answers to "where does this product live", in one
+/// message, is the sort of thing a reader notices and a sender does not.
+///
+/// Resolved once. The value cannot change without a restart, and a mail
+/// template is not the place to be reading the environment per render.
+fn site_url() -> &'static str {
+    static SITE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SITE.get_or_init(|| {
+        std::env::var("PUBLIC_URL")
+            .unwrap_or_else(|_| "https://glarion-api.fly.dev".to_string())
+            .trim_end_matches('/')
+            .to_string()
+    })
+}
 
 /// Renders the frame.
 ///
@@ -213,6 +234,7 @@ fn chrome(parts: Chrome<'_>) -> String {
     let eyebrow = escape(eyebrow);
     let heading = escape(heading);
     let footer = escape(footer);
+    let site = site_url();
     let button = match cta {
         Some((label, url)) => format!(
             r#"<table role="presentation" cellspacing="0" cellpadding="0" style="margin:26px 0 6px"><tr><td style="border-radius:8px;background:{CLEAR}"><a href="{}" style="display:inline-block;padding:12px 22px;color:#06251a;font-size:15px;font-weight:700;text-decoration:none">{} &nbsp;&rarr;</a></td></tr></table>"#,
@@ -223,7 +245,7 @@ fn chrome(parts: Chrome<'_>) -> String {
     };
 
     format!(
-        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>{preview}</title></head><body style="margin:0;padding:0;background:{BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{INK}"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{BG}"><tr><td align="center" style="padding:24px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background:{RAISE};border:1px solid {RULE};border-radius:14px;overflow:hidden"><tr><td style="height:3px;background:{CLEAR}"></td></tr><tr><td style="padding:20px 28px 17px;border-bottom:1px solid {RULE}"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td align="center" style="width:30px;height:30px;border-radius:8px;background:{CLEAR};color:#06251a;font-size:14px;font-weight:900"><img src="{SITE}/glarion-mark.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;object-fit:contain"></td><td style="padding-left:10px"><a href="{SITE}" style="color:{INK};font-size:19px;font-weight:800;text-decoration:none;letter-spacing:-.3px">Glarion</a></td></tr></table></td></tr><tr><td style="padding:28px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 14px"><tr><td style="padding:6px 10px;border:1px solid #2a4a3b;border-radius:999px;background:#10231a;color:{CLEAR};font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 style="margin:0 0 15px;color:{INK};font-size:24px;line-height:1.24;letter-spacing:-.4px">{heading}</h1>{body}{button}</td></tr><tr><td style="padding:17px 28px;background:{SINK};border-top:1px solid {RULE}"><p style="margin:0 0 6px;color:{INK_2};font-size:12px;line-height:1.6">{footer}</p><p style="margin:0;color:{INK_3};font-size:11px;line-height:1.5">Glarion &nbsp;&middot;&nbsp; <a href="{SITE}" style="color:{INK_2}">Website</a> &nbsp;&middot;&nbsp; <a href="{SITE}/privacy.html" style="color:{INK_2}">Privacy</a> &nbsp;&middot;&nbsp; <a href="{SITE}/terms.html" style="color:{INK_2}">Terms</a></p></td></tr></table></td></tr></table></body></html>"#
+        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>{preview}</title></head><body style="margin:0;padding:0;background:{BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{INK}"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{BG}"><tr><td align="center" style="padding:24px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background:{RAISE};border:1px solid {RULE};border-radius:14px;overflow:hidden"><tr><td style="height:3px;background:{CLEAR}"></td></tr><tr><td style="padding:20px 28px 17px;border-bottom:1px solid {RULE}"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td align="center" style="width:30px;height:30px;border-radius:8px;background:{CLEAR};color:#06251a;font-size:14px;font-weight:900"><img src="{site}/glarion-mark.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;object-fit:contain"></td><td style="padding-left:10px"><a href="{site}" style="color:{INK};font-size:19px;font-weight:800;text-decoration:none;letter-spacing:-.3px">Glarion</a></td></tr></table></td></tr><tr><td style="padding:28px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 14px"><tr><td style="padding:6px 10px;border:1px solid #2a4a3b;border-radius:999px;background:#10231a;color:{CLEAR};font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 style="margin:0 0 15px;color:{INK};font-size:24px;line-height:1.24;letter-spacing:-.4px">{heading}</h1>{body}{button}</td></tr><tr><td style="padding:17px 28px;background:{SINK};border-top:1px solid {RULE}"><p style="margin:0 0 6px;color:{INK_2};font-size:12px;line-height:1.6">{footer}</p><p style="margin:0;color:{INK_3};font-size:11px;line-height:1.5">Glarion &nbsp;&middot;&nbsp; <a href="{site}" style="color:{INK_2}">Website</a> &nbsp;&middot;&nbsp; <a href="{site}/privacy.html" style="color:{INK_2}">Privacy</a> &nbsp;&middot;&nbsp; <a href="{site}/terms.html" style="color:{INK_2}">Terms</a></p></td></tr></table></td></tr></table></body></html>"#
     )
 }
 
@@ -837,5 +859,51 @@ mod tests {
 
         assert!(!message.html.contains("<script>alert(1)</script>"));
         assert!(message.html.contains("&lt;script&gt;"));
+    }
+
+    /// The chrome's links and the action link must name the same host.
+    ///
+    /// They did not have to before, because both happened to be the same
+    /// string. The day a real domain is pointed at this app, PUBLIC_URL moves
+    /// and a hard-coded constant would not — leaving a button that goes to
+    /// the new host under a logo that still links to the old one.
+    #[test]
+    fn the_chrome_and_the_action_link_agree_on_where_the_product_lives() {
+        let host = site_url();
+        let message = verification_email("Ada", &format!("{host}/app#/verify/x"));
+
+        assert!(
+            message.html.contains(&format!("href=\"{host}\"")),
+            "the wordmark must link to the configured host"
+        );
+        assert!(
+            message.html.contains(&format!("{host}/privacy.html")),
+            "and so must the footer"
+        );
+        assert!(
+            message
+                .html
+                .contains(&format!("src=\"{host}/glarion-mark.png\"")),
+            "and the mark must be loaded from it"
+        );
+        // Every absolute URL in the message, not just the three checked
+        // above. Asserting "the old host is absent" would prove nothing while
+        // the old host is also the default; asserting that no *other* origin
+        // appears at all catches a literal reintroduced anywhere, whatever it
+        // is set to.
+        let mut rest = message.html.as_str();
+        let mut origins = 0;
+        while let Some(at) = rest.find("https://") {
+            rest = &rest[at..];
+            let end = rest.find(['"', '\'', '<', ' ']).unwrap_or(rest.len());
+            let url = &rest[..end];
+            assert!(
+                url.starts_with(host),
+                "an absolute URL that PUBLIC_URL did not put there: {url}"
+            );
+            origins += 1;
+            rest = &rest[end..];
+        }
+        assert!(origins >= 4, "expected the chrome's links to be absolute");
     }
 }
