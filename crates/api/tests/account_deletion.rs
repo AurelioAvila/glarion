@@ -42,7 +42,7 @@ async fn test_pool() -> Option<PgPool> {
         .await
         .expect("migrations failed");
 
-    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements cascade")
+    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements, rate_limit_buckets cascade")
         .execute(&pool)
         .await
         .expect("truncate failed");

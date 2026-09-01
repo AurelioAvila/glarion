@@ -102,7 +102,11 @@ pub async fn signup(
 ) -> ApiResult<Json<SignupResponse>> {
     // Rate limited alongside login: unlimited signup is an account-flooding
     // and mail-bombing primitive even though no password is being guessed.
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -236,7 +240,11 @@ pub async fn resend_verification(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<ResendRequest>,
 ) -> ApiResult<Json<MessageResponse>> {
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -297,7 +305,11 @@ pub async fn login(
     // Checked before anything else: an attacker must not be able to spend
     // our Argon2 cycles, or learn anything from the response, once they are
     // over the limit.
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
