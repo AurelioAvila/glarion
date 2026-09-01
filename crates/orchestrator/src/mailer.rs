@@ -20,6 +20,14 @@ pub struct Mailer {
     /// from the request, because a link built from an attacker-supplied
     /// Host header is how confirmation emails get turned into phishing.
     pub public_url: String,
+    /// Where a reply goes, when `from` is an address nobody reads.
+    ///
+    /// The password-changed notice tells the reader to reply straight away if
+    /// the change was not theirs. That is the single most time-critical
+    /// sentence this system sends, and from a noreply@ address it goes
+    /// nowhere — the person doing the right thing, quickly, reaches a bin.
+    /// Set MAIL_REPLY_TO to a monitored inbox.
+    reply_to: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -29,6 +37,10 @@ struct ResendPayload<'a> {
     subject: &'a str,
     html: &'a str,
     text: &'a str,
+    /// Omitted entirely when unset, rather than sent empty — Resend rejects a
+    /// blank one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_to: Option<&'a str>,
 }
 
 /// A complete message: what it is called, and both bodies.
@@ -57,6 +69,10 @@ impl Mailer {
                 .unwrap_or_else(|_| "http://localhost:5173".to_string())
                 .trim_end_matches('/')
                 .to_string(),
+            reply_to: std::env::var("MAIL_REPLY_TO")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
         }
     }
 
@@ -89,6 +105,7 @@ impl Mailer {
             subject: &message.subject,
             html: &message.html,
             text: &message.text,
+            reply_to: self.reply_to.as_deref(),
         };
 
         let response = reqwest::Client::new()
@@ -548,6 +565,7 @@ mod tests {
             api_key: None,
             from: "Glarion <hello@example.com>".to_string(),
             public_url: "https://glarion.example".to_string(),
+            reply_to: None,
         }
     }
 
@@ -615,6 +633,7 @@ mod tests {
             api_key: None,
             from: "x@example.com".into(),
             public_url: "https://glarion.app".into(),
+            reply_to: None,
         };
 
         assert_eq!(
@@ -731,6 +750,7 @@ mod tests {
             api_key: None,
             from: "x@example.com".into(),
             public_url: "https://glarion.app/".trim_end_matches('/').to_string(),
+            reply_to: None,
         };
 
         assert!(!mailer.verification_link("tok").contains("app//"));
@@ -905,5 +925,34 @@ mod tests {
             rest = &rest[end..];
         }
         assert!(origins >= 4, "expected the chrome's links to be absolute");
+    }
+
+    /// The password-changed notice tells the reader to reply straight away if
+    /// the change was not theirs. It is the most time-critical sentence this
+    /// system sends, and from a noreply@ address it reaches a bin — the
+    /// person doing the right thing, quickly, is the one it fails.
+    ///
+    /// This pins the shape rather than the address: the message still says
+    /// reply, and the transport still has somewhere to carry a reply to.
+    #[test]
+    fn the_security_notice_asks_for_a_reply_and_a_reply_can_arrive() {
+        let message = password_changed_email("Ada");
+        assert!(
+            message.text.contains("reply to this message"),
+            "the notice must keep telling people to get in touch"
+        );
+
+        let configured = Mailer {
+            api_key: None,
+            from: "Glarion <noreply@example.com>".to_string(),
+            public_url: "https://glarion.example".to_string(),
+            reply_to: Some("security@example.com".to_string()),
+        };
+        assert_eq!(configured.reply_to.as_deref(), Some("security@example.com"));
+
+        // Unset is the honest default rather than a guessed address: a
+        // Reply-To pointing somewhere nobody reads is the same failure with
+        // extra steps.
+        assert!(mailer().reply_to.is_none());
     }
 }
