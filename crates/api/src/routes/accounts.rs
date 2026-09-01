@@ -13,7 +13,9 @@ use uuid::Uuid;
 use crate::auth::{hash_password, issue_token, verify_password, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
-use orchestrator::mailer::verification_email;
+use orchestrator::mailer::{
+    password_changed_email, password_reset_email, verification_email, welcome_email,
+};
 
 /// Minimum password length. Deliberately a length floor rather than a
 /// composition rule (no "must contain a symbol") — length is what actually
@@ -40,6 +42,18 @@ const VERIFICATION_VALID_HOURS: i64 = 24;
 /// How long before another confirmation email may be requested. Stops the
 /// resend endpoint from being used to send someone repeated mail.
 const RESEND_COOLDOWN_MINUTES: i64 = 2;
+
+/// How long a password-reset link stays usable.
+///
+/// Much shorter than the 24 hours a confirmation link gets, and on purpose: a
+/// confirmation link can only prove an address, while a reset link *is* the
+/// account for as long as it lives. An hour is enough to read an email and
+/// act on it, and short enough that a link left sitting in a mailbox that is
+/// later compromised is usually already dead.
+const RESET_VALID_MINUTES: i64 = 60;
+
+/// How long before another reset email may be requested for the same account.
+const RESET_COOLDOWN_MINUTES: i64 = 2;
 
 #[derive(Deserialize)]
 pub struct SignupRequest {
@@ -79,6 +93,18 @@ pub struct VerifyRequest {
 #[derive(Deserialize)]
 pub struct ResendRequest {
     pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub password: String,
+    pub password_confirmation: String,
 }
 
 #[derive(Serialize)]
@@ -221,14 +247,24 @@ pub async fn signup(
 /// the resend endpoint; a misleading error is not.
 async fn send_verification(state: &AppState, email: &str, first_name: &str, token: &str) {
     let link = state.mailer.verification_link(token);
-    let body = verification_email(first_name, &link);
+    let message = verification_email(first_name, &link);
 
-    if let Err(error) = state
-        .mailer
-        .send(email, "Confirm your email address", &body)
-        .await
-    {
+    if let Err(error) = state.mailer.send(email, &message).await {
         tracing::error!(error = ?error, "could not send the confirmation email");
+    }
+}
+
+/// Sent once the address is confirmed, never before.
+///
+/// Best-effort, for the same reason the confirmation itself is: the account
+/// is already usable by the time this runs, so a mail provider having a bad
+/// minute must not turn a successful confirmation into an error the person
+/// would read as "it did not work".
+async fn send_welcome(state: &AppState, email: &str, first_name: &str) {
+    let message = welcome_email(first_name, &state.mailer.app_link("/targets"));
+
+    if let Err(error) = state.mailer.send(email, &message).await {
+        tracing::warn!(error = ?error, "could not send the welcome email");
     }
 }
 
@@ -241,21 +277,28 @@ pub async fn verify_email(
 
     // Clearing the hash in the same statement makes the link single-use:
     // a second request finds no row rather than succeeding again.
-    let row: Option<(Uuid, i32)> = sqlx::query_as(
+    let row: Option<(Uuid, i32, String, String)> = sqlx::query_as(
         "update users
          set email_verified_at = coalesce(email_verified_at, now()),
              verification_token_hash = null
          where verification_token_hash = $1 and verification_sent_at > $2
-         returning id, token_version",
+         returning id, token_version, email, coalesce(first_name, '')",
     )
     .bind(&token_hash)
     .bind(cutoff)
     .fetch_optional(&state.pool)
     .await?;
 
-    let (user_id, token_version) = row.ok_or_else(|| {
+    let (user_id, token_version, email, first_name) = row.ok_or_else(|| {
         ApiError::BadRequest("This confirmation link is no longer valid. Request a new one.".into())
     })?;
+
+    // Exactly once per account, without needing a column to remember it: the
+    // statement above only matches a row that still holds this token hash and
+    // clears it in the same breath, and resend_verification refuses to issue
+    // a new token to an address that is already confirmed. So there is no
+    // second path back through here for an account that has been welcomed.
+    send_welcome(&state, &email, &first_name).await;
 
     // Signing in here saves the user a round trip through the sign-in form
     // immediately after proving they control the address.
@@ -413,6 +456,158 @@ pub async fn logout(
             .map_err(|_| ApiError::Unauthorized)?,
     );
     Ok((headers, StatusCode::NO_CONTENT))
+}
+
+/// Starts a password reset.
+///
+/// Answers identically whether or not the address has an account, whether or
+/// not it is confirmed, and whether or not anything was actually sent. The
+/// sign-in endpoint goes to real trouble not to leak which addresses are
+/// registered — including hashing against a decoy so the *timing* does not
+/// leak it either — and an honest "no account with that email" here would
+/// give away for free exactly what that protects.
+pub async fn forgot_password(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Json(body): Json<ForgotPasswordRequest>,
+) -> ApiResult<Json<MessageResponse>> {
+    if !state.auth_limiter.check(peer.ip()) {
+        return Err(ApiError::TooManyRequests);
+    }
+
+    let email = normalize_email(&body.email)?;
+
+    let answer = Ok(Json(MessageResponse {
+        message: "If that address has an account, a reset link is on its way.".into(),
+    }));
+
+    let row: Option<(Uuid, Option<String>, Option<DateTime<Utc>>)> =
+        sqlx::query_as("select id, first_name, password_reset_sent_at from users where email = $1")
+            .bind(&email)
+            .fetch_optional(&state.pool)
+            .await?;
+
+    let Some((user_id, first_name, sent_at)) = row else {
+        return answer;
+    };
+
+    // Per-account cooldown on top of the per-IP limiter. Without it, one
+    // address can be mail-bombed from a rotating set of IPs, each of which
+    // stays comfortably inside its own budget.
+    if let Some(sent_at) = sent_at {
+        if Utc::now() - sent_at < Duration::minutes(RESET_COOLDOWN_MINUTES) {
+            return answer;
+        }
+    }
+
+    let (token, token_hash) = new_verification_token();
+    sqlx::query(
+        "update users
+         set password_reset_token_hash = $2, password_reset_sent_at = now()
+         where id = $1",
+    )
+    .bind(user_id)
+    .bind(&token_hash)
+    .execute(&state.pool)
+    .await?;
+
+    let link = state.mailer.reset_link(&token);
+    let message = password_reset_email(
+        first_name.as_deref().unwrap_or(""),
+        &link,
+        RESET_VALID_MINUTES,
+    );
+    if let Err(error) = state.mailer.send(&email, &message).await {
+        // Logged rather than surfaced. The caller cannot act on our mail
+        // provider having a bad minute, and an error here that the "if that
+        // address has an account" path does not also produce would tell an
+        // attacker the address exists.
+        tracing::error!(error = ?error, "could not send the password reset email");
+    }
+
+    answer
+}
+
+/// Finishes a password reset.
+///
+/// Three things happen together and none of them is optional:
+///   * the token is consumed in the same statement that reads it, so a
+///     replay finds no row rather than succeeding twice;
+///   * `token_version` is bumped, which invalidates every session that
+///     already exists — the point of a reset is to take an account back from
+///     somebody, and leaving their session alive would defeat it entirely;
+///   * the address is marked confirmed if it was not, because receiving this
+///     link proves control of the inbox exactly as the confirmation link
+///     does, and refusing afterwards would leave an account that can neither
+///     sign in nor be recovered.
+pub async fn reset_password(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Json(body): Json<ResetPasswordRequest>,
+) -> ApiResult<(HeaderMap, Json<SessionResponse>)> {
+    if !state.auth_limiter.check(peer.ip()) {
+        return Err(ApiError::TooManyRequests);
+    }
+
+    if body.password != body.password_confirmation {
+        return Err(ApiError::BadRequest("the passwords do not match".into()));
+    }
+
+    let password_len = body.password.chars().count();
+    if password_len < MIN_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at least {MIN_PASSWORD_LEN} characters"
+        )));
+    }
+    if password_len > MAX_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_LEN} characters"
+        )));
+    }
+
+    let token_hash = hash_token(body.token.trim());
+    let cutoff = Utc::now() - Duration::minutes(RESET_VALID_MINUTES);
+    let password_hash = hash_password(&body.password)?;
+
+    let row: Option<(Uuid, i32, String, Option<String>)> = sqlx::query_as(
+        "update users
+         set password_hash = $3,
+             password_reset_token_hash = null,
+             password_reset_sent_at = null,
+             email_verified_at = coalesce(email_verified_at, now()),
+             token_version = token_version + 1
+         where password_reset_token_hash = $1 and password_reset_sent_at > $2
+         returning id, token_version, email, first_name",
+    )
+    .bind(&token_hash)
+    .bind(cutoff)
+    .bind(&password_hash)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (user_id, token_version, email, first_name) = row.ok_or_else(|| {
+        ApiError::BadRequest("This reset link is no longer valid. Request a new one.".into())
+    })?;
+
+    // Best-effort, after the fact: the password has already changed, and
+    // failing the request now would tell someone their reset did not work
+    // when it did — leaving them with a password they do not know they have.
+    let notice = password_changed_email(first_name.as_deref().unwrap_or(""));
+    if let Err(error) = state.mailer.send(&email, &notice).await {
+        tracing::warn!(error = ?error, "could not send the password-changed notice");
+    }
+
+    // Signed in immediately, like confirmation is: they have just proved
+    // control of the address and set the password, so asking for it back on
+    // a sign-in form adds a step and proves nothing further. The session goes
+    // into the same httpOnly cookie every other entry point sets — a reset
+    // that handed the token back in the body would be the one path where a
+    // session lands somewhere script can read it.
+    let token = issue_token(&state.jwt_secret, user_id, token_version)?;
+    Ok((
+        session_header(&state, &token)?,
+        Json(SessionResponse { user_id }),
+    ))
 }
 
 #[derive(Deserialize)]

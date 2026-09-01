@@ -167,6 +167,9 @@ function renderSignIn(): void {
       "No account yet? ",
       el("a", { class: "inline", href: "#/signup", text: "Create one" }),
     ]),
+    el("p", { class: "switch" }, [
+      el("a", { class: "inline", href: "#/forgot", text: "Forgot your password?" }),
+    ]),
   ]);
 
   on(form, "submit", (event) => {
@@ -413,6 +416,146 @@ async function renderVerify(token: string): Promise<void> {
       ]),
     );
   }
+}
+
+/// Asks for the address to send a reset link to.
+///
+/// The confirmation shown afterwards is deliberately the same sentence
+/// whatever happened — sent, not sent, no such account. The API answers that
+/// way for a reason (it must not become a way to test which addresses are
+/// registered), and a screen that said "we could not find that account" would
+/// hand back exactly what the API withheld.
+function renderForgotPassword(): void {
+  const container = root();
+  clear(container);
+
+  const message = el("div");
+  const email = el("input", {
+    type: "email",
+    required: true,
+    autocomplete: "email",
+    value: rememberedEmail.get() ?? "",
+  });
+  const button = submitButton("Send the reset link");
+
+  const form = el("form", { class: "auth" }, [
+    el("h1", { text: "Reset your password" }),
+    message,
+    field(
+      "Email",
+      email,
+      el("span", { class: "hint", text: "We will send a link that works once and lasts an hour." }),
+    ),
+    button,
+    el("p", { class: "switch" }, [
+      "Remembered it? ",
+      el("a", { class: "inline", href: "#/signin", text: "Sign in" }),
+    ]),
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+
+    void withPending(button, "Sending…", async () => {
+      try {
+        const result = await api.forgotPassword(email.value);
+        clear(container);
+        container.append(
+          el("div", { class: "auth" }, [
+            el("h1", { text: "Check your email" }),
+            notice("ok", result.message),
+            el("p", {
+              class: "hint",
+              text: "If nothing arrives in a few minutes, look in your spam folder before asking for another link.",
+            }),
+            el("p", { class: "switch" }, [
+              el("a", { class: "inline", href: "#/signin", text: "Back to sign in" }),
+            ]),
+          ]),
+        );
+      } catch (error) {
+        message.replaceChildren(notice("error", describeError(error)));
+      }
+    });
+  });
+
+  container.append(form);
+  email.focus();
+}
+
+/// Landing page for the link in the reset email.
+///
+/// The token is never put in the DOM as a link and never re-sent anywhere
+/// except this one request. Once it succeeds the session it returns is used
+/// straight away: the person has just proved they control the address and
+/// chosen the password, so a sign-in form here would ask them to prove the
+/// same thing twice.
+function renderResetPassword(token: string): void {
+  const container = root();
+  clear(container);
+
+  const message = el("div");
+  const password = el("input", {
+    type: "password",
+    required: true,
+    autocomplete: "new-password",
+    minlength: 12,
+  });
+  const confirmation = el("input", { type: "password", required: true, autocomplete: "new-password" });
+  const button = submitButton("Set the new password");
+
+  const mismatch = el("span", { class: "hint hint-error", hidden: true });
+  const checkMatch = (): void => {
+    const differ = confirmation.value !== "" && confirmation.value !== password.value;
+    mismatch.hidden = !differ;
+    mismatch.textContent = differ ? "The passwords do not match." : "";
+  };
+  on(password, "input", checkMatch);
+  on(confirmation, "input", checkMatch);
+
+  const form = el("form", { class: "auth" }, [
+    el("h1", { text: "Choose a new password" }),
+    message,
+    field("New password", password, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("Repeat password", confirmation, mismatch),
+    el("p", {
+      class: "hint",
+      text: "Everywhere you are currently signed in will be signed out.",
+    }),
+    button,
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+
+    if (password.value !== confirmation.value) {
+      checkMatch();
+      confirmation.focus();
+      return;
+    }
+
+    void withPending(button, "Saving…", async () => {
+      try {
+        await api.resetPassword(token, password.value, confirmation.value);
+        session.set();
+        window.location.hash = "#/targets";
+      } catch (error) {
+        message.replaceChildren(
+          notice("error", describeError(error)),
+          el("p", { class: "switch" }, [
+            "Links expire after an hour. You can ",
+            el("a", { class: "inline", href: "#/forgot", text: "ask for a new one" }),
+            ".",
+          ]),
+        );
+      }
+    });
+  });
+
+  container.append(form);
+  password.focus();
 }
 
 // --- sites -----------------------------------------------------------------
@@ -1894,6 +2037,19 @@ function routeInner(): void {
   // signed in as somebody else. The token decides, not the session.
   if (parts[0] === "verify" && parts[1]) {
     void renderVerify(parts[1]);
+    return;
+  }
+
+  // Recovery links, like confirmation links, get followed while signed out
+  // and sometimes while signed in as somebody else. The token decides, not
+  // the session — otherwise the one person who most needs this screen, the
+  // one with a stale session in another tab, is bounced away from it.
+  if (parts[0] === "reset" && parts[1]) {
+    renderResetPassword(parts[1]);
+    return;
+  }
+  if (parts[0] === "forgot") {
+    renderForgotPassword();
     return;
   }
 

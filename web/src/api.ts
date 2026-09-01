@@ -305,6 +305,21 @@ export const api = {
     return request<{ message: string }>("POST", "/api/auth/resend-verification", { email });
   },
 
+  forgotPassword(email: string) {
+    return request<{ message: string }>("POST", "/api/auth/forgot-password", { email });
+  },
+
+  // No token in the reply: the session arrives as an HttpOnly cookie, the same
+  // as sign-in and confirmation. A reset that handed one back in the body
+  // would be the single path where a session lands where script can read it.
+  resetPassword(token: string, password: string, passwordConfirmation: string) {
+    return request<{ user_id: string }>("POST", "/api/auth/reset-password", {
+      token,
+      password,
+      password_confirmation: passwordConfirmation,
+    });
+  },
+
   login(email: string, password: string) {
     return request<{ user_id: string }>("POST", "/api/auth/login", {
       email,
