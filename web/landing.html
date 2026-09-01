@@ -16,14 +16,25 @@
 <meta property="og:url" content="https://glarion-api.fly.dev/">
 <meta property="og:title" content="Glarion — Website Security Monitoring for Agencies">
 <meta property="og:description" content="Check any domain without an account, then monitor verified client sites and deliver clear white-label reports.">
-<meta property="og:image" content="https://glarion-api.fly.dev/glarion-mark.png">
-<meta property="og:image:width" content="1254">
-<meta property="og:image:height" content="1254">
-<meta property="og:image:alt" content="Glarion verification aperture mark">
-<meta name="twitter:card" content="summary">
+<!--
+  A landscape card rather than the square mark alone. The mark under
+  twitter:card=summary renders as a thumbnail beside the title; the 1200x630
+  form under summary_large_image renders full width, roughly twice the
+  footprint in the places these links actually get shared — a Slack channel
+  or a DM far more often than a public timeline. Slack, Discord and iMessage
+  read these same tags, so this applies with or without an account anywhere.
+
+  Drawn by scripts/og-image.sh and committed; it is not built at deploy time.
+  The square mark stays the favicon, which is what it is drawn for.
+-->
+<meta property="og:image" content="https://glarion-api.fly.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Glarion — security monitoring for the sites you look after.">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Glarion — Website Security Monitoring for Agencies">
 <meta name="twitter:description" content="Monitor verified client websites and turn scanner noise into clear, actionable reports.">
-<meta name="twitter:image" content="https://glarion-api.fly.dev/glarion-mark.png">
+<meta name="twitter:image" content="https://glarion-api.fly.dev/og.png">
 <link rel="icon" type="image/png" href="/glarion-mark.png">
 <link rel="apple-touch-icon" href="/glarion-mark.png">
 <link rel="manifest" href="/site.webmanifest">
