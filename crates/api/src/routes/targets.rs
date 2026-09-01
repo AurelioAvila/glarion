@@ -19,7 +19,7 @@ use std::net::SocketAddr;
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
-use crate::billing::Plan;
+use crate::billing::current_plan;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -102,17 +102,12 @@ pub async fn set_cadence(
     // rather than only hidden in the interface: a control nobody can see is
     // not a limit, it is a suggestion.
     if cadence != Cadence::Manual {
-        let plan: Option<String> = sqlx::query_scalar(
-            "select plan from entitlements where user_id = $1 and product = 'glarion'",
-        )
-        .bind(user.id)
-        .fetch_optional(&state.pool)
-        .await?;
-
         // No row reads as the free plan, the same fail-closed way the site
-        // allowance does.
-        let plan = Plan::from_db_str(plan.as_deref().unwrap_or("free"));
-        if !plan.allows_scheduling() {
+        // allowance does. See billing::current_plan.
+        if !current_plan(&state.pool, user.id)
+            .await?
+            .allows_scheduling()
+        {
             return Err(ApiError::PlanLimit(
                 "automatic checks are part of the paid plans".into(),
             ));
@@ -181,17 +176,12 @@ pub async fn create_target(
     // Storing the allowance as well as the plan meant two sources of truth
     // that drift apart the moment either is written without the other —
     // and the one that drifts is the one enforcing a paid limit.
-    let plan: Option<String> = sqlx::query_scalar(
-        "select plan from entitlements where user_id = $1 and product = 'glarion'",
-    )
-    .bind(user.id)
-    .fetch_optional(&state.pool)
-    .await?;
-
-    // No row reads as the free plan rather than as no allowance at all: a
-    // missing entitlement is our bookkeeping problem, and locking somebody
-    // out of the product entirely is the wrong way to notice it.
-    let plan = Plan::from_db_str(plan.as_deref().unwrap_or("free"));
+    //
+    // A missing entitlement reads as the free plan rather than as no
+    // allowance at all: that is our bookkeeping problem, and locking somebody
+    // out of the product entirely is the wrong way to notice it. See
+    // billing::current_plan.
+    let plan = current_plan(&state.pool, user.id).await?;
     let max_targets = plan.max_targets();
 
     let current: i64 = sqlx::query_scalar("select count(*) from targets where user_id = $1")
