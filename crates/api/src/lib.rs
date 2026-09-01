@@ -60,8 +60,15 @@ pub async fn run() -> Result<()> {
             .allow_headers([
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderName::from_static("x-glarion-csrf"),
             ])
-            .allow_methods([axum::http::Method::GET, axum::http::Method::POST]),
+            .allow_credentials(true)
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+            ]),
     );
 
     // Relative to the working directory, which is the repository root in
@@ -103,6 +110,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/preview/email", post(routes::preview::email_preview))
         .route("/api/auth/signup", post(routes::accounts::signup))
         .route("/api/auth/login", post(routes::accounts::login))
+        .route("/api/auth/logout", post(routes::accounts::logout))
         .route("/api/auth/verify", post(routes::accounts::verify_email))
         .route(
             "/api/auth/resend-verification",

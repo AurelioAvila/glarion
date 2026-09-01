@@ -20,6 +20,7 @@
 use argon2::Argon2;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use axum::http::Method;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use chrono::{Duration, Utc};
@@ -110,10 +111,7 @@ pub fn decode_token(secret: &str, token: &str) -> Result<Claims, ApiError> {
     // this module ever issues. A token whose header claims a different
     // algorithm is rejected here rather than by inspecting `alg` — nothing
     // downstream ever asks what algorithm a token claims to use.
-    if URL_SAFE_NO_PAD
-        .decode(header_b64)
-        .is_ok_and(|decoded| decoded != HEADER_JSON.as_bytes())
-    {
+    if URL_SAFE_NO_PAD.decode(header_b64).as_deref() != Ok(HEADER_JSON.as_bytes()) {
         return Err(ApiError::Unauthorized);
     }
 
@@ -159,16 +157,33 @@ impl FromRequestParts<AppState> for AuthUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let header = parts
+        let bearer = parts
             .headers
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
-            .ok_or(ApiError::Unauthorized)?;
+            .and_then(|header| header.strip_prefix("Bearer "))
+            .map(str::trim);
+        let cookie = parts
+            .headers
+            .get(axum::http::header::COOKIE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(session_cookie);
+        let token = bearer.or(cookie).ok_or(ApiError::Unauthorized)?;
 
-        let token = header
-            .strip_prefix("Bearer ")
-            .ok_or(ApiError::Unauthorized)?
-            .trim();
+        // SameSite is the first CSRF boundary. The explicit non-simple
+        // header is the second: a hostile site cannot add it without a
+        // successful CORS preflight. Legacy bearer sessions remain valid
+        // during migration and do not need CSRF protection.
+        if bearer.is_none()
+            && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS)
+            && parts
+                .headers
+                .get("x-glarion-csrf")
+                .and_then(|value| value.to_str().ok())
+                != Some("1")
+        {
+            return Err(ApiError::Unauthorized);
+        }
 
         let claims = decode_token(&state.jwt_secret, token)?;
 
@@ -187,6 +202,13 @@ impl FromRequestParts<AppState> for AuthUser {
             _ => Err(ApiError::Unauthorized),
         }
     }
+}
+
+fn session_cookie(header: &str) -> Option<&str> {
+    header.split(';').find_map(|part| {
+        let (name, value) = part.trim().split_once('=')?;
+        (name == "glarion_session" && !value.is_empty()).then_some(value)
+    })
 }
 
 #[cfg(test)]
@@ -289,5 +311,14 @@ mod tests {
         let token = format!("{signing_input}.{signature}");
 
         assert!(decode_token(SECRET, &token).is_err());
+    }
+
+    #[test]
+    fn session_cookie_is_parsed_by_exact_name() {
+        assert_eq!(
+            session_cookie("theme=dark; glarion_session=abc.def; x=1"),
+            Some("abc.def")
+        );
+        assert_eq!(session_cookie("not_glarion_session=token"), None);
     }
 }

@@ -24,6 +24,7 @@ use std::net::SocketAddr;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+use api::auth::issue_token;
 use api::state::AppState;
 
 const JWT_SECRET: &str = "integration-test-secret-long-enough-for-hs256";
@@ -134,9 +135,19 @@ async fn signup(app: &axum::Router, pool: &PgPool, email: &str) -> (String, Uuid
     .await;
 
     assert_eq!(status, StatusCode::OK, "login failed: {body}");
+    assert!(
+        body.get("token").is_none(),
+        "session credentials must never be exposed to browser JavaScript"
+    );
+    let user_id = Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap();
+    let token_version: i32 = sqlx::query_scalar("select token_version from users where id = $1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
     (
-        body["token"].as_str().unwrap().to_string(),
-        Uuid::parse_str(body["user_id"].as_str().unwrap()).unwrap(),
+        issue_token(JWT_SECRET, user_id, token_version).unwrap(),
+        user_id,
     )
 }
 
@@ -181,6 +192,35 @@ async fn an_unconfirmed_account_cannot_sign_in() {
 
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body["error"], "email_not_verified");
+}
+
+#[tokio::test]
+async fn cookie_sessions_require_csrf_on_state_changing_requests() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+    let (token, _) = signup(&app, &pool, "cookie-csrf@example.com").await;
+
+    let request = |csrf: bool, domain: &str| {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/api/targets")
+            .header("content-type", "application/json")
+            .header("cookie", format!("glarion_session={token}"));
+        if csrf {
+            builder = builder.header("x-glarion-csrf", "1");
+        }
+        builder
+            .body(Body::from(json!({ "domain": domain }).to_string()))
+            .unwrap()
+    };
+
+    let (status, _) = send(&app, request(false, "blocked.example.com")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, body) = send(&app, request(true, "allowed.example.com")).await;
+    assert_eq!(status, StatusCode::OK, "cookie request failed: {body}");
 }
 
 #[tokio::test]

@@ -1,6 +1,7 @@
 //! Registration, email confirmation, and sign-in.
 
 use axum::extract::{ConnectInfo, State};
+use axum::http::{header::SET_COOKIE, HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -58,8 +59,7 @@ pub struct LoginRequest {
 }
 
 #[derive(Serialize)]
-pub struct TokenResponse {
-    pub token: String,
+pub struct SessionResponse {
     pub user_id: Uuid,
 }
 
@@ -84,6 +84,34 @@ pub struct ResendRequest {
 #[derive(Serialize)]
 pub struct MessageResponse {
     pub message: String,
+}
+
+fn session_header(state: &AppState, token: &str) -> ApiResult<HeaderMap> {
+    let value = session_cookie_value(&state.mailer.public_url, token);
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&value).map_err(|_| ApiError::Unauthorized)?,
+    );
+    Ok(headers)
+}
+
+fn session_cookie_value(public_url: &str, token: &str) -> String {
+    let secure = if public_url.starts_with("https://") {
+        "; Secure"
+    } else {
+        ""
+    };
+    format!("glarion_session={token}; Path=/; Max-Age=43200; HttpOnly; SameSite=Strict{secure}")
+}
+
+fn clear_session_cookie_value(public_url: &str) -> String {
+    let secure = if public_url.starts_with("https://") {
+        "; Secure"
+    } else {
+        ""
+    };
+    format!("glarion_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict{secure}")
 }
 
 /// What the resend endpoint needs to decide whether to send anything.
@@ -207,7 +235,7 @@ async fn send_verification(state: &AppState, email: &str, first_name: &str, toke
 pub async fn verify_email(
     State(state): State<AppState>,
     Json(body): Json<VerifyRequest>,
-) -> ApiResult<Json<TokenResponse>> {
+) -> ApiResult<(HeaderMap, Json<SessionResponse>)> {
     let token_hash = hash_token(body.token.trim());
     let cutoff = Utc::now() - Duration::hours(VERIFICATION_VALID_HOURS);
 
@@ -232,7 +260,10 @@ pub async fn verify_email(
     // Signing in here saves the user a round trip through the sign-in form
     // immediately after proving they control the address.
     let token = issue_token(&state.jwt_secret, user_id, token_version)?;
-    Ok(Json(TokenResponse { token, user_id }))
+    Ok((
+        session_header(&state, &token)?,
+        Json(SessionResponse { user_id }),
+    ))
 }
 
 pub async fn resend_verification(
@@ -301,7 +332,7 @@ pub async fn login(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<LoginRequest>,
-) -> ApiResult<Json<TokenResponse>> {
+) -> ApiResult<(HeaderMap, Json<SessionResponse>)> {
     // Checked before anything else: an attacker must not be able to spend
     // our Argon2 cycles, or learn anything from the response, once they are
     // over the limit.
@@ -357,7 +388,31 @@ pub async fn login(
     }
 
     let token = issue_token(&state.jwt_secret, user_id, token_version)?;
-    Ok(Json(TokenResponse { token, user_id }))
+    Ok((
+        session_header(&state, &token)?,
+        Json(SessionResponse { user_id }),
+    ))
+}
+
+pub async fn logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<(HeaderMap, StatusCode)> {
+    if headers
+        .get("x-glarion-csrf")
+        .and_then(|value| value.to_str().ok())
+        != Some("1")
+    {
+        return Err(ApiError::Unauthorized);
+    }
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&clear_session_cookie_value(&state.mailer.public_url))
+            .map_err(|_| ApiError::Unauthorized)?,
+    );
+    Ok((headers, StatusCode::NO_CONTENT))
 }
 
 #[derive(Deserialize)]
@@ -653,6 +708,23 @@ mod tests {
         assert_eq!(
             age_on(birth, NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
             22
+        );
+    }
+
+    #[test]
+    fn production_session_cookie_is_http_only_secure_and_strict() {
+        let value = session_cookie_value("https://glarion.example", "token");
+        assert!(value.contains("HttpOnly"));
+        assert!(value.contains("Secure"));
+        assert!(value.contains("SameSite=Strict"));
+        assert!(value.contains("Max-Age=43200"));
+    }
+
+    #[test]
+    fn local_logout_clears_the_same_cookie_without_forcing_secure() {
+        assert_eq!(
+            clear_session_cookie_value("http://localhost:8080"),
+            "glarion_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
         );
     }
 
