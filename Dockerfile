@@ -71,7 +71,8 @@ COPY --from=build /app/target/release/runner /usr/local/bin/runner
 # page and the endpoints it calls means no CORS entry to maintain, and one
 # thing to deploy instead of two.
 COPY web/landing.html web/index.html web/privacy.html web/terms.html \
-     web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js web/glarion-mark.png web/
+     web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js \
+     web/glarion-mark.png web/og.png web/
 COPY --from=web /web/dist web/dist
 
 RUN chown -R glarion:glarion /app
