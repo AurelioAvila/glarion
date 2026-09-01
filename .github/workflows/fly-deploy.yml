@@ -29,3 +29,21 @@ jobs:
       - name: Deploy
         if: ${{ env.FLY_API_TOKEN != '' }}
         run: flyctl deploy --remote-only
+
+      # No GitHub Releases here — Glarion deploys on every push to main — so
+      # this announces the deploy itself instead of a release, using the
+      # triggering commit as the "what's new" line.
+      - name: Announce to Discord
+        if: ${{ success() }}
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping announcement"
+            exit 0
+          fi
+          CONTENT=$(jq -n --arg msg "${{ github.event.head_commit.message }}" --arg url "${{ github.event.head_commit.url }}" \
+            '"@everyone Glarion just shipped:\n\n" + $msg + "\n\n" + $url')
+          PAYLOAD=$(jq -n --argjson content "$CONTENT" \
+            '{content: $content, allowed_mentions: {parse: ["everyone"]}}')
+          curl -sf --show-error -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK"
