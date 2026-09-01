@@ -20,11 +20,11 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Deployment not configured
         if: ${{ env.FLY_API_TOKEN == '' }}
         run: echo "Fly deployment is intentionally skipped until FLY_API_TOKEN is configured."
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         if: ${{ env.FLY_API_TOKEN != '' }}
       - name: Deploy
         if: ${{ env.FLY_API_TOKEN != '' }}
@@ -37,12 +37,14 @@ jobs:
         if: ${{ success() }}
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
         run: |
           if [ -z "$WEBHOOK" ]; then
             echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping announcement"
             exit 0
           fi
-          CONTENT=$(jq -n --arg msg "${{ github.event.head_commit.message }}" --arg url "${{ github.event.head_commit.url }}" \
+          CONTENT=$(jq -n --arg msg "$COMMIT_MESSAGE" --arg url "$COMMIT_URL" \
             '"@everyone Glarion just shipped:\n\n" + $msg + "\n\n" + $url')
           PAYLOAD=$(jq -n --argjson content "$CONTENT" \
             '{content: $content, allowed_mentions: {parse: ["everyone"]}}')
