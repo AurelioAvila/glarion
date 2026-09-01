@@ -14,19 +14,44 @@
 //!    impractical, not to police individual bursts.
 //!
 //! The client key is the TCP peer address. Behind a reverse proxy that is
-//! the proxy's address, which collapses every client into one bucket — so
-//! deploying behind a proxy requires teaching this module to read a
-//! forwarded header *from a trusted proxy only*. Reading such a header
-//! unconditionally would be worse than the current behaviour: it is
-//! attacker-controlled, so it would let one client mint a fresh bucket per
-//! request and remove the limit entirely.
+//! the proxy's address, which collapses every client into one bucket: on
+//! Fly, where `[http_service]` means fly-proxy terminates every connection,
+//! that made one global budget for the whole internet — twenty free checks
+//! per five minutes across all visitors, and ten signups.
+//!
+//! So `forwarded_client_ip` reads the address fly-proxy recorded, and
+//! `TRUST_PROXY_CLIENT_IP` decides whether it is believed. The flag is the
+//! trust boundary, not a preference: read unconditionally the header is
+//! attacker-controlled, which would let one client mint a fresh bucket per
+//! request and remove the limit entirely. It may only be set where every
+//! request provably arrives through a proxy that overwrites the header.
 
+use axum::http::HeaderMap;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+/// The header fly-proxy sets to the address it accepted the connection from.
+///
+/// Fly-specific on purpose. `X-Forwarded-For` carries a client-supplied list
+/// whose trustworthy element depends on how many proxies are in front, and
+/// getting that count wrong silently restores the unlimited case.
+pub const CLIENT_IP_HEADER: &str = "fly-client-ip";
+
+/// The address the trusted proxy says the request came from.
+///
+/// `None` when the header is absent or unparseable, which leaves the caller
+/// on the TCP peer address — the safe direction, since an unparseable header
+/// must not be allowed to become a bucket of its own.
+pub fn forwarded_client_ip(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get(CLIENT_IP_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<IpAddr>().ok())
+}
 
 /// Attempts allowed per window for authentication endpoints.
 pub const AUTH_ATTEMPTS_PER_WINDOW: u32 = 10;
@@ -221,6 +246,40 @@ mod tests {
         // A different address is unaffected by the first one's exhaustion.
         assert!(limiter.check(client(2)));
         assert!(limiter.check(client(2)));
+    }
+
+    #[test]
+    fn forwarded_address_is_read_from_the_proxy_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_IP_HEADER, "203.0.113.7".parse().unwrap());
+
+        assert_eq!(
+            forwarded_client_ip(&headers),
+            Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)))
+        );
+    }
+
+    #[test]
+    fn forwarded_address_falls_back_when_unusable() {
+        // Absent, junk and a host:port pair all have to leave the caller on
+        // the peer address. Anything else lets a bad header become a bucket.
+        assert_eq!(forwarded_client_ip(&HeaderMap::new()), None);
+
+        for value in ["not-an-address", "203.0.113.7:51234", ""] {
+            let mut headers = HeaderMap::new();
+            headers.insert(CLIENT_IP_HEADER, value.parse().unwrap());
+            assert_eq!(forwarded_client_ip(&headers), None, "accepted {value:?}");
+        }
+    }
+
+    #[test]
+    fn forwarded_ipv6_is_accepted() {
+        // Fly hands out IPv6 client addresses, and rejecting them would put
+        // every IPv6 visitor back in the shared proxy bucket.
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_IP_HEADER, "2a09:8280:1::3:abcd".parse().unwrap());
+
+        assert!(matches!(forwarded_client_ip(&headers), Some(IpAddr::V6(_))));
     }
 
     #[test]

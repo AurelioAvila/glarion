@@ -79,6 +79,19 @@ pub async fn run() -> Result<()> {
     let app = with_static_files(app, std::path::Path::new(&web_root))
         .layer(axum::middleware::from_fn(redirect_www_to_apex));
 
+    // Outermost on purpose: everything downstream, the rate limiters and the
+    // scan audit trail included, reads the connection address, and behind a
+    // proxy that address is the proxy's for every caller alive.
+    let app = if trusts_proxy_client_ip() {
+        tracing::info!(
+            "trusting {} for the client address",
+            rate_limit::CLIENT_IP_HEADER
+        );
+        app.layer(axum::middleware::from_fn(use_forwarded_client_ip))
+    } else {
+        app
+    };
+
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, "glarion api listening");
@@ -92,6 +105,36 @@ pub async fn run() -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+/// Whether a proxy in front of this process overwrites the client-IP header.
+///
+/// Set in fly.toml and nowhere else. Off by default because believing the
+/// header without a proxy that rewrites it hands every caller a private
+/// rate-limit bucket, which is worse than sharing one.
+fn trusts_proxy_client_ip() -> bool {
+    std::env::var("TRUST_PROXY_CLIENT_IP")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
+
+/// Replaces the connection address with the one the trusted proxy reported.
+///
+/// Rewriting the extension rather than changing every handler keeps the fix
+/// in one place: the rate limiters, the login throttle and the scan audit
+/// trail all keep extracting `ConnectInfo` and now all see the real caller.
+async fn use_forwarded_client_ip(
+    mut request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if let Some(client) = rate_limit::forwarded_client_ip(request.headers()) {
+        // Port zero rather than the proxy's: the address is the client's, the
+        // port belonged to a different connection, and nothing reads it.
+        request
+            .extensions_mut()
+            .insert(axum::extract::ConnectInfo(SocketAddr::new(client, 0)));
+    }
+
+    next.run(request).await
 }
 
 /// Keeps one public origin for search engines, cookies and shared links while
