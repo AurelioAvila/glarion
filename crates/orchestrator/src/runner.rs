@@ -188,9 +188,9 @@ async fn report_change(
         None => format!("This scan found {current} to fix."),
     };
     let link = mailer.app_link(&format!("/scans/{}", job.id));
-    let body = change_email(&recipient.domain, &summary, &detail, &link);
+    let message = change_email(&recipient.domain, &summary, &detail, &link);
 
-    if let Err(error) = mailer.send(&recipient.email, &summary, &body).await {
+    if let Err(error) = mailer.send(&recipient.email, &message).await {
         tracing::error!(error = ?error, "could not send the change notification");
     }
 }
