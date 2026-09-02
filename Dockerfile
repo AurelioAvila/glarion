@@ -75,6 +75,9 @@ COPY --from=build /app/target/release/runner /usr/local/bin/runner
 # in inboxes hotlink it, so the image keeps serving it.
 COPY web/landing.html web/index.html web/privacy.html web/terms.html \
      web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js \
+     web/seo.css web/website-security-monitoring.html \
+     web/agency-security-reports.html web/nuclei-monitoring.html \
+     web/website-vulnerability-scanner.html \
      web/glarion-mark-64.png web/glarion-mark-180.png \
      web/glarion-mark-192.png web/glarion-mark-512.png web/glarion-mark.png web/og.png web/
 COPY --from=web /web/dist web/dist
