@@ -300,7 +300,9 @@ function renderSignUp(carried: string | null): void {
       ? [
           el("p", {
             class: "blurb",
-            text: `${carried} will be waiting as your first site. Proving it is yours takes one DNS record.`,
+            text:
+              `${carried} will be waiting as your first site. The free check on it costs ` +
+              "nothing. The full scan takes one DNS record and a plan.",
           }),
         ]
       : []),

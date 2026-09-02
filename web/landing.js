@@ -15,8 +15,13 @@ const DEFAULT_NOTE =
   'No account, no email. This reads only what the site already publishes to every visitor.';
 
 function setNote(text, isError) {
-  note.textContent = text;
+  // The note is a live region, so writing the same sentence again would
+  // read it out again. Every check starts by restoring the default note,
+  // and announcing that on every submit is noise that trains a reader to
+  // ignore the one place refusals are reported.
+  if (note.textContent.trim() !== text) note.textContent = text;
   note.classList.toggle('is-error', Boolean(isError));
+  input.setAttribute('aria-invalid', isError ? 'true' : 'false');
 }
 
 function el(tag, className, text) {
@@ -120,8 +125,15 @@ function render(payload) {
     : '/app/#/signup';
   signup.style.display = 'inline-block';
   cta.append(signup);
+  // Both gates named, and the price with them.
+  //
+  // This line used to say proof of ownership was the only thing in the way,
+  // which stopped being true when the scanner moved behind a plan. It is the
+  // warmest moment on the site and the last one before somebody goes off to
+  // edit a client's DNS: finding out about the price after that work is done
+  // is not a pricing objection, it is a grievance.
   cta.append(el('span', 'foot-note',
-    'A full scan checks far more, and needs you to prove the domain is yours.'));
+    'A full scan checks far more. It needs a plan, from €19 a month, and proof the domain is yours.'));
   result.append(cta);
 
   if (payload.domain) result.append(shareRow(payload.domain));

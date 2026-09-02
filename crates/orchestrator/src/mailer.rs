@@ -350,10 +350,15 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
 /// in silence, so the first thing anyone had to go on was an empty dashboard.
 /// It says what to do first, because a monitoring tool with no targets added
 /// looks broken rather than empty.
+///
+/// Step three names the plan. This is the first message a new account gets,
+/// it arrives before any of the work, and it used to promise a scan the
+/// account it was welcoming could not run — with a DNS edit standing between
+/// the promise and the refusal.
 pub fn welcome_email(first_name: &str, link: &str) -> Message {
     let hello = greeting(first_name);
     let steps = format!(
-        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td style="padding:17px;color:{INK_2};font-size:14px;line-height:1.8"><strong style="color:{INK}">1.</strong> &nbsp;Add a site you look after<br><strong style="color:{INK}">2.</strong> &nbsp;Prove you are allowed to scan it — one DNS record or one file<br><strong style="color:{INK}">3.</strong> &nbsp;Run the first check</td></tr></table>"#
+        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td style="padding:17px;color:{INK_2};font-size:14px;line-height:1.8"><strong style="color:{INK}">1.</strong> &nbsp;Add a site you look after<br><strong style="color:{INK}">2.</strong> &nbsp;Prove you are allowed to scan it — one DNS record or one file<br><strong style="color:{INK}">3.</strong> &nbsp;Run the full scan, on a plan</td></tr></table>"#
     );
     Message {
         subject: "Your Glarion account is ready".to_string(),
@@ -364,14 +369,14 @@ pub fn welcome_email(first_name: &str, link: &str) -> Message {
             body: &format!(
                 "{}{}{steps}{}",
                 para(&hello),
-                para("One account covers every site you look after. Add the first one and the check runs in a couple of minutes."),
-                para("We only scan domains whose ownership has been proven, which is why step 2 exists — it is also what makes the report something you can hand to a client."),
+                para("One account covers every site you look after. Add the first one and the free check — everything the site publishes to any visitor — runs in a couple of minutes."),
+                para("We only scan domains whose ownership has been proven, which is why step 2 exists — it is also what makes the report something you can hand to a client. The full scan, the one that goes looking rather than reading, is what a plan pays for."),
             ),
             cta: Some(("Add your first site", link)),
             footer: "You are receiving this because you just confirmed a Glarion account.",
         }),
         text: format!(
-            "{hello}\n\nYour Glarion account is ready. One account covers every site you look after.\n\n1. Add a site you look after\n2. Prove you are allowed to scan it - one DNS record or one file\n3. Run the first check\n\nWe only scan domains whose ownership has been proven, which is what makes the report something you can hand to a client.\n\nStart here: {link}"
+            "{hello}\n\nYour Glarion account is ready. One account covers every site you look after.\n\n1. Add a site you look after\n2. Prove you are allowed to scan it - one DNS record or one file\n3. Run the full scan, on a plan\n\nThe free check reads what a site publishes to any visitor and costs nothing. The full scan goes looking instead, and that is what a plan pays for. We only scan domains whose ownership has been proven, which is what makes the report something you can hand to a client.\n\nStart here: {link}"
         ),
     }
 }
@@ -625,7 +630,7 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], upgrade_link: &s
     }
 
     let scope = format!(
-        "This read only what {domain} publishes to any visitor: its headers, its certificate, its DNS, and the files it offers to automated readers. It did not examine the application itself — outdated components with known vulnerabilities, exposed administrative paths, or misconfigured storage — because that requires the domain's owner to confirm the request first."
+        "This read only what {domain} publishes to any visitor: its headers, its certificate, its DNS, and the files it offers to automated readers. It did not examine the application itself — outdated components with known vulnerabilities, exposed administrative paths, or misconfigured storage. That is the full scan: it needs the domain's owner to confirm the request, and it needs a plan, from €19 a month."
     );
     let preview = format!("{headline} on {domain}");
     let body = format!(
@@ -641,11 +646,15 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], upgrade_link: &s
             eyebrow: "Free external check",
             heading: &headline,
             body: &body,
-            cta: Some(("Run the full check", upgrade_link)),
+            // Named for what it opens, not for what it does. "Run the full
+            // check" reads as one more free click on a mail that has just
+            // handed the reader twelve free findings, and the next thing
+            // they meet is a price.
+            cta: Some(("See what the full scan finds", upgrade_link)),
             footer: "You received this because this report was requested from your address. We do not add you to anything by sending it.",
         }),
         text: format!(
-            "{headline}\n{domain}\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nRun the full check: {upgrade_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
+            "{headline}\n{domain}\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nSee what the full scan finds: {upgrade_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
         ),
     }
 }
