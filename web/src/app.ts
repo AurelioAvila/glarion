@@ -26,6 +26,7 @@ import type {
   Target,
   TriagedFinding,
 } from "./api.js";
+import { cleanDomain, rememberDomain, takeRememberedDomain } from "./carry.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
@@ -230,9 +231,17 @@ function unconfirmedNotice(email: string): HTMLElement {
 
 // --- sign up ---------------------------------------------------------------
 
-function renderSignUp(): void {
+/// `carried` is the domain the visitor checked on the front page, if they
+/// arrived from that result rather than from a bare link. Saying it back to
+/// them is the point: this form asks for seven fields and an email
+/// round-trip, and the reason to fill it in is the site they were just
+/// looking at. Held on to here so the first thing the account asks for is
+/// already answered.
+function renderSignUp(carried: string | null): void {
   const container = root();
   clear(container);
+
+  if (carried) rememberDomain(carried);
 
   const message = el("div");
   const firstName = el("input", { type: "text", required: true, autocomplete: "given-name" });
@@ -269,6 +278,14 @@ function renderSignUp(): void {
 
   const form = el("form", { class: "auth" }, [
     el("h1", { text: "Create your account" }),
+    ...(carried
+      ? [
+          el("p", {
+            class: "blurb",
+            text: `${carried} will be waiting as your first site. Proving it is yours takes one DNS record.`,
+          }),
+        ]
+      : []),
     message,
     el("div", { class: "field-pair" }, [
       field("First name", firstName),
@@ -918,6 +935,12 @@ function addTargetForm(): HTMLElement {
   });
   const client = el("input", { type: "text", placeholder: "Optional" });
   const button = submitButton("Add");
+
+  // The domain from the free check, if this account was opened off the back
+  // of one. Taken rather than read: it belongs in the box once, and after
+  // that the box is the user's.
+  const remembered = takeRememberedDomain();
+  if (remembered) domain.value = remembered;
 
   const form = el("form", {}, [
     message,
@@ -2287,8 +2310,15 @@ function routeInner(): void {
   stopPolling();
   renderNav();
 
+  // The query lives inside the fragment (`#/signup?d=example.com`), so it
+  // is split off here rather than read from location.search — the server
+  // never sees it, and a route that kept it would look for a view called
+  // "signup?d=example.com".
   const hash = window.location.hash.replace(/^#/, "") || "/";
-  const parts = hash.split("/").filter(Boolean);
+  const separator = hash.indexOf("?");
+  const path = separator === -1 ? hash : hash.slice(0, separator);
+  const query = new URLSearchParams(separator === -1 ? "" : hash.slice(separator + 1));
+  const parts = path.split("/").filter(Boolean);
 
   // Confirmation links get followed while signed out, and sometimes while
   // signed in as somebody else. The token decides, not the session.
@@ -2319,7 +2349,7 @@ function routeInner(): void {
   }
 
   if (!session.isSignedIn) {
-    if (parts[0] === "signup") renderSignUp();
+    if (parts[0] === "signup") renderSignUp(cleanDomain(query.get("d")));
     else renderSignIn();
     return;
   }
