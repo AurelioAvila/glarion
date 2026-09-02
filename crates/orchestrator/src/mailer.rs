@@ -72,6 +72,20 @@ impl Mailer {
             api_key: std::env::var("RESEND_API_KEY")
                 .ok()
                 .filter(|k| !k.is_empty()),
+            // Moving this to an @glarion.app address means changing DNS in
+            // the same breath, not after.
+            //
+            // glarion.app publishes `v=spf1 -all` — no host may send as this
+            // domain — because nothing does, and because our own free check
+            // reports a missing SPF record as a finding. A hard fail on a
+            // domain with no senders costs nothing and spoofs nobody.
+            //
+            // The day mail moves here, that record starts rejecting our own
+            // confirmation emails, and the failure is silent from this side:
+            // Resend accepts the send, the receiver drops it, and the account
+            // that never arrives looks like somebody who changed their mind.
+            // Verify the domain in Resend and publish the SPF and DKIM it
+            // gives you *before* setting this to an @glarion.app address.
             from: std::env::var("MAIL_FROM")
                 .unwrap_or_else(|_| "Glarion <onboarding@resend.dev>".to_string()),
             public_url: std::env::var("PUBLIC_URL")
