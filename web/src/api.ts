@@ -43,6 +43,7 @@ export interface Subscription {
   max_targets: number;
   targets_used: number;
   allows_scheduling: boolean;
+  allows_full_scan: boolean;
   status: string | null;
   current_period_end: string | null;
   manageable: boolean;
