@@ -23,6 +23,9 @@
 //!
 //!   * one request to the front page, and one to each of two well-known
 //!     files, and nothing else. No path discovery, no guessing.
+//!   * TXT lookups for SPF and DMARC, which are public DNS records that any
+//!     mail server on the internet reads before accepting a message. Asking
+//!     a resolver a question is not contacting the site at all.
 //!   * `GET` only, and redirects are not followed.
 //!   * the same resolved-address guard as everything else, so it cannot be
 //!     pointed at private space.
@@ -76,13 +79,17 @@ pub enum PreviewError {
 /// Kept here rather than shared with the triage rules on purpose: this
 /// runs before anyone has proved anything, so it deliberately reports less
 /// and does not pretend to be a substitute for the real thing.
-const HEADERS: [(&str, &str); 5] = [
+const HEADERS: [(&str, &str); 6] = [
     ("content-security-policy", "Content-Security-Policy"),
     ("strict-transport-security", "HTTPS enforcement (HSTS)"),
     ("x-frame-options", "Clickjacking protection"),
     ("x-content-type-options", "MIME sniffing protection"),
     ("referrer-policy", "Referrer policy"),
+    ("permissions-policy", "Camera, microphone and location"),
 ];
+
+/// Headers whose only job is to announce what the site runs on.
+const DISCLOSURE_HEADERS: [&str; 3] = ["x-powered-by", "x-aspnet-version", "x-generator"];
 
 /// Looks at a domain using only what it publishes.
 pub async fn preview(domain: &str) -> Result<Preview, PreviewError> {
@@ -122,9 +129,12 @@ async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, Prev
     // The certificate and the front page at the same time. The handshake is
     // its own connection and would otherwise add its latency to a wait
     // somebody is sitting through.
-    let (response, certificate) = tokio::join!(
+    let dmarc_name = format!("_dmarc.{domain}");
+    let (response, certificate, spf, dmarc) = tokio::join!(
         client.get(format!("https://{domain}/")).send(),
         crate::tools::tls::inspect(domain),
+        crate::verification::txt_records_at(domain),
+        crate::verification::txt_records_at(&dmarc_name),
     );
 
     // First, because it is the only thing here with a deadline attached.
@@ -157,6 +167,19 @@ async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, Prev
                 .notes
                 .push(format!("The certificate could not be read: {error}"));
         }
+    }
+
+    // Whether anyone can send mail as this domain. Worth as much to an
+    // agency as any header here: the client whose invoices get forged does
+    // not care that it was not technically a website problem.
+    match (spf, dmarc) {
+        (Ok(spf), Ok(dmarc)) => {
+            preview.observations.push(spf_summary(&spf));
+            preview.observations.push(dmarc_summary(&dmarc));
+        }
+        _ => preview
+            .notes
+            .push("The mail records could not be read just now.".to_string()),
     }
 
     let response = response.map_err(|_| PreviewError::Unreachable(domain.to_string()))?;
@@ -195,6 +218,24 @@ async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, Prev
         }
     }
 
+    let cookies: Vec<String> = headers
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::to_string)
+        .collect();
+    if let Some(observation) = cookie_summary(&cookies) {
+        preview.observations.push(observation);
+    }
+
+    let disclosed: Vec<String> = DISCLOSURE_HEADERS
+        .iter()
+        .filter_map(|name| header_value(&headers, name))
+        .collect();
+    if let Some(observation) = disclosure_summary(&disclosed) {
+        preview.observations.push(observation);
+    }
+
     for path in PUBLIC_FILES {
         let url = format!("https://{domain}{path}");
         let present = match client.get(&url).send().await {
@@ -214,6 +255,159 @@ async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, Prev
     }
 
     Ok(preview)
+}
+
+/// What an SPF record says about mail claiming to come from this domain.
+///
+/// Pure, so the parsing is tested without a resolver. SPF is one TXT record
+/// beginning `v=spf1`; the part that matters is how it ends. `-all` refuses
+/// everything not listed, `~all` asks the receiver to accept it and mark it
+/// as suspicious, and `?all` states no opinion at all — which for a domain
+/// that sends invoices is close to publishing nothing.
+pub fn spf_summary(records: &[String]) -> Observation {
+    let record = records
+        .iter()
+        .map(|value| value.trim())
+        .find(|value| value.to_ascii_lowercase().starts_with("v=spf1"));
+
+    let Some(record) = record else {
+        return Observation {
+            label: "Email spoofing (SPF)".into(),
+            value: "Not published".into(),
+            is_finding: true,
+        };
+    };
+
+    let lowered = record.to_ascii_lowercase();
+    let (value, is_finding) = if lowered.contains("-all") {
+        ("Strict — unlisted senders refused", false)
+    } else if lowered.contains("~all") {
+        ("Soft fail — unlisted senders only marked", true)
+    } else if lowered.contains("?all") {
+        ("Neutral — states no opinion", true)
+    } else {
+        (
+            "Published, but does not say what to do with unlisted senders",
+            true,
+        )
+    };
+
+    Observation {
+        label: "Email spoofing (SPF)".into(),
+        value: value.into(),
+        is_finding,
+    }
+}
+
+/// What a DMARC record instructs receivers to do.
+///
+/// SPF alone tells a receiver how to judge a message; DMARC is what tells
+/// it to act. `p=none` is the setting almost every domain is left on after
+/// somebody "set up DMARC" — it monitors and nothing else, so a forged
+/// invoice still lands in the customer's inbox.
+pub fn dmarc_summary(records: &[String]) -> Observation {
+    let record = records
+        .iter()
+        .map(|value| value.trim())
+        .find(|value| value.to_ascii_lowercase().starts_with("v=dmarc1"));
+
+    let Some(record) = record else {
+        return Observation {
+            label: "Email spoofing (DMARC)".into(),
+            value: "Not published".into(),
+            is_finding: true,
+        };
+    };
+
+    let policy = record
+        .to_ascii_lowercase()
+        .split(';')
+        .map(str::trim)
+        .find_map(|part| part.strip_prefix("p=").map(|p| p.trim().to_string()));
+
+    let (value, is_finding) = match policy.as_deref() {
+        Some("reject") => ("Forgeries rejected".to_string(), false),
+        Some("quarantine") => ("Forgeries sent to spam".to_string(), false),
+        Some("none") => (
+            "Monitoring only — forgeries still delivered".to_string(),
+            true,
+        ),
+        _ => ("Published without a policy".to_string(), true),
+    };
+
+    Observation {
+        label: "Email spoofing (DMARC)".into(),
+        value,
+        is_finding,
+    }
+}
+
+/// Whether the cookies the front page sets are protected.
+///
+/// Read from `Set-Cookie` on a page anyone can request, so this needs no
+/// permission — and a session cookie without `HttpOnly` is readable by any
+/// script that gets onto the page, which turns a small injection into a
+/// stolen session. `None` when the page sets no cookies at all: silence is
+/// better than inventing a clean result for something not being done.
+pub fn cookie_summary(cookies: &[String]) -> Option<Observation> {
+    if cookies.is_empty() {
+        return None;
+    }
+
+    let mut missing = Vec::new();
+    let flag_missing = |flag: &str| {
+        cookies
+            .iter()
+            .any(|cookie| !cookie.to_ascii_lowercase().contains(flag))
+    };
+
+    if flag_missing("httponly") {
+        missing.push("HttpOnly");
+    }
+    if flag_missing("secure") {
+        missing.push("Secure");
+    }
+    if flag_missing("samesite") {
+        missing.push("SameSite");
+    }
+
+    let count = cookies.len();
+    let noun = if count == 1 { "cookie" } else { "cookies" };
+
+    Some(if missing.is_empty() {
+        Observation {
+            label: "Cookie protection".into(),
+            value: format!("{count} {noun}, all flagged"),
+            is_finding: false,
+        }
+    } else {
+        Observation {
+            label: "Cookie protection".into(),
+            value: format!("{count} {noun} missing {}", missing.join(", ")),
+            is_finding: true,
+        }
+    })
+}
+
+/// Software and version numbers the site volunteers in its headers.
+///
+/// Not a vulnerability by itself, and it is deliberately not scored as one:
+/// it is the line an attacker reads first to decide which exploits are
+/// worth trying, which is why the full scan starts from it.
+pub fn disclosure_summary(values: &[String]) -> Option<Observation> {
+    if values.is_empty() {
+        return None;
+    }
+
+    let has_version = values
+        .iter()
+        .any(|value| value.chars().any(|c| c.is_ascii_digit()));
+
+    Some(Observation {
+        label: "Version disclosure".into(),
+        value: values.join(", ").chars().take(80).collect(),
+        is_finding: has_version,
+    })
 }
 
 fn header_value(headers: &reqwest::header::HeaderMap, name: &str) -> Option<String> {
@@ -351,5 +545,67 @@ mod tests {
             Err(PreviewError::Unreachable(_)) => {}
             other => panic!("expected Unreachable, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn spf_reads_the_ending_that_decides_what_receivers_do() {
+        assert!(!spf_summary(&["v=spf1 include:_spf.google.com -all".into()]).is_finding);
+
+        // The two settings that look like protection and are not.
+        assert!(spf_summary(&["v=spf1 include:example.com ~all".into()]).is_finding);
+        assert!(spf_summary(&["v=spf1 ?all".into()]).is_finding);
+
+        // A domain with TXT records that are not SPF publishes no SPF.
+        let unrelated = spf_summary(&["google-site-verification=abc".into()]);
+        assert!(unrelated.is_finding);
+        assert_eq!(unrelated.value, "Not published");
+    }
+
+    #[test]
+    fn dmarc_distinguishes_monitoring_from_enforcement() {
+        assert!(!dmarc_summary(&["v=DMARC1; p=reject; rua=mailto:a@b.c".into()]).is_finding);
+        assert!(!dmarc_summary(&["v=DMARC1; p=quarantine".into()]).is_finding);
+
+        // The setting nearly every domain is left on: it reports and does
+        // nothing, so a forgery still reaches the customer.
+        let monitoring = dmarc_summary(&["v=DMARC1; p=none; rua=mailto:a@b.c".into()]);
+        assert!(monitoring.is_finding);
+        assert!(monitoring.value.contains("still delivered"));
+
+        assert!(dmarc_summary(&[]).is_finding);
+    }
+
+    #[test]
+    fn cookie_flags_are_reported_only_when_cookies_are_set() {
+        assert!(cookie_summary(&[]).is_none());
+
+        let bare = cookie_summary(&["session=abc; Path=/".into()]).unwrap();
+        assert!(bare.is_finding);
+        assert!(bare.value.contains("HttpOnly"));
+        assert!(bare.value.contains("Secure"));
+
+        let flagged =
+            cookie_summary(&["session=abc; Path=/; HttpOnly; Secure; SameSite=Lax".into()])
+                .unwrap();
+        assert!(!flagged.is_finding);
+
+        // One unprotected cookie among several is still an unprotected
+        // cookie: the summary must not be averaged into looking clean.
+        let mixed =
+            cookie_summary(&["a=1; HttpOnly; Secure; SameSite=Lax".into(), "b=2".into()]).unwrap();
+        assert!(mixed.is_finding);
+    }
+
+    #[test]
+    fn a_version_number_is_what_makes_disclosure_worth_flagging() {
+        assert!(disclosure_summary(&[]).is_none());
+
+        // A bare product name tells an attacker far less than a version.
+        assert!(!disclosure_summary(&["PHP".into()]).unwrap().is_finding);
+        assert!(
+            disclosure_summary(&["PHP/8.1.2".into()])
+                .unwrap()
+                .is_finding
+        );
     }
 }
