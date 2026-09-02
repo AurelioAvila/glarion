@@ -49,6 +49,7 @@
   "description": "Website security monitoring for agencies that manage client sites.",
   "offers": [
     { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "EUR" },
+    { "@type": "Offer", "name": "Solo", "price": "19", "priceCurrency": "EUR" },
     { "@type": "Offer", "name": "Studio", "price": "39", "priceCurrency": "EUR" },
     { "@type": "Offer", "name": "Agency", "price": "99", "priceCurrency": "EUR" }
   ]
@@ -519,6 +520,22 @@ footer {
   .running li { animation: none; opacity: 1; }
 }
 
+/* Printing.
+   The result is meant to be handed to a client, and Ctrl+P is the only
+   export anybody needs: drop the navigation, the argument and the sale,
+   keep the finding rows and say where the page came from. */
+@media print {
+  :root { color-scheme: light; }
+  body { background: #fff; color: #111; }
+  .top, footer, .check, .cta-row, #argument, #already-paying, #product-proof,
+  #trust, #arithmetic, #pricing, #permission, #who { display: none !important; }
+  .hero { padding-top: 0; }
+  #result { display: block !important; }
+  .fact, .verdict, .verdict-meta, .caveat { color: #111; }
+  .print-source { display: block; margin-top: 2rem; font-size: .8rem; color: #444; }
+}
+.print-source { display: none; }
+
 @media (max-width: 46rem) {
   .wrap { padding-left: 1.25rem; padding-right: 1.25rem; }
   .top-inner { padding: 0 1.25rem; }
@@ -829,6 +846,8 @@ footer {
   </section>
 
 </main>
+
+<p class="print-source wrap">Checked with glarion.app &mdash; security monitoring for the sites you look after.</p>
 
 <footer>
   <div class="wrap foot-inner">
