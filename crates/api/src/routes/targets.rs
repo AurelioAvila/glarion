@@ -364,38 +364,34 @@ pub async fn check_verification(
     // an unreachable site is a perfectly ordinary thing to hit halfway
     // through setting up DNS. It stays fail-closed either way: nothing here
     // can report success without actually seeing the token.
-    let matched = match method {
+    match method {
         VerificationMethod::DnsTxt => match verification::fetch_dns_txt_records(&domain).await {
-            Ok(records) => token_present(&records, &token),
+            Ok(records) if token_present(&records, &token) => {}
+            Ok(records) => return Ok(Json(not_yet(dns_detail(&domain, &records)))),
             Err(_) => {
-                return Ok(Json(CheckVerificationResponse {
-                    verified: false,
-                    expires_at: None,
-                    detail: "We could not reach DNS just now. Please try again in a moment.".into(),
-                }))
+                return Ok(Json(not_yet(
+                    "We could not reach DNS just now. Nothing is wrong with your record — try again in a moment."
+                        .into(),
+                )))
             }
         },
         VerificationMethod::WellKnownFile => {
             match verification::fetch_well_known_file(&domain).await {
-                Ok(body) => file_contains_token(&body, &token),
+                Ok(body) if file_contains_token(&body, &token) => {}
+                Ok(_) => {
+                    return Ok(Json(not_yet(format!(
+                        "{} is reachable, but it does not hold the value we issued. The file must contain that value and nothing else.",
+                        verification::well_known_url(&domain)
+                    ))))
+                }
                 Err(_) => {
-                    return Ok(Json(CheckVerificationResponse {
-                        verified: false,
-                        expires_at: None,
-                        detail: "We could not fetch that file. Check it is reachable over                                  HTTPS, then try again."
-                            .into(),
-                    }))
+                    return Ok(Json(not_yet(format!(
+                        "We could not fetch {}. It has to be reachable over HTTPS, with no redirect and no login in front of it.",
+                        verification::well_known_url(&domain)
+                    ))))
                 }
             }
         }
-    };
-
-    if !matched {
-        return Ok(Json(CheckVerificationResponse {
-            verified: false,
-            expires_at: None,
-            detail: "token not found yet — DNS changes can take a few minutes to propagate".into(),
-        }));
     }
 
     let now = Utc::now();
@@ -418,6 +414,41 @@ pub async fn check_verification(
         expires_at: Some(expires_at),
         detail: "ownership verified".into(),
     }))
+}
+
+/// A check that did not succeed. Never carries an expiry: only a real
+/// verification produces one, so a "not yet" can never be mistaken for a
+/// pass by anything reading this response.
+fn not_yet(detail: String) -> CheckVerificationResponse {
+    CheckVerificationResponse {
+        verified: false,
+        expires_at: None,
+        detail,
+    }
+}
+
+/// Says what we actually looked for and what actually answered.
+///
+/// The old message was "token not found yet", which is true and useless: it
+/// reads as a fault in the product rather than as a step the reader has not
+/// finished, and it never names the record. Somebody who has just pasted a
+/// TXT record into a control panel needs to know which of two very different
+/// things happened — nothing is published there at all, or something is
+/// published and it is the wrong string.
+fn dns_detail(domain: &str, records: &[String]) -> String {
+    let name = verification::dns_txt_record_name(domain);
+
+    if records.is_empty() {
+        return format!(
+            "Nothing is published at {name} yet. Add the TXT record at your DNS provider and check again — most publish within a few minutes, a few take up to an hour."
+        );
+    }
+
+    let count = records.len();
+    let plural = if count == 1 { "record" } else { "records" };
+    format!(
+        "{name} answers with {count} TXT {plural}, but none is the value we issued. Copy the value again and paste it whole, with no quotes and no trailing spaces."
+    )
 }
 
 /// Loads a target's domain, confirming it belongs to this user. Returns
