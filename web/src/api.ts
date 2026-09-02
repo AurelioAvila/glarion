@@ -16,6 +16,10 @@ export interface SignupDetails {
 export interface Profile {
   agency_name: string | null;
   agency_logo_url: string | null;
+  /// The address this account signs in with. Sent on GET only — the server
+  /// ignores it on a save, because moving an account to another address is
+  /// the confirmed change-of-address flow, not a profile field.
+  email?: string | null;
 }
 
 export interface PreviewObservation {
@@ -429,10 +433,16 @@ export const api = {
     return request<ScanDetail>("GET", `/api/scans/${encodeURIComponent(scanId)}`);
   },
 
-  startScan(targetId: string) {
+  /// Queues one scan.
+  ///
+  /// The tool is chosen by the caller rather than fixed here. "tls" was
+  /// allowlisted by the server and unreachable from the dashboard, so the
+  /// certificate checks a paying customer had been sold could only ever
+  /// run through the preview.
+  startScan(targetId: string, tool: "nuclei" | "tls") {
     return request<ScanSummary>("POST", "/api/scans", {
       target_id: targetId,
-      tool: "nuclei",
+      tool,
       accept_terms: true,
     });
   },

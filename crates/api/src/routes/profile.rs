@@ -19,23 +19,30 @@ const MAX_LOGO_URL: usize = 2048;
 pub struct Profile {
     pub agency_name: Option<String>,
     pub agency_logo_url: Option<String>,
+    /// The address this account signs in with. Read-only: `skip_deserializing`
+    /// means a PUT carrying an email cannot move the account — that is what
+    /// the confirmed change-of-address flow is for, and this field exists
+    /// only so Settings can show which address it is talking about.
+    #[serde(default, skip_deserializing)]
+    pub email: Option<String>,
 }
 
 pub async fn get_profile(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> ApiResult<Json<Profile>> {
-    let row: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("select agency_name, agency_logo_url from users where id = $1")
+    let row: Option<(Option<String>, Option<String>, String)> =
+        sqlx::query_as("select agency_name, agency_logo_url, email from users where id = $1")
             .bind(user.id)
             .fetch_optional(&state.pool)
             .await?;
 
-    let (agency_name, agency_logo_url) = row.ok_or(ApiError::NotFound)?;
+    let (agency_name, agency_logo_url, email) = row.ok_or(ApiError::NotFound)?;
 
     Ok(Json(Profile {
         agency_name,
         agency_logo_url,
+        email: Some(email),
     }))
 }
 
@@ -80,6 +87,7 @@ pub async fn update_profile(
     Ok(Json(Profile {
         agency_name,
         agency_logo_url,
+        email: None,
     }))
 }
 
