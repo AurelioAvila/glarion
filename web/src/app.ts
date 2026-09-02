@@ -651,7 +651,11 @@ async function renderTargets(): Promise<void> {
   }
 
   const addPanel = addTargetForm();
-  addPanel.hidden = true;
+  // Open already if it arrived carrying a domain from the free check. An
+  // account with sites in it hides this panel behind a button, and a
+  // prefilled box nobody can see is the same as no prefill at all.
+  const carrying = Boolean(addPanel.querySelector("input")?.value);
+  addPanel.hidden = !carrying;
 
   const addButton = el("button", { class: "ghost", type: "button", text: "Add a site" });
   on(addButton, "click", () => {
@@ -2320,6 +2324,14 @@ function routeInner(): void {
   const query = new URLSearchParams(separator === -1 ? "" : hash.slice(separator + 1));
   const parts = path.split("/").filter(Boolean);
 
+  // Taken before the session is consulted, because the better version of
+  // this visitor is already signed in: an agency that pays for this and has
+  // just run the free check on a new client's site is sent straight past the
+  // signup screen, and holding the domain there dropped it on the floor for
+  // exactly the person most likely to add it.
+  const carried = parts[0] === "signup" ? cleanDomain(query.get("d")) : null;
+  if (carried) rememberDomain(carried);
+
   // Confirmation links get followed while signed out, and sometimes while
   // signed in as somebody else. The token decides, not the session.
   if (parts[0] === "verify" && parts[1]) {
@@ -2349,7 +2361,7 @@ function routeInner(): void {
   }
 
   if (!session.isSignedIn) {
-    if (parts[0] === "signup") renderSignUp(cleanDomain(query.get("d")));
+    if (parts[0] === "signup") renderSignUp(carried);
     else renderSignIn();
     return;
   }
