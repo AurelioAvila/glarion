@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
 </p>
 
-> **Built around authorization, not assumptions.** Full scans require current DNS or `.well-known` ownership proof, are checked again at execution time, and reject private, loopback and cloud-metadata destinations. Every queued scan retains an authorization trail.
+> **Built around authorization, not assumptions.** Full scans require a plan and current DNS or `.well-known` ownership proof, are checked again at execution time, and reject private, loopback and cloud-metadata destinations. Every queued scan retains an authorization trail.
 
 | Proof point | What is enforced |
 |---|---|
@@ -49,7 +49,7 @@ expires after 30 days. The check runs in two independent places:
 Every queued scan writes an authorization record in the same transaction as
 the job, so a job cannot exist without a trail of who authorized it.
 
-## Two tiers, and why only one is gated
+## Two tiers, and why one is gated twice
 
 A full scan probes: it requests paths a site never advertised and tries
 known vulnerability fingerprints against them. That is the act the gate
@@ -66,6 +66,14 @@ redirects followed — and needs neither an account nor a verified domain.
 Keeping them apart matters commercially as much as legally. Before it,
 nobody could see a single result without first editing DNS for a client's
 domain, which is to say before we had shown them anything at all.
+
+The split is also where the money is. The free check stays free, with no
+account and no limit on how many domains you point it at. The full scan
+answers to two gates rather than one: proving ownership settles whether we
+may run it, and a plan settles whether it is paid for. Both are checked in
+`create_scan`, next to each other, and both fail closed. The free plan gets
+the check and stops there — it is a real product on its own, and it is not
+the scanner.
 
 ## Where traffic can be aimed
 
@@ -218,12 +226,14 @@ sender, and then the message that mattered goes unread too.
 
 ## Plans
 
-| Plan | Price | Sites | Automatic checks |
-|---|---|---|---|
-| Free | — | 1 | No |
-| Solo | 19 EUR / month, 170 / year | 5 | Weekly or monthly |
-| Studio | 39 EUR / month, 350 / year | 10 | Weekly or monthly |
-| Agency | 99 EUR / month, 750 / year | 40 | Weekly or monthly |
+| Plan | Price | Sites | Full scan | Automatic checks |
+|---|---|---|---|---|
+| Free | — | 1 | No — the free check only | No |
+| Solo | 19 EUR / month, 170 / year | 5 | Yes | Weekly or monthly |
+| Studio | 39 EUR / month, 350 / year | 10 | Yes | Weekly or monthly |
+| Agency | 99 EUR / month, 750 / year | 40 | Yes | Weekly or monthly |
+
+Prices exclude VAT, which Stripe adds at checkout by country.
 
 Priced per account with a site allowance, not per site. The competition
 charges from about 90 USD per application, which is a sensible model for a
