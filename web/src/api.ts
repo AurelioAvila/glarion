@@ -312,6 +312,19 @@ export const api = {
     });
   },
 
+  /// Changing the password from inside the account.
+  ///
+  /// The reply carries no token: the server rotates the session cookie in
+  /// the same response, which is what keeps this device signed in while
+  /// every other one is signed out.
+  changePassword(currentPassword: string, newPassword: string, confirmation: string) {
+    return request<{ message: string }>("POST", "/api/account/password", {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirmation: confirmation,
+    });
+  },
+
   confirmEmailChange(token: string) {
     return request<{ message: string }>("POST", "/api/auth/confirm-email-change", { token });
   },
