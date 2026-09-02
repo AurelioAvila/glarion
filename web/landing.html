@@ -588,17 +588,29 @@ footer {
           <label class="check-label" for="domain">Check a domain now</label>
           <input id="domain" name="domain" type="text" inputmode="url"
                  autocomplete="off" autocapitalize="off" spellcheck="false"
-                 placeholder="example.com">
+                 aria-describedby="check-note" placeholder="example.com">
         </div>
         <button class="primary" type="submit" id="check-go">Check</button>
       </div>
-      <p class="check-note" id="check-note">
+      <!--
+        role="alert" because this line is where a refusal lands — an empty
+        box, a domain that could not be reached — and setNote is the only
+        thing that says so. Without a live region the message is written to
+        an element nobody is watching: focus stays on the button, and a
+        screen-reader user presses Check and is told nothing at all.
+
+        setNote skips a write that would not change the text, so the note
+        returning to its default at the start of each check does not
+        interrupt the reader with a sentence they have already heard.
+      -->
+      <p class="check-note" id="check-note" role="alert">
         No account, no email. This reads only what the site already publishes to
         every visitor.
       </p>
     </form>
 
-    <div id="result" hidden></div>
+    <!-- Announced politely: the steps as they run, then the verdict. -->
+    <div id="result" hidden role="status" aria-live="polite"></div>
   </div>
 
   <section class="wrap" id="argument">
@@ -785,7 +797,15 @@ footer {
     </ul>
     <div class="cta-row">
       <a class="primary" href="/app/#/signup" style="display:inline-block">Create an account</a>
-      <span class="foot-note">The free plan does not ask for a card.</span>
+      <!--
+        VAT said here, not at the card form.
+
+        The prices above exclude it, Stripe adds it by country, and an
+        Italian sole trader who budgeted &euro;19 is asked for &euro;23.18 at
+        the last screen in the funnel. The terms and the plan page both say
+        this already; the page doing the selling did not.
+      -->
+      <span class="foot-note">The free plan does not ask for a card. Prices exclude VAT, added at checkout.</span>
     </div>
   </section>
 
