@@ -351,6 +351,25 @@ async fn scan_is_refused_when_verification_has_expired() {
     assert_eq!(body["error"], "target_not_verified");
 }
 
+/// Puts an account on a paid plan.
+///
+/// The full scan is what a subscription buys, so every test that expects a
+/// scan to be *allowed* has to say which plan is paying for it. Tests that
+/// expect a refusal deliberately do not call this: a free account is the
+/// state a new signup is already in.
+async fn subscribe(pool: &PgPool, email: &str) {
+    sqlx::query(
+        "insert into entitlements (user_id, product, plan, max_targets, subscription_status)
+         select id, 'glarion', 'studio', 10, 'active' from users where email = $1
+         on conflict (user_id, product) do update
+         set plan = 'studio', max_targets = 10, subscription_status = 'active'",
+    )
+    .bind(email)
+    .execute(pool)
+    .await
+    .expect("could not create the entitlement");
+}
+
 #[tokio::test]
 async fn scan_is_queued_when_verification_is_current() {
     let Some(pool) = test_pool().await else {
@@ -359,6 +378,7 @@ async fn scan_is_queued_when_verification_is_current() {
     let app = app(pool.clone());
 
     let (token, _) = signup(&app, &pool, "verified@example.com").await;
+    subscribe(&pool, "verified@example.com").await;
     let target_id = create_target(&app, &token, "example.com").await;
     insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
 
@@ -556,4 +576,75 @@ async fn ip_literal_targets_are_refused_at_creation() {
             "{candidate} must not be registrable as a target"
         );
     }
+}
+
+/// The gate that turns the product into a business.
+///
+/// A free account can prove it owns a domain and still not be allowed to
+/// scan it: proving ownership answers "may we", and the plan answers "is
+/// this paid for". Both have to be true, and this is the one that used to
+/// be missing — the free plan was handing out the only thing anybody would
+/// pay for.
+#[tokio::test]
+async fn the_full_scan_is_refused_on_the_free_plan() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, &pool, "freeplan@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "a verified domain is not a substitute for a subscription"
+    );
+    assert_eq!(body["error"], "plan_limit");
+
+    // Nothing was written: a refused scan must not leave a job behind.
+    let jobs: i64 = sqlx::query_scalar("select count(*) from scan_jobs where target_id = $1")
+        .bind(target_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(jobs, 0);
+}
+
+/// The same account, once it is paying.
+#[tokio::test]
+async fn the_full_scan_is_allowed_once_the_account_subscribes() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    let (token, _) = signup(&app, &pool, "upgraded@example.com").await;
+    let target_id = create_target(&app, &token, "example.com").await;
+    insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+    subscribe(&pool, "upgraded@example.com").await;
+
+    let (status, body) = send(
+        &app,
+        post(
+            "/api/scans",
+            Some(&token),
+            json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "a paid plan should scan: {body}");
+    assert_eq!(body["status"], "queued");
 }

@@ -80,6 +80,18 @@ impl Plan {
         !matches!(self, Plan::Free)
     }
 
+    /// Whether the scanner may be pointed at a site at all.
+    ///
+    /// The free plan gets the preview — everything a site publishes to any
+    /// visitor, read without permission — and stops there. The full scan is
+    /// what the subscription buys: it costs real compute, it is the part
+    /// that needs ownership proved, and it is the only thing here anybody
+    /// would pay for. Giving it away meant the free plan was the product and
+    /// the paid ones were a quantity discount on it.
+    pub fn allows_full_scan(&self) -> bool {
+        !matches!(self, Plan::Free)
+    }
+
     /// Whether reports may carry the agency's own name and logo.
     ///
     /// Sold as part of Studio and Agency, and the pricing note says so in
