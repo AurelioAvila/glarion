@@ -337,8 +337,8 @@ fn classify(
                 Disposition::Review,
                 Priority::Low,
                 guidance(
-                    "This hardening header is not being sent. It is a defence-in-depth                      measure rather than a flaw, and whether it is worth adding depends                      on what the site does.",
-                    "Review against the site's needs. Adding it is usually harmless, but                      test first if the site embeds or is embedded by third-party content.",
+                    "This hardening header is not being sent. It is a defence-in-depth measure rather than a flaw, and whether it is worth adding depends on what the site does.",
+                    "Review against the site's needs. Adding it is usually harmless, but test first if the site embeds or is embedded by third-party content.",
                 ),
             ),
         },
@@ -398,32 +398,32 @@ fn classify(
                 Disposition::Act,
                 Priority::Urgent,
                 guidance(
-                    "The certificate has already expired. Every mainstream browser now                      shows a full-page security warning instead of the site, so to a                      visitor it is indistinguishable from being offline — and to a                      customer mid-purchase it looks like fraud.",
-                    "Renew the certificate immediately. If it was issued by Let's                      Encrypt or another automated authority, the renewal job has                      stopped: check that it still runs and that port 80 is reachable                      for the renewal challenge.",
+                    "The certificate has already expired. Every mainstream browser now shows a full-page security warning instead of the site, so to a visitor it is indistinguishable from being offline — and to a customer mid-purchase it looks like fraud.",
+                    "Renew the certificate immediately. If it was issued by Let's Encrypt or another automated authority, the renewal job has stopped: check that it still runs and that port 80 is reachable for the renewal challenge.",
                 ),
             ),
             "critical" => (
                 Disposition::Act,
                 Priority::Urgent,
                 guidance(
-                    "The certificate expires within a week. When it does, the site stops                      loading for everyone: this is a scheduled outage unless something                      is done before the date.",
-                    "Renew it now rather than waiting for the automation. An automated                      renewal that has not fired with a week to go has already failed                      several times.",
+                    "The certificate expires within a week. When it does, the site stops loading for everyone: this is a scheduled outage unless something is done before the date.",
+                    "Renew it now rather than waiting for the automation. An automated renewal that has not fired with a week to go has already failed several times.",
                 ),
             ),
             "soon" => (
                 Disposition::Act,
                 Priority::High,
                 guidance(
-                    "The certificate expires within a fortnight. Automated renewal                      normally completes with about thirty days to spare, so passing this                      point usually means the renewal is broken rather than merely late.",
-                    "Check that the renewal process runs and succeeds, and renew by hand                      if it does not.",
+                    "The certificate expires within a fortnight. Automated renewal normally completes with about thirty days to spare, so passing this point usually means the renewal is broken rather than merely late.",
+                    "Check that the renewal process runs and succeeds, and renew by hand if it does not.",
                 ),
             ),
             "approaching" => (
                 Disposition::Review,
                 Priority::Medium,
                 guidance(
-                    "The certificate expires within a month. This is the window in which                      an automated renewal should already have happened, so it is worth                      confirming one is scheduled rather than assuming it.",
-                    "Confirm the renewal is automated and working. If it is manual, put                      the date in a calendar now.",
+                    "The certificate expires within a month. This is the window in which an automated renewal should already have happened, so it is worth confirming one is scheduled rather than assuming it.",
+                    "Confirm the renewal is automated and working. If it is manual, put the date in a calendar now.",
                 ),
             ),
             // Comfortably valid: the renewal date belongs in the appendix
@@ -435,8 +435,8 @@ fn classify(
             Disposition::Act,
             Priority::Urgent,
             guidance(
-                "The certificate being served does not list this domain among the names                  it covers. Browsers treat that exactly like an expired certificate: a                  full-page warning instead of the site. It usually means a new subdomain                  was pointed at a server whose certificate was never reissued to include                  it.",
-                "Reissue the certificate with this domain included, or point the domain                  at the host whose certificate already covers it.",
+                "The certificate being served does not list this domain among the names it covers. Browsers treat that exactly like an expired certificate: a full-page warning instead of the site. It usually means a new subdomain was pointed at a server whose certificate was never reissued to include it.",
+                "Reissue the certificate with this domain included, or point the domain at the host whose certificate already covers it.",
             ),
         ),
 
@@ -444,8 +444,8 @@ fn classify(
             Disposition::Act,
             Priority::Urgent,
             guidance(
-                "The certificate was issued by itself rather than by a recognised                  authority, so no browser trusts it. This is almost always a default                  certificate still in place because the real one was never installed —                  which means nobody has loaded the site in a browser since it was set up.",
-                "Install a certificate from a trusted authority. Let's Encrypt issues                  them free and renews automatically.",
+                "The certificate was issued by itself rather than by a recognised authority, so no browser trusts it. This is almost always a default certificate still in place because the real one was never installed — which means nobody has loaded the site in a browser since it was set up.",
+                "Install a certificate from a trusted authority. Let's Encrypt issues them free and renews automatically.",
             ),
         ),
 
