@@ -193,6 +193,12 @@ pub fn router(state: AppState) -> Router {
         )
         // Authenticated: starting a move needs the account and its password.
         .route("/api/account/email", post(routes::accounts::change_email))
+        // Authenticated, and asks for the current password on top of the
+        // session: see the handler for why the session alone is not enough.
+        .route(
+            "/api/account/password",
+            post(routes::accounts::change_password),
+        )
         // Unauthenticated by necessity: the link is followed from the new
         // mailbox, which by design is not where the session is. The token is
         // the authorization.

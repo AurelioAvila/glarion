@@ -662,6 +662,113 @@ pub async fn reset_password(
 }
 
 #[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    /// Re-proves the account holder. The session token is exactly what a
+    /// thief already has; a new password is a permanent takeover, so it
+    /// needs the one thing a stolen session would not also have.
+    pub current_password: String,
+    pub new_password: String,
+    pub new_password_confirmation: String,
+}
+
+/// Changes the password on a signed-in account.
+///
+/// The reset flow already existed, but it is recovery — it costs an email
+/// round trip and only works for someone who can read the mailbox. Somebody
+/// who is signed in and simply wants a different password should not have to
+/// pretend they have forgotten the one they have.
+///
+/// `token_version` is bumped, which ends every session that exists,
+/// including this one. That is the point rather than a side effect: the
+/// usual reason to change a password is a suspicion that somebody else is
+/// signed in, and a change that left their session alive would do nothing
+/// about it. A fresh cookie is issued in the same response, so the person
+/// who made the change stays signed in and nobody else does.
+pub async fn change_password(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ChangePasswordRequest>,
+) -> ApiResult<(HeaderMap, Json<MessageResponse>)> {
+    // Rejected before Argon2 is asked to hash anything, so an oversized body
+    // cannot make refusing a request cost more than sending it.
+    if body.current_password.len() > MAX_PASSWORD_LEN * 4 {
+        return Err(ApiError::InvalidCredentials);
+    }
+
+    if body.new_password != body.new_password_confirmation {
+        return Err(ApiError::BadRequest(
+            "the new passwords do not match".into(),
+        ));
+    }
+
+    let length = body.new_password.chars().count();
+    if length < MIN_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at least {MIN_PASSWORD_LEN} characters"
+        )));
+    }
+    if length > MAX_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_LEN} characters"
+        )));
+    }
+
+    let row: Option<(String, String, Option<String>)> =
+        sqlx::query_as("select email, password_hash, first_name from users where id = $1")
+            .bind(user.id)
+            .fetch_optional(&state.pool)
+            .await?;
+    let Some((email, password_hash, first_name)) = row else {
+        return Err(ApiError::Unauthorized);
+    };
+
+    if !verify_password(&body.current_password, &password_hash) {
+        return Err(ApiError::InvalidCredentials);
+    }
+
+    if body.new_password == body.current_password {
+        return Err(ApiError::BadRequest(
+            "that is already the password on this account".into(),
+        ));
+    }
+
+    let new_hash = hash_password(&body.new_password)?;
+
+    // Any pending reset link is destroyed in the same statement. A link
+    // issued before the change is a live key to an account whose owner has
+    // just decided the old key should not work.
+    let token_version: i32 = sqlx::query_scalar(
+        "update users
+         set password_hash = $2,
+             password_reset_token_hash = null,
+             password_reset_sent_at = null,
+             token_version = token_version + 1
+         where id = $1
+         returning token_version",
+    )
+    .bind(user.id)
+    .bind(&new_hash)
+    .fetch_one(&state.pool)
+    .await?;
+
+    // Best-effort and after the fact, exactly as the reset does it: the
+    // password has already changed, and failing the request now would tell
+    // someone their change did not work when it did.
+    let notice = password_changed_email(first_name.as_deref().unwrap_or(""));
+    if let Err(error) = state.mailer.send(&email, &notice).await {
+        tracing::warn!(error = ?error, "could not send the password-changed notice");
+    }
+
+    let token = issue_token(&state.jwt_secret, user.id, token_version)?;
+    Ok((
+        session_header(&state, &token)?,
+        Json(MessageResponse {
+            message: "Password changed. Every other signed-in device has been signed out.".into(),
+        }),
+    ))
+}
+
+#[derive(Deserialize)]
 pub struct ChangeEmailRequest {
     pub new_email: String,
     /// Re-proves the account holder, exactly as deleting does. The bearer

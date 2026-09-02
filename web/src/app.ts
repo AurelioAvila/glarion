@@ -1737,9 +1737,81 @@ async function renderSettings(): Promise<void> {
   ]);
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
 
+  container.append(
+    el("div", { style: "margin-top:3rem" }, [sectionRule("Password"), changePasswordSection()]),
+  );
+
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Email address"), changeEmailSection()]));
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Delete account"), deleteAccountSection()]));
+}
+
+/// Changing the password without pretending to have forgotten it.
+///
+/// This page used to offer only "send the confirmation link", which settles
+/// a different question entirely â€” whether an address can receive mail â€”
+/// and is no use at all to somebody who is signed in and simply wants a
+/// different password. They were left with the recovery flow, which asks
+/// them to lie about having forgotten it.
+///
+/// The current password is asked for because the session alone is exactly
+/// what a thief already holds. Everything else is the server's business:
+/// it ends every other session and rotates this one in the same response.
+function changePasswordSection(): HTMLElement {
+  const message = el("div");
+  const current = el("input", {
+    type: "password",
+    required: true,
+    autocomplete: "current-password",
+  });
+  const next = el("input", { type: "password", required: true, autocomplete: "new-password" });
+  const confirmation = el("input", {
+    type: "password",
+    required: true,
+    autocomplete: "new-password",
+  });
+  const button = submitButton("Change password");
+
+  const form = el("form", { style: "max-width:22rem" }, [
+    el("p", {
+      class: "blurb",
+      style: "margin:0 0 1.1rem",
+      text:
+        "Changing it signs out every other device. This one stays signed in, " +
+        "and the address on the account is told either way.",
+    }),
+    message,
+    field("Current password", current),
+    field("New password", next, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("Repeat the new password", confirmation),
+    button,
+  ]);
+
+  on(form, "submit", (event) => {
+    event.preventDefault();
+    clear(message);
+
+    // Caught here as well as on the server so the commonest mistake costs a
+    // keystroke rather than a round trip.
+    if (next.value !== confirmation.value) {
+      message.replaceChildren(notice("error", "The new passwords do not match."));
+      return;
+    }
+
+    void withPending(button, "Changingâ€¦", async () => {
+      try {
+        const result = await api.changePassword(current.value, next.value, confirmation.value);
+        message.replaceChildren(notice("ok", result.message));
+        current.value = "";
+        next.value = "";
+        confirmation.value = "";
+      } catch (error) {
+        message.replaceChildren(notice("error", describeError(error)));
+      }
+    });
+  });
+
+  return form;
 }
 
 /// Moving the account to a different mailbox.
