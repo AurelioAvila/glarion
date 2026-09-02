@@ -26,6 +26,12 @@ pub struct Subscription {
     pub max_targets: i32,
     pub targets_used: i64,
     pub allows_scheduling: bool,
+    /// Whether the scanner may be run at all, from the same method the scan
+    /// gate reads. The dashboard needs it to know whether to make the case
+    /// for a plan or to offer the button, and deriving that from
+    /// `allows_scheduling` — true for the same plans today — would be one
+    /// pricing change away from offering a button that always fails.
+    pub allows_full_scan: bool,
     pub status: Option<String>,
     pub current_period_end: Option<DateTime<Utc>>,
     /// True when there is a Stripe customer to manage, which decides
@@ -76,6 +82,7 @@ pub async fn get_subscription(
         max_targets: plan.max_targets(),
         targets_used: used,
         allows_scheduling: plan.allows_scheduling(),
+        allows_full_scan: plan.allows_full_scan(),
         status: row.subscription_status,
         current_period_end: row.current_period_end,
         manageable: row.stripe_customer_id.is_some(),
