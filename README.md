@@ -221,6 +221,7 @@ sender, and then the message that mattered goes unread too.
 | Plan | Price | Sites | Automatic checks |
 |---|---|---|---|
 | Free | — | 1 | No |
+| Solo | 19 EUR / month, 170 / year | 5 | Weekly or monthly |
 | Studio | 39 EUR / month, 350 / year | 10 | Weekly or monthly |
 | Agency | 99 EUR / month, 750 / year | 40 | Weekly or monthly |
 

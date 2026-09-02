@@ -1883,6 +1883,7 @@ function deleteAccountSection(): HTMLElement {
 /// came to be wrong after the yearly prices changed.
 const PLANS = [
   { plan: "free", name: "Free", monthly: 0, yearly: 0, sites: 1, scheduling: false },
+  { plan: "solo", name: "Solo", monthly: 19, yearly: 170, sites: 5, scheduling: true },
   { plan: "studio", name: "Studio", monthly: 39, yearly: 350, sites: 10, scheduling: true },
   { plan: "agency", name: "Agency", monthly: 99, yearly: 750, sites: 40, scheduling: true },
 ] as const;
