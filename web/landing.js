@@ -111,7 +111,13 @@ function render(payload) {
 
   const cta = el('div', 'cta-row');
   const signup = el('a', 'primary', 'Scan this properly');
-  signup.href = '/app/#/signup';
+  // Carries the domain across. The account form asks for seven fields and
+  // an email round-trip, and until it knew this it ended by asking for the
+  // domain the reader had typed here a minute earlier — the one part of the
+  // setup they had already done.
+  signup.href = payload.domain
+    ? `/app/#/signup?d=${encodeURIComponent(payload.domain)}`
+    : '/app/#/signup';
   signup.style.display = 'inline-block';
   cta.append(signup);
   cta.append(el('span', 'foot-note',
