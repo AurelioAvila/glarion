@@ -23,14 +23,29 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Plan {
     Free,
+    /// The step between the free single site and Studio.
+    ///
+    /// Exists because the gap was the funnel's widest leak: somebody looking
+    /// after three to eight client sites found one free site or a ten-site
+    /// plan, and the tools they compare against sell exactly that range by
+    /// the site. Five sites at EUR19 is EUR3.80 each — under the per-site
+    /// competition and still above Studio's EUR3.90, so it widens the top of
+    /// the funnel without undercutting the tier above it.
+    Solo,
     Studio,
     Agency,
 }
+
+/// Every plan that is sold. Free is not one, and neither is anything a
+/// future edit forgets to add here — which is why the webhook reads this
+/// list rather than its own copy.
+pub const PAID_PLANS: [Plan; 3] = [Plan::Solo, Plan::Studio, Plan::Agency];
 
 impl Plan {
     pub fn as_db_str(&self) -> &'static str {
         match self {
             Plan::Free => "free",
+            Plan::Solo => "solo",
             Plan::Studio => "studio",
             Plan::Agency => "agency",
         }
@@ -44,6 +59,7 @@ impl Plan {
     /// with capabilities nobody paid for.
     pub fn from_db_str(value: &str) -> Self {
         match value.trim().to_ascii_lowercase().as_str() {
+            "solo" => Plan::Solo,
             "studio" => Plan::Studio,
             "agency" => Plan::Agency,
             _ => Plan::Free,
@@ -53,6 +69,7 @@ impl Plan {
     pub fn max_targets(&self) -> i32 {
         match self {
             Plan::Free => 1,
+            Plan::Solo => 5,
             Plan::Studio => 10,
             Plan::Agency => 40,
         }
@@ -76,6 +93,7 @@ impl Plan {
     pub fn display_name(&self) -> &'static str {
         match self {
             Plan::Free => "Free",
+            Plan::Solo => "Solo",
             Plan::Studio => "Studio",
             Plan::Agency => "Agency",
         }
@@ -121,6 +139,8 @@ impl Interval {
 pub fn price_env_var(plan: Plan, interval: Interval) -> Option<&'static str> {
     match (plan, interval) {
         (Plan::Free, _) => None,
+        (Plan::Solo, Interval::Monthly) => Some("STRIPE_PRICE_SOLO_MONTHLY"),
+        (Plan::Solo, Interval::Yearly) => Some("STRIPE_PRICE_SOLO_YEARLY"),
         (Plan::Studio, Interval::Monthly) => Some("STRIPE_PRICE_STUDIO_MONTHLY"),
         (Plan::Studio, Interval::Yearly) => Some("STRIPE_PRICE_STUDIO_YEARLY"),
         (Plan::Agency, Interval::Monthly) => Some("STRIPE_PRICE_AGENCY_MONTHLY"),
@@ -134,7 +154,7 @@ pub fn price_env_var(plan: Plan, interval: Interval) -> Option<&'static str> {
 /// has. An id we do not recognise grants nothing, for the same reason an
 /// unreadable plan string does.
 pub fn plan_for_price(price_id: &str) -> Option<Plan> {
-    for plan in [Plan::Studio, Plan::Agency] {
+    for plan in PAID_PLANS {
         for interval in [Interval::Monthly, Interval::Yearly] {
             let Some(var) = price_env_var(plan, interval) else {
                 continue;
@@ -401,8 +421,26 @@ mod tests {
 
     #[test]
     fn allowances_rise_with_the_plan() {
-        assert!(Plan::Free.max_targets() < Plan::Studio.max_targets());
+        assert!(Plan::Free.max_targets() < Plan::Solo.max_targets());
+        assert!(Plan::Solo.max_targets() < Plan::Studio.max_targets());
         assert!(Plan::Studio.max_targets() < Plan::Agency.max_targets());
+    }
+
+    #[test]
+    fn every_paid_plan_has_a_price_for_both_intervals() {
+        // The webhook maps a Stripe price back to a plan by walking
+        // PAID_PLANS. A plan added to the enum but not to that list, or one
+        // with no configured price variable, is a tier nobody can be granted
+        // after paying for it.
+        for plan in PAID_PLANS {
+            assert_ne!(plan, Plan::Free);
+            assert!(price_env_var(plan, Interval::Monthly).is_some());
+            assert!(price_env_var(plan, Interval::Yearly).is_some());
+            assert!(plan.allows_scheduling());
+            assert!(plan.allows_branding());
+        }
+
+        assert_eq!(PAID_PLANS.len(), 3, "a new plan needs a row here too");
     }
 
     #[test]
