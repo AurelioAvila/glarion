@@ -89,6 +89,16 @@ fn post(path: &str, token: Option<&str>, body: Value) -> Request<Body> {
     builder.body(Body::from(body.to_string())).unwrap()
 }
 
+fn get(path: &str, token: Option<&str>) -> Request<Body> {
+    let mut builder = Request::builder().method("GET").uri(path);
+
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    builder.body(Body::empty()).unwrap()
+}
+
 const TEST_PASSWORD: &str = "a-sufficiently-long-password";
 
 /// Registers a user, confirms the address, and signs in.
@@ -408,6 +418,62 @@ async fn scan_is_queued_when_verification_is_current() {
     .unwrap();
 
     assert_eq!(authorized, 1);
+}
+
+/// What the dashboard is told has to match what the gate does.
+///
+/// The site page reads `allows_full_scan` off /api/billing to decide whether
+/// to make the case for a plan or to get out of the way. If that ever
+/// disagreed with /api/scans, the interface would either hide the offer from
+/// the person who needs to see it or hold out a button that cannot work —
+/// and neither side would fail, or log, or say anything at all. So this
+/// asserts the two endpoints against each other rather than against a
+/// constant either of them could drift away from together.
+#[tokio::test]
+async fn the_advertised_scan_entitlement_matches_what_the_gate_does() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let app = app(pool.clone());
+
+    for (email, domain, paying) in [
+        ("free-plan@example.com", "free-example.com", false),
+        ("paid-plan@example.com", "paid-example.com", true),
+    ] {
+        let (token, _) = signup(&app, &pool, email).await;
+        if paying {
+            subscribe(&pool, email).await;
+        }
+
+        // Ownership proved in both cases, so the plan is the only thing
+        // left that can decide the answer.
+        let target_id = create_target(&app, &token, domain).await;
+        insert_verification(&pool, target_id, Duration::days(1), Duration::days(29)).await;
+
+        let (status, billing) = send(&app, get("/api/billing", Some(&token))).await;
+        assert_eq!(status, StatusCode::OK, "billing should answer: {billing}");
+        let advertised = billing["allows_full_scan"]
+            .as_bool()
+            .unwrap_or_else(|| panic!("allows_full_scan missing from {billing}"));
+
+        let (scan_status, scan_body) = send(
+            &app,
+            post(
+                "/api/scans",
+                Some(&token),
+                json!({ "target_id": target_id, "tool": "nuclei", "accept_terms": true }),
+            ),
+        )
+        .await;
+
+        assert_eq!(
+            advertised,
+            scan_status == StatusCode::OK,
+            "/api/billing says allows_full_scan={advertised} for {email}, \
+             while /api/scans answered {scan_status}: {scan_body}"
+        );
+        assert_eq!(advertised, paying, "wrong entitlement reported for {email}");
+    }
 }
 
 #[tokio::test]
