@@ -228,8 +228,17 @@ pub async fn signup(
     // whether somebody has an account, which is exactly what the sign-in
     // endpoint is careful not to leak. The real owner is told nothing new;
     // someone probing learns nothing either.
+    // Read before this request does anything, and used by both branches.
+    //
+    // Reading it after the send would make it this recipient's own result on
+    // the new-address branch and somebody else's on the taken-address branch —
+    // which is exactly the difference an account-existence probe is looking
+    // for. The cost of reading early is that the first person to hit a broken
+    // provider is told the mail is on its way; everyone after them is not.
+    let mail_healthy = state.mailer.last_send_ok();
+
     let Some(user_id) = user_id else {
-        return Ok(Json(signup_answer(&state, email)));
+        return Ok(Json(signup_answer(mail_healthy, email)));
     };
 
     sqlx::query(
@@ -241,49 +250,51 @@ pub async fn signup(
     .execute(&state.pool)
     .await?;
 
-    send_verification(&state, &email, &first_name, &token).await;
+    send_verification(&state, &email, &first_name, &token);
 
-    Ok(Json(signup_answer(&state, email)))
+    Ok(Json(signup_answer(mail_healthy, email)))
 }
 
 /// The one answer signup gives, whichever branch produced it.
 ///
 /// Built in a single place on purpose: a new address and an address already
 /// registered must be indistinguishable, or signup becomes a way to test who
-/// has an account. `delivered` therefore reports the mailer's state, which is
-/// the same for both, and never this recipient's own result.
-fn signup_answer(state: &AppState, email: String) -> SignupResponse {
-    let delivered = state.mailer.last_send_ok();
-
+/// has an account. `delivered` is the mailer's state read before either branch
+/// ran, so it is the same for both and never this recipient's own result.
+fn signup_answer(delivered: bool, email: String) -> SignupResponse {
     SignupResponse {
         email,
         message: if delivered {
             "Check your email to confirm your address.".into()
         } else {
-            "Your account exists, but the confirmation email could not be sent.              Try the resend link in a few minutes, or use the contact address on glarion.app."
+            "Your account exists, but the confirmation email could not be sent. Try the resend link in a few minutes, or use the contact address on glarion.app."
                 .into()
         },
         delivered,
     }
 }
 
-/// Sends the confirmation message, logging rather than failing on error.
+/// Starts the confirmation message and returns without waiting for it.
 ///
-/// Never fails signup: the account already exists at this point, so returning
-/// an error would tell the user signup failed when it did not, and leave them
-/// unable to retry because the address is now taken. Whether it arrived is
-/// reported through `signup_answer`, from the mailer's own state.
-async fn send_verification(state: &AppState, email: &str, first_name: &str, token: &str) -> bool {
-    let link = state.mailer.verification_link(token);
+/// Never fails signup: the account already exists by this point, so an error
+/// here would tell the user signup failed when it did not, and leave them
+/// unable to retry because the address is now taken.
+///
+/// Spawned rather than awaited because only this branch has a message to send.
+/// Awaiting a live HTTPS call to the provider on the new-address path while the
+/// taken-address path returns immediately makes response time say what the
+/// response body is careful not to: which addresses already have an account.
+fn send_verification(state: &AppState, email: &str, first_name: &str, token: &str) {
+    let mailer = state.mailer.clone();
+    let link = mailer.verification_link(token);
     let message = verification_email(first_name, &link);
+    let email = email.to_string();
 
-    match state.mailer.send(email, &message).await {
-        Ok(()) => true,
-        Err(error) => {
+    tokio::spawn(async move {
+        if let Err(error) = mailer.send(&email, &message).await {
             tracing::error!(error = ?error, "could not send the confirmation email");
-            false
         }
-    }
+    });
 }
 
 /// Sent once the address is confirmed, never before.
@@ -398,7 +409,7 @@ pub async fn resend_verification(
     .execute(&state.pool)
     .await?;
 
-    send_verification(&state, &email, &user.first_name, &token).await;
+    send_verification(&state, &email, &user.first_name, &token);
 
     answer
 }
@@ -503,7 +514,11 @@ pub async fn forgot_password(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> ApiResult<Json<MessageResponse>> {
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -577,7 +592,11 @@ pub async fn reset_password(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<ResetPasswordRequest>,
 ) -> ApiResult<(HeaderMap, Json<SessionResponse>)> {
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -759,7 +778,11 @@ pub async fn confirm_email_change(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<ConfirmEmailChangeRequest>,
 ) -> ApiResult<Json<MessageResponse>> {
-    if !state.auth_limiter.check(peer.ip()) {
+    if !state
+        .auth_limiter
+        .check_shared(&state.pool, "auth", peer.ip())
+        .await
+    {
         return Err(ApiError::TooManyRequests);
     }
 
