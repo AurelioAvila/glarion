@@ -243,6 +243,47 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// The address a researcher writes to, published where a scanner looks.
+///
+/// The free check on the front page reports whether a site publishes
+/// `.well-known/security.txt`. glarion.app did not, and the first domain a
+/// visitor types into our own box is ours — so the page arguing that this
+/// product notices what others miss opened by failing one of its own nine
+/// checks.
+///
+/// Generated per request rather than shipped as a file because RFC 9116
+/// requires an `Expires` date, and a file carries the one written the day it
+/// was committed. A lapsed security.txt is worse than none: a scanner reads
+/// it as a contact nobody maintains, so the fix would quietly become the
+/// defect a few months later. This one is never stale.
+///
+/// The contact is the address already in the footer, the privacy policy and
+/// the terms, not a `security@` alias — glarion.app publishes no MX records,
+/// so mail to one would bounce. Same reason MAIL_REPLY_TO stays unset until
+/// there is a monitored inbox behind it: a report that reaches nobody is the
+/// failure this file exists to prevent.
+async fn security_txt() -> impl IntoResponse {
+    let site = std::env::var("PUBLIC_URL")
+        .unwrap_or_else(|_| "https://glarion.app".to_string())
+        .trim_end_matches('/')
+        .to_string();
+    let expires = (chrono::Utc::now() + chrono::Duration::days(90)).format("%Y-%m-%dT%H:%M:%SZ");
+
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
+        format!(
+            "Contact: mailto:aurelio_11@outlook.it\n\
+             Expires: {expires}\n\
+             Preferred-Languages: en\n\
+             Canonical: {site}/.well-known/security.txt\n\
+             Policy: https://github.com/AurelioAvila/glarion/blob/master/SECURITY.md\n"
+        ),
+    )
+}
+
 /// Adds the marketing page and the dashboard to a router, if they are
 /// there to add.
 ///
@@ -351,6 +392,7 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
                 .layer(revalidate.clone())
                 .service(ServeFile::new(&landing)),
         )
+        .route("/.well-known/security.txt", get(security_txt))
         // `/app` without a trailing slash, deliberately: the shell asks for
         // /dist/app.js absolutely, but any relative URL a future edit adds
         // would resolve against the wrong base under `/app/`.

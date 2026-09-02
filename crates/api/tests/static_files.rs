@@ -120,6 +120,37 @@ async fn public_documents_are_served_instead_of_the_landing_page() {
 }
 
 #[tokio::test]
+async fn security_txt_is_published_and_has_not_expired() {
+    // The free check reports whether a site publishes this file, so ours
+    // failing our own check is the cheapest kind of credibility to lose.
+    // The expiry is the part that rots: RFC 9116 wants a date, a scanner
+    // treats a past one as an abandoned contact, and a hand-written file
+    // would pass on the day it shipped and fail every day after.
+    let dir = web_dir();
+    let router = with_static_files(Router::new(), &dir);
+
+    let (status, body) = body_of(router, "/.well-known/security.txt").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("Contact: mailto:"), "no contact: {body}");
+    assert!(body.contains("Canonical: "), "no canonical URL: {body}");
+
+    let expires = body
+        .lines()
+        .find_map(|line| line.strip_prefix("Expires: "))
+        .expect("RFC 9116 requires an Expires field");
+    let expires: chrono::DateTime<chrono::Utc> = expires.parse().expect("Expires must be RFC 3339");
+    let now = chrono::Utc::now();
+    assert!(expires > now, "already expired: {expires}");
+    assert!(
+        expires < now + chrono::Duration::days(366),
+        "RFC 9116 asks for less than a year out: {expires}"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
 async fn an_unknown_public_path_is_a_real_404() {
     let dir = web_dir();
     let router = with_static_files(Router::new(), &dir);
