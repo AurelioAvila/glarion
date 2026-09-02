@@ -1010,7 +1010,12 @@ async function renderTarget(targetId: string): Promise<void> {
     // what the site already publishes, so it needs no permission — and
     // seeing two real problems is a far better reason to finish the domain
     // check than being told to.
-    append(container, previewSection(site.domain), verificationSection(site));
+    // The preview, then the case for going further, then the procedure that
+    // gets you there. The middle block is the one that was missing: people
+    // saw a short list of headers, were asked to edit a client's DNS, and
+    // had no way of knowing what they would get for it.
+    const check = verificationSection(site);
+    append(container, previewSection(site.domain), unlockSection(check.start), check.element);
   }
 }
 
@@ -1103,9 +1108,12 @@ function previewBody(result: PreviewResult): HTMLElement {
 /// random token is the likeliest way for the step to fail, and the wait for
 /// propagation is stated before it happens rather than after the check
 /// looks broken.
-function verificationSection(target: Target): HTMLElement {
+function verificationSection(target: Target): {
+  element: HTMLElement;
+  start: HTMLButtonElement;
+} {
   const body = el("div");
-  const section = el("div", {}, [
+  const section = el("div", { id: "domain-check" }, [
     sectionRule("Domain check"),
     el("p", {
       class: "blurb",
@@ -1113,7 +1121,7 @@ function verificationSection(target: Target): HTMLElement {
       text:
         "A full scan probes far more than the check above, so it only runs on sites " +
         "whose owner has asked us to. Publish the record below and we will confirm " +
-        "it. One time, valid for 30 days.",
+        "it. One time, valid for 30 days, on any DNS provider.",
     }),
     body,
   ]);
@@ -1132,7 +1140,78 @@ function verificationSection(target: Target): HTMLElement {
     });
   });
 
-  return section;
+  return { element: section, start };
+}
+
+/// What the full scan adds, and how to get it.
+///
+/// The gap this closes was the whole shape of the product to a new account:
+/// the free check reads a handful of headers, and then the page asked for a
+/// DNS record without ever saying what the record buys. Nobody edits a
+/// client's DNS on a maybe.
+///
+/// Everything listed is something the scanner actually does — see
+/// `orchestrator::tools` and `orchestrator::triage`. The price of the step
+/// is stated in the same breath as the list, because the honest answer is
+/// the persuasive one here: the full scan is on the free plan too, and the
+/// only thing standing between the reader and it is proof that the domain
+/// is theirs to scan.
+const FULL_SCAN_ADDS: [string, string][] = [
+  ["Known vulnerabilities", "Thousands of public fingerprints, matched against what this site actually runs."],
+  ["Exposure", "Admin panels, config files, backups and dashboards reachable without a password."],
+  ["Software age", "Versions on show, and the published CVEs that go with them."],
+  ["The whole certificate chain", "Issuer, names covered, renewal date, and how the handshake is configured."],
+  ["Ranked, not listed", "Every finding sorted by what it would cost you, with the fix written out."],
+  ["A report you can send", "One page a client can read, under your name rather than ours."],
+];
+
+function unlockSection(start: HTMLButtonElement): HTMLElement {
+  const list = el("div", { class: "locked" });
+  for (const [label, detail] of FULL_SCAN_ADDS) {
+    list.append(
+      el("div", { class: "locked-item" }, [
+        el("span", { class: "locked-mark", "aria-hidden": "true", text: "◇" }),
+        el("div", {}, [
+          el("span", { class: "locked-label", text: label }),
+          el("span", { class: "locked-detail", text: detail }),
+        ]),
+      ]),
+    );
+  }
+
+  const button = el("button", {
+    class: "primary",
+    type: "button",
+    text: "Unlock the full scan",
+  });
+
+  // Scrolls to the procedure and opens it in one action. Two separate steps
+  // — find the section, then press the button in it — is where a reader who
+  // was persuaded stops being persuaded.
+  on(button, "click", () => {
+    document.getElementById("domain-check")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!start.disabled) start.click();
+  });
+
+  return el("div", { class: "unlock" }, [
+    sectionRule("The full scan"),
+    el("p", {
+      class: "blurb",
+      style: "margin-top:1rem",
+      text:
+        "The check above reads what the site hands to every visitor. The full scan " +
+        "goes looking, which is why it needs your permission first.",
+    }),
+    list,
+    el("div", { class: "unlock-foot" }, [
+      button,
+      el("p", { class: "hint", style: "margin:0" }, [
+        "Free on your first site. ",
+        el("a", { class: "inline", href: "#/plan", text: "The paid plans" }),
+        " add more sites, weekly re-checks without asking, and your own name on the report.",
+      ]),
+    ]),
+  ]);
 }
 
 function verificationInstructions(
@@ -1749,7 +1828,7 @@ async function renderSettings(): Promise<void> {
 /// Changing the password without pretending to have forgotten it.
 ///
 /// This page used to offer only "send the confirmation link", which settles
-/// a different question entirely â€” whether an address can receive mail â€”
+/// a different question entirely — whether an address can receive mail —
 /// and is no use at all to somebody who is signed in and simply wants a
 /// different password. They were left with the recovery flow, which asks
 /// them to lie about having forgotten it.
@@ -1798,7 +1877,7 @@ function changePasswordSection(): HTMLElement {
       return;
     }
 
-    void withPending(button, "Changingâ€¦", async () => {
+    void withPending(button, "Changing…", async () => {
       try {
         const result = await api.changePassword(current.value, next.value, confirmation.value);
         message.replaceChildren(notice("ok", result.message));

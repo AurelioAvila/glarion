@@ -346,6 +346,63 @@ main { max-width: 58rem; margin: 0 auto; padding: 3rem 2rem 7rem; }
   overflow-wrap: anywhere;
 }
 
+/* --- the locked half ---------------------------------------------------- */
+
+/*
+  What the full scan adds, shown to somebody who has not proved the domain
+  yet. It has to read as a real half of the product being held back, not as
+  an advertisement — so it borrows the same rules, mono labels and greys as
+  everything else, and the only ornament is a mark standing where a result
+  would be. Colour stays reserved for findings.
+*/
+.unlock { margin-bottom: 3rem; }
+
+.locked {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .1rem 2.5rem;
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--rule-soft);
+}
+.locked-item {
+  display: flex;
+  align-items: baseline;
+  gap: .85rem;
+  padding: .8rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.locked-mark {
+  flex: none;
+  color: var(--ink-3);
+  font-size: .7rem;
+  line-height: 1.4;
+}
+.locked-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: .28rem;
+}
+.locked-detail {
+  display: block;
+  font-size: .87rem;
+  color: var(--ink-3);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.unlock-foot {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-top: 1.75rem;
+}
+.unlock-foot .hint { max-width: 26rem; }
+
 /* --- charts ------------------------------------------------------------ */
 
 .chart-frame { margin: 1.4rem 0 .4rem; }
@@ -839,6 +896,8 @@ kbd {
 @media (max-width: 46rem) {
   main { padding: 2.25rem 1.25rem 5rem; }
   .facts { grid-template-columns: 1fr; }
+  .locked { grid-template-columns: 1fr; }
+  .unlock-foot { flex-direction: column; align-items: flex-start; gap: .9rem; }
   .top-inner { padding: 0 1.25rem; }
   .standing { font-size: 1.2rem; }
   .entry { grid-template-columns: 1fr; gap: .9rem; }
