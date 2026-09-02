@@ -327,6 +327,24 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         // door. Getting this wrong shows a signed-out visitor a blank
         // application instead of the page that explains it.
         .route_service("/", revalidate.clone().service(ServeFile::new(&landing)))
+        // The shareable result: /check?d=example.com is the same page, which
+        // reads the query string and runs the check on load. A link an agency
+        // can send to its client is the cheapest way this product travels,
+        // and until now the only URL it had was the front page.
+        //
+        // Kept out of search results: every shared link would otherwise put a
+        // near-duplicate of the landing page in the index, once per domain
+        // anybody ever checked.
+        .route_service(
+            "/check",
+            ServiceBuilder::new()
+                .layer(SetResponseHeaderLayer::overriding(
+                    HeaderName::from_static("x-robots-tag"),
+                    HeaderValue::from_static("noindex"),
+                ))
+                .layer(revalidate.clone())
+                .service(ServeFile::new(&landing)),
+        )
         // `/app` without a trailing slash, deliberately: the shell asks for
         // /dist/app.js absolutely, but any relative URL a future edit adds
         // would resolve against the wrong base under `/app/`.

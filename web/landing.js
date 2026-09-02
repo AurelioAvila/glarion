@@ -118,6 +118,8 @@ function render(payload) {
     'A full scan checks far more, and needs you to prove the domain is yours.'));
   result.append(cta);
 
+  if (payload.domain) result.append(shareRow(payload.domain));
+
   result.append(emailCapture(payload.domain));
 }
 
@@ -200,4 +202,51 @@ function emailCapture(domain) {
   });
 
   return form;
+}
+
+/*
+  The link an agency sends to its client.
+
+  This result is the thing worth forwarding — it is about the client's own
+  site, it is readable by somebody who is not technical, and it arrives
+  before any invoice. Until it had a URL of its own the only way to pass it
+  on was a screenshot, which loses the domain, the date and where it came
+  from. /check?d= re-runs the same public check on load, so the page the
+  client opens is current rather than a stale copy of what we saw.
+*/
+function shareRow(domain) {
+  const row = el('div', 'cta-row share-row');
+  const link = `${location.origin}/check?d=${encodeURIComponent(domain)}`;
+
+  const copy = el('button', 'ghost', 'Send this to your client');
+  copy.type = 'button';
+
+  const note = el('span', 'foot-note', 'Copies a link to this result. Ctrl+P prints it.');
+
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      note.textContent = 'Link copied.';
+    } catch {
+      // Clipboard access is refused in some browsers and over plain http.
+      // Showing the link is worse than copying it and better than a dead
+      // button that says nothing happened.
+      note.textContent = link;
+    }
+  });
+
+  row.append(copy, note);
+  return row;
+}
+
+/*
+  A shared link runs the check it names.
+
+  Reading the domain rather than the result: a URL that carried findings
+  would let anyone publish any claim about any site under our name.
+*/
+const shared = new URLSearchParams(location.search).get('d');
+if (shared) {
+  input.value = shared;
+  form.requestSubmit();
 }
