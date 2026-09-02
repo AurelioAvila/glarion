@@ -205,6 +205,21 @@ async fn deletion_anonymizes_personal_fields_and_the_row_survives() {
     let app = app(pool.clone());
 
     let (token, user_id) = signup(&app, &pool, "leaving@example.com").await;
+
+    // The full scan is a paid feature, and this test needs a real scan to
+    // exist so it can prove the audit trail outlives the account. The plan
+    // is set without a live subscription status on purpose: an account with
+    // billing still running is refused deletion, which is a different test.
+    sqlx::query(
+        "insert into entitlements (user_id, product, plan, max_targets)
+         values ($1, 'glarion', 'studio', 10)
+         on conflict (user_id, product) do update set plan = 'studio', max_targets = 10",
+    )
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .expect("could not create the entitlement");
+
     let target_id = create_target(&app, &token, "example.com").await;
     insert_verification(&pool, target_id).await;
 
