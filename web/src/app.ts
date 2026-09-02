@@ -19,6 +19,7 @@
 import { api, ApiError, rememberedEmail, session } from "./api.js";
 import type {
   Cadence,
+  Profile,
   Subscription,
   PreviewResult,
   ScanDetail,
@@ -1208,7 +1209,9 @@ const FULL_SCAN_ADDS: [string, string][] = [
   ["Software age", "Versions on show, and the published CVEs that go with them."],
   ["The whole certificate chain", "Issuer, names covered, renewal date, and how the handshake is configured."],
   ["Ranked, not listed", "Every finding sorted by what it would cost you, with the fix written out."],
+  ["Checked without asking", "Weekly, on a schedule, so a certificate never expires on a Sunday."],
   ["A report you can send", "One page a client can read, under your name rather than ours."],
+  ["More than one site", "Five, ten or forty, depending on how long the client list is."],
 ];
 
 function unlockSection(start: HTMLButtonElement): HTMLElement {
@@ -1225,16 +1228,13 @@ function unlockSection(start: HTMLButtonElement): HTMLElement {
     );
   }
 
-  const button = el("button", {
-    class: "primary",
-    type: "button",
-    text: "Unlock the full scan",
-  });
+  const plans = el("a", { class: "primary", href: "#/plan", text: "See the plans" });
+  const prove = el("button", { class: "ghost", type: "button", text: "Prove the domain" });
 
   // Scrolls to the procedure and opens it in one action. Two separate steps
   // — find the section, then press the button in it — is where a reader who
   // was persuaded stops being persuaded.
-  on(button, "click", () => {
+  on(prove, "click", () => {
     document.getElementById("domain-check")?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!start.disabled) start.click();
   });
@@ -1245,16 +1245,17 @@ function unlockSection(start: HTMLButtonElement): HTMLElement {
       class: "blurb",
       style: "margin-top:1rem",
       text:
-        "The check above reads what the site hands to every visitor. The full scan " +
-        "goes looking, which is why it needs your permission first.",
+        "The check above reads what the site hands to every visitor, and it stays " +
+        "free forever. The full scan goes looking instead of reading, which is what " +
+        "the subscription pays for.",
     }),
     list,
     el("div", { class: "unlock-foot" }, [
-      button,
+      plans,
+      prove,
       el("p", { class: "hint", style: "margin:0" }, [
-        "Free on your first site. ",
-        el("a", { class: "inline", href: "#/plan", text: "The paid plans" }),
-        " add more sites, weekly re-checks without asking, and your own name on the report.",
+        "Two things unlock it: a plan, and proof the domain is yours to scan. ",
+        "The domain check is free and takes one DNS record — do it now and it is done.",
       ]),
     ]),
   ]);
@@ -1521,7 +1522,7 @@ function cadenceControl(target: Target): HTMLElement {
         .catch((error: unknown) => {
           current = previous;
           paint();
-          message.replaceChildren(notice("error", describeError(error)));
+          message.replaceChildren(planAwareNotice(error));
         });
     });
 
@@ -1542,16 +1543,64 @@ function cadenceControl(target: Target): HTMLElement {
   ]);
 }
 
+/// The checks a verified, paid-for site can be put through.
+///
+/// "tls" was on the server's allowlist from the start and had no control
+/// anywhere in the dashboard, so the certificate work a customer is paying
+/// for could only ever run as part of the free preview. Naming both here
+/// also stops the ledger being a list of rows that do not say what they were.
+const SCAN_TOOLS = [
+  {
+    id: "nuclei" as const,
+    name: "Vulnerabilities",
+    detail: "Known weaknesses, exposed panels and files, software with published CVEs.",
+  },
+  {
+    id: "tls" as const,
+    name: "Certificate & TLS",
+    detail: "The chain, the names it covers, the renewal date, and how the handshake is set up.",
+  },
+];
+
+function toolName(id: string): string {
+  return SCAN_TOOLS.find((tool) => tool.id === id)?.name ?? id;
+}
+
 function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
   const message = el("div");
   const list = el("ul", { class: "ledger" });
   const start = el("button", { class: "primary", type: "button", text: "Run a scan" });
+
+  let tool: "nuclei" | "tls" = "nuclei";
+  const explain = el("p", { class: "hint", style: "margin:0 0 1.4rem" });
+  const tabs = el("div", { class: "tabs", style: "margin-bottom:1rem" });
+  const buttons = SCAN_TOOLS.map((entry) =>
+    el("button", { class: "tab", type: "button", text: entry.name }),
+  );
+
+  function select(index: number): void {
+    const chosen = SCAN_TOOLS[index] ?? SCAN_TOOLS[0]!;
+    tool = chosen.id;
+    explain.textContent = chosen.detail;
+    buttons.forEach((button, i) => {
+      button.className = i === index ? "tab tab-active" : "tab";
+    });
+    clear(message);
+  }
+
+  buttons.forEach((button, index) => {
+    on(button, "click", () => select(index));
+    tabs.append(button);
+  });
+  select(0);
 
   const section = el("div", {}, [
     el("div", { class: "head-row", style: "margin-bottom:1.25rem" }, [
       el("div", {}, [sectionRule("Scans")]),
       start,
     ]),
+    tabs,
+    explain,
     message,
     list,
   ]);
@@ -1598,17 +1647,35 @@ function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
     clear(message);
     void withPending(start, "Starting…", async () => {
       try {
-        await api.startScan(target.id);
+        await api.startScan(target.id, tool);
         const updated = await api.scans(target.id);
         paint(updated);
         schedule(updated);
       } catch (error) {
-        message.replaceChildren(notice("error", describeError(error)));
+        message.replaceChildren(planAwareNotice(error));
       }
     });
   });
 
   return section;
+}
+
+/// A refusal that leads somewhere.
+///
+/// A plan limit is the one error here that is not a fault: the person did
+/// nothing wrong, they are simply on the plan that does not include this.
+/// Showing them the sentence and no way to act on it wastes the only moment
+/// they were definitely interested.
+function planAwareNotice(error: unknown): HTMLElement {
+  if (!(error instanceof ApiError) || error.code !== "plan_limit") {
+    return notice("error", describeError(error));
+  }
+
+  return el("p", { class: "notice notice-info", role: "status" }, [
+    `${error.message} `,
+    el("a", { class: "inline", href: "#/plan", text: "See the plans" }),
+    ".",
+  ]);
 }
 
 function scanEntry(scan: ScanSummary): HTMLElement {
@@ -1634,6 +1701,8 @@ function scanEntry(scan: ScanSummary): HTMLElement {
 
   const detail = el("div", { class: "entry-state" }, [
     el("span", { class: "headline", text: headline }),
+    el("span", { class: "sep", text: "/" }),
+    el("span", { text: toolName(scan.tool) }),
     el("span", { class: "sep", text: "/" }),
     el("span", { text: relativeTime(scan.completed_at ?? scan.created_at) }),
     scan.status === "completed"
@@ -1794,7 +1863,7 @@ async function renderSettings(): Promise<void> {
   clear(container);
   container.append(skeleton());
 
-  let profile = { agency_name: null as string | null, agency_logo_url: null as string | null };
+  let profile: Profile = { agency_name: null, agency_logo_url: null };
   try {
     profile = await api.profile();
   } catch (error) {
@@ -1863,10 +1932,18 @@ async function renderSettings(): Promise<void> {
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
 
   container.append(
-    el("div", { style: "margin-top:3rem" }, [sectionRule("Password"), changePasswordSection()]),
+    el("div", { style: "margin-top:3rem" }, [
+      sectionRule("Password"),
+      changePasswordSection(profile.email ?? null),
+    ]),
   );
 
-  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Email address"), changeEmailSection()]));
+  container.append(
+    el("div", { style: "margin-top:3rem" }, [
+      sectionRule("Email address"),
+      changeEmailSection(profile.email ?? null),
+    ]),
+  );
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Delete account"), deleteAccountSection()]));
 }
@@ -1882,7 +1959,7 @@ async function renderSettings(): Promise<void> {
 /// The current password is asked for because the session alone is exactly
 /// what a thief already holds. Everything else is the server's business:
 /// it ends every other session and rotates this one in the same response.
-function changePasswordSection(): HTMLElement {
+function changePasswordSection(email: string | null): HTMLElement {
   const message = el("div");
   const current = el("input", {
     type: "password",
@@ -1896,20 +1973,53 @@ function changePasswordSection(): HTMLElement {
     autocomplete: "new-password",
   });
   const button = submitButton("Change password");
+  const byEmail = el("button", {
+    class: "ghost",
+    type: "button",
+    text: "Email me a link instead",
+  });
+
+  // The server answers vaguely on purpose — "if that address has an
+  // account" — so the endpoint cannot be used to discover who is
+  // registered. Signed in, asking about your own address, that vagueness
+  // protects nothing and reads as doubt, so the message is written here.
+  //
+  // The other half of the same question, for the person who does not have
+  // the current password to hand — signed in on a machine where the browser
+  // remembers it, which is most people. Without this they had to sign out
+  // and use the "forgotten" flow, which is a lie they have to tell to get
+  // a link that was always available to them.
+  on(byEmail, "click", () => {
+    clear(message);
+    void withPending(byEmail, "Sending…", async () => {
+      try {
+        if (!email) {
+          message.replaceChildren(
+            notice("error", "We could not read the address on this account. Reload and try again."),
+          );
+          return;
+        }
+        await api.forgotPassword(email);
+        message.replaceChildren(notice("ok", `A link is on its way to ${email}. It lasts an hour.`));
+      } catch (error) {
+        message.replaceChildren(notice("error", describeError(error)));
+      }
+    });
+  });
 
   const form = el("form", { style: "max-width:22rem" }, [
     el("p", {
       class: "blurb",
       style: "margin:0 0 1.1rem",
       text:
-        "Changing it signs out every other device. This one stays signed in, " +
-        "and the address on the account is told either way.",
+        "Set a new one here, or have a link sent to the address on this account " +
+        "and change it from there. Either way every other device is signed out.",
     }),
     message,
     field("Current password", current),
     field("New password", next, el("span", { class: "hint", text: "At least 12 characters." })),
     field("Repeat the new password", confirmation),
-    button,
+    el("div", { class: "unlock-foot", style: "margin-top:0" }, [button, byEmail]),
   ]);
 
   on(form, "submit", (event) => {
@@ -1951,11 +2061,14 @@ function changePasswordSection(): HTMLElement {
 /// API answers that way so a signed-in account cannot be used to enumerate
 /// the others, and a screen that said "that address is taken" would hand
 /// back exactly what the API withheld.
-function changeEmailSection(): HTMLElement {
+function changeEmailSection(current: string | null): HTMLElement {
   const message = el("div");
   const address = el("input", { type: "email", required: true, autocomplete: "email" });
   const password = el("input", { type: "password", required: true, autocomplete: "current-password" });
-  const button = submitButton("Send the confirmation link");
+  // Not "send the confirmation link": on a page you can only reach by
+  // being signed in, that reads as a request to confirm the address you
+  // already confirmed, which is the one thing this cannot mean.
+  const button = submitButton("Send the link to the new address");
 
   const form = el("form", { style: "max-width:22rem" }, [
     el("p", {
@@ -1963,6 +2076,7 @@ function changeEmailSection(): HTMLElement {
       style: "margin:0 0 1.1rem",
       text: "The new address has to confirm before anything moves. Until it does, this account keeps the address it has.",
     }),
+    current ? el("p", { class: "mono-note", style: "margin:-.6rem 0 1.4rem", text: `Currently ${current}` }) : null,
     message,
     field("New email", address),
     field("Confirm your password", password),
@@ -2091,8 +2205,8 @@ type PlanOffer = (typeof PLANS)[number];
 function planIncludes(offer: PlanOffer): string {
   const sites = `${offer.sites} ${offer.sites === 1 ? "site" : "sites"}`;
   return offer.scheduling
-    ? `${sites} · weekly checks · reports under your name`
-    : `${sites} · scans when you ask`;
+    ? `${sites} · full scans · weekly checks · reports under your name`
+    : `${sites} · the free check only, no full scan`;
 }
 
 /// The plan page.
