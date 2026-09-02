@@ -487,6 +487,12 @@ section { padding-top: 5.5rem; }
 */
 .gate { border-left: 2px solid var(--rule); padding-left: 1.25rem; max-width: 60ch; }
 
+/* Links inside running text.
+   The bare `a` rule strips colour and underline, which is right for the
+   masthead and the footer and would make a link in a paragraph invisible. */
+.prose a { border-bottom: 1px solid var(--ink-3); }
+.prose a:hover { border-bottom-color: var(--ink); }
+
 /* --- foot -------------------------------------------------------------- */
 
 footer {
@@ -785,6 +791,39 @@ footer {
         The check at the top of this page is exempt for a reason that survives
         scrutiny: it reads only what the site broadcasts to every visitor and to
         every search engine. Nothing is probed, no path is guessed.
+      </p>
+    </div>
+  </section>
+
+  <!--
+    Last, and on purpose.
+
+    An agency deciding whether to let a stranger probe its clients' domains
+    asks who the stranger is, and until this section existed the page never
+    said. It goes here rather than in the first screen because it answers an
+    objection the visitor only forms once the product has interested them.
+  -->
+  <section class="wrap" id="who">
+    <div class="section-rule"><h2>Who builds this</h2></div>
+    <div class="gate">
+      <p class="prose">
+        Aurelio Avila. I work as a SOC analyst — alert triage, log correlation
+        and detection tuning across Microsoft Sentinel, Splunk and Wazuh — and I
+        hold Security+, CySA+, SC-200 and BTL1. Glarion is the tool I wanted
+        while doing that work: something that looks at a client's site the way
+        somebody hostile would, and refuses to look at all until the owner has
+        proved the domain is theirs.
+      </p>
+      <p class="prose">
+        The detection work is public and runnable rather than a folder of
+        screenshots:
+        <a href="https://github.com/AurelioAvila/detection-engineering-rules">YARA
+        and Sigma rules tested against samples that should fire and samples that
+        should not</a>, and
+        <a href="https://github.com/AurelioAvila/network-traffic-analysis">a
+        PCAP analyser for port scans, beaconing and floods</a>. Glarion's own
+        source is public for the same reason: the security model is worth
+        nothing if you have to take my word for it.
       </p>
     </div>
   </section>
