@@ -920,6 +920,13 @@ function historyStrip(row: SiteRow): HTMLElement {
 /// Written as a procedure rather than as three tiles, because that is what
 /// it is. It also says plainly that step two involves their DNS — the part
 /// nobody expects, and the reason setup gets abandoned halfway.
+///
+/// And it now says, before that step rather than after it, that step three
+/// needs a plan. The scanner stopped being free, and this screen went on
+/// describing a path that ends at a paywall the reader meets only once they
+/// have been to a client's registrar and edited a live DNS zone. Finding
+/// out then is not a pricing objection, it is a grievance: the work is
+/// already done and it was done on a false premise.
 function firstRun(): HTMLElement {
   const step = (n: string, title: string, body: string): HTMLElement =>
     el("li", { "data-step": n }, [el("h3", { text: title }), el("p", { text: body })]);
@@ -939,7 +946,19 @@ function firstRun(): HTMLElement {
         "Prove the domain is yours",
         "A one-time DNS record. We only ever scan sites whose owner asked us to.",
       ),
-      step("3", "Scan, then send", "Run a scan and download the report under your own name."),
+      step(
+        "3",
+        "Scan, then send",
+        "Run the full scan and download the report under your own name. This is the " +
+          "step a plan pays for.",
+      ),
+    ]),
+    el("p", { class: "hint", style: "margin-top:-1rem" }, [
+      "The check that reads what a site already publishes is free, here and on the " +
+        "front page. The full scan in step three is the part a plan pays for — worth " +
+        "knowing before you go and edit a client's DNS: ",
+      el("a", { class: "inline", href: "#/plan", text: "what the plans cost" }),
+      ".",
     ]),
     el("div", { style: "margin-top:2.5rem" }, [addTargetForm()]),
   ]);
@@ -1200,9 +1219,10 @@ function verificationSection(target: Target): {
 /// Everything listed is something the scanner actually does — see
 /// `orchestrator::tools` and `orchestrator::triage`. The price of the step
 /// is stated in the same breath as the list, because the honest answer is
-/// the persuasive one here: the full scan is on the free plan too, and the
-/// only thing standing between the reader and it is proof that the domain
-/// is theirs to scan.
+/// the persuasive one here: two things stand between the reader and this,
+/// a plan and proof the domain is theirs, and the copy below names both.
+/// It used to say the scan was free and the proof was the only obstacle,
+/// which stopped being true the day the scanner moved behind a plan.
 const FULL_SCAN_ADDS: [string, string][] = [
   ["Known vulnerabilities", "Thousands of public fingerprints, matched against what this site actually runs."],
   ["Exposure", "Admin panels, config files, backups and dashboards reachable without a password."],
