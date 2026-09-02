@@ -12,7 +12,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cleanDomain, rememberDomain, takeRememberedDomain } from "./carry.js";
+import {
+  cleanDomain,
+  forgetRememberedDomain,
+  rememberDomain,
+  takeRememberedDomain,
+} from "./carry.js";
 
 /// The browser API the module reaches for, small enough to keep honest.
 function installStorage(): Map<string, string> {
@@ -57,6 +62,16 @@ test("the domain survives the round trip and is handed over once", () => {
   assert.equal(takeRememberedDomain(), null, "a second read must not repeat it");
 });
 
+test("forgetting it clears the entry and survives storage that refuses", () => {
+  const cells = installStorage();
+  rememberDomain("client-site.com");
+
+  forgetRememberedDomain();
+
+  assert.equal(cells.has("glarion.signup.domain"), false);
+  assert.equal(takeRememberedDomain(), null);
+});
+
 test("a domain left over from a month ago is not offered", () => {
   const cells = installStorage();
   const lastMonth = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -90,5 +105,6 @@ test("storage that refuses to answer leaves the form alone", () => {
   };
 
   assert.doesNotThrow(() => rememberDomain("client-site.com"));
+  assert.doesNotThrow(() => forgetRememberedDomain());
   assert.equal(takeRememberedDomain(), null);
 });

@@ -26,7 +26,12 @@ import type {
   Target,
   TriagedFinding,
 } from "./api.js";
-import { cleanDomain, rememberDomain, takeRememberedDomain } from "./carry.js";
+import {
+  cleanDomain,
+  forgetRememberedDomain,
+  rememberDomain,
+  takeRememberedDomain,
+} from "./carry.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
@@ -230,6 +235,18 @@ function unconfirmedNotice(email: string): HTMLElement {
 }
 
 // --- sign up ---------------------------------------------------------------
+
+/// The domain the visitor checked on the front page, waiting for the box it
+/// belongs in.
+///
+/// Read out of storage once, here, rather than from the render that uses it.
+/// Views in this app render more than once for a single arrival — a
+/// signed-in visitor asking for `#/signup` is bounced to `#/targets`, which
+/// draws the sites view, and drawing it again replaces that DOM. Consuming
+/// the value inside the form meant the first draw took it and the second
+/// showed an empty box, which is precisely the bug this whole change was
+/// meant to fix.
+let pendingDomain: string | null = takeRememberedDomain();
 
 /// `carried` is the domain the visitor checked on the front page, if they
 /// arrived from that result rather than from a bare link. Saying it back to
@@ -941,10 +958,8 @@ function addTargetForm(): HTMLElement {
   const button = submitButton("Add");
 
   // The domain from the free check, if this account was opened off the back
-  // of one. Taken rather than read: it belongs in the box once, and after
-  // that the box is the user's.
-  const remembered = takeRememberedDomain();
-  if (remembered) domain.value = remembered;
+  // of one.
+  if (pendingDomain) domain.value = pendingDomain;
 
   const form = el("form", {}, [
     message,
@@ -962,6 +977,10 @@ function addTargetForm(): HTMLElement {
     void withPending(button, "Adding…", async () => {
       try {
         const target = await api.addTarget(domain.value, client.value || null);
+        // It arrived where it was going. Anything still holding it would
+        // put it back in the box the next time this form is drawn.
+        pendingDomain = null;
+        forgetRememberedDomain();
         window.location.hash = `#/targets/${target.id}`;
       } catch (error) {
         message.replaceChildren(notice("error", describeError(error)));
@@ -2330,7 +2349,13 @@ function routeInner(): void {
   // signup screen, and holding the domain there dropped it on the floor for
   // exactly the person most likely to add it.
   const carried = parts[0] === "signup" ? cleanDomain(query.get("d")) : null;
-  if (carried) rememberDomain(carried);
+  if (carried) {
+    pendingDomain = carried;
+    // Stored as well as held, so it survives the confirmation email: the
+    // way back into a new account is a link in a mailbox, which opens a
+    // fresh page with none of this in memory.
+    rememberDomain(carried);
+  }
 
   // Confirmation links get followed while signed out, and sometimes while
   // signed in as somebody else. The token decides, not the session.

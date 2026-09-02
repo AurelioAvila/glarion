@@ -43,8 +43,22 @@ export function rememberDomain(domain: string): void {
   }
 }
 
+export function forgetRememberedDomain(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Nothing to do about it, and nothing depends on it having worked.
+  }
+}
+
 /// Reads it once. Consumed on the way out whether or not it was still
 /// fresh, so a stale entry cannot sit there being offered on every visit.
+///
+/// Call this once per page load and hold the answer. Calling it from a
+/// render is what the first version of this did, and a view here can render
+/// more than once for a single arrival — the signed-in path bounces
+/// `#/signup` to `#/targets`, which renders, and a value consumed by a
+/// render whose DOM is then thrown away is a value lost.
 export function takeRememberedDomain(): string | null {
   let stored: string | null = null;
   try {
