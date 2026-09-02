@@ -8,6 +8,7 @@
 //!   3. The requested tool is on the allowlist.
 //!   4. The target is within its scan-rate budget.
 //!   5. The user explicitly accepted the scan terms for this request.
+//!   6. The account is on a plan that includes the full scan.
 //!
 //! Each of these is checked here, before any row is written. The
 //! authorization record is inserted in the same transaction as the job, so
@@ -111,6 +112,20 @@ pub async fn create_scan(
     };
     if !is_currently_verified(&status, Utc::now()) {
         return Err(ApiError::TargetNotVerified);
+    }
+
+    // (6) The plan. Checked on the server rather than only hidden in the
+    // interface: a control nobody can see is not a limit, it is a
+    // suggestion, and this one is the thing the subscription buys. No
+    // entitlement row reads as the free plan, the same fail-closed way the
+    // site allowance does — see billing::current_plan.
+    if !crate::billing::current_plan(&state.pool, user.id)
+        .await?
+        .allows_full_scan()
+    {
+        return Err(ApiError::PlanLimit(
+            "the full scan is part of the paid plans — the free check on the site page needs no subscription".into(),
+        ));
     }
 
     // (4) Intensity budget for this target over the trailing window.
