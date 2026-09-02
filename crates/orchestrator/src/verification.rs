@@ -97,6 +97,16 @@ pub fn expiry_from(now: DateTime<Utc>) -> DateTime<Utc> {
 /// Vec (not an error) when the record simply doesn't exist yet — that is
 /// an expected, common state (user hasn't added it yet), not a failure.
 pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError> {
+    txt_records_at(&dns_txt_record_name(domain)).await
+}
+
+/// Every TXT record published at one exact name.
+///
+/// Split out of the verification lookup because ownership proof is not the
+/// only thing published as TXT: SPF sits at the domain itself and DMARC at
+/// `_dmarc.`, and the free check reads both. One resolver, one timeout, one
+/// place where the "absent" and "unreachable" cases are told apart.
+pub async fn txt_records_at(name: &str) -> Result<Vec<String>, DnsError> {
     use hickory_resolver::config::{ResolverConfig, CLOUDFLARE};
     use hickory_resolver::net::runtime::TokioRuntimeProvider;
     use hickory_resolver::TokioResolver;
@@ -118,11 +128,10 @@ pub async fn fetch_dns_txt_records(domain: &str) -> Result<Vec<String>, DnsError
     )
     .build()
     .expect("a hard-coded resolver config cannot fail to build");
-    let name = dns_txt_record_name(domain);
 
     let lookup = tokio::time::timeout(
         std::time::Duration::from_secs(FETCH_TIMEOUT_SECS),
-        resolver.txt_lookup(name),
+        resolver.txt_lookup(name.to_string()),
     )
     .await;
 
