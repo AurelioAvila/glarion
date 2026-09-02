@@ -1021,10 +1021,19 @@ async function renderTarget(targetId: string): Promise<void> {
   let target: Target | undefined;
   let scans: ScanSummary[] = [];
   let latestDetail: ScanDetail | undefined;
+  let plan: Subscription | null = null;
   try {
-    const [targets, scanList] = await Promise.all([api.targets(), api.scans(targetId)]);
+    // The plan is asked for alongside the rest but is not allowed to sink
+    // the page: this view's job is showing the state of a site, and a
+    // billing hiccup should cost the upsell, not the whole screen.
+    const [targets, scanList, subscription] = await Promise.all([
+      api.targets(),
+      api.scans(targetId),
+      api.subscription().catch(() => null),
+    ]);
     target = targets.find((candidate) => candidate.id === targetId);
     scans = scanList;
+    plan = subscription;
 
     // The most recent finished scan carries everything the profile and the
     // summary need. Fetched separately because the list endpoint returns
@@ -1058,12 +1067,21 @@ async function renderTarget(targetId: string): Promise<void> {
   );
 
   if (site.verified) {
+    // The case for a plan belongs here, not only on the unverified page.
+    //
+    // It used to disappear the moment the DNS record resolved — which is
+    // the moment somebody has done the hardest thing this product asks of
+    // them and has nothing left to do but scan. They were shown a button
+    // instead, and found out it needed paying for by pressing it. The
+    // argument is worth more standing between a proved domain and its
+    // first scan than it ever was next to a form asking for a TXT record.
     append(
       container,
       expiryNote(site),
       latestDetail ? currentState(latestDetail) : null,
       postureSection(scans),
       latestDetail ? knownFacts(latestDetail) : null,
+      plan && !plan.allows_full_scan ? unlockSection(null) : null,
       cadenceControl(site),
       scansSection(site, scans),
     );
@@ -1234,7 +1252,11 @@ const FULL_SCAN_ADDS: [string, string][] = [
   ["More than one site", "Five, ten or forty, depending on how long the client list is."],
 ];
 
-function unlockSection(start: HTMLButtonElement): HTMLElement {
+/// `start` is the button that begins the domain check, when there is one to
+/// offer. Passing null says the domain is already proved and a plan is the
+/// only thing left — which is the strongest position this block is ever
+/// shown in, and until now the one place it was not shown at all.
+function unlockSection(start: HTMLButtonElement | null): HTMLElement {
   const list = el("div", { class: "locked" });
   for (const [label, detail] of FULL_SCAN_ADDS) {
     list.append(
@@ -1248,36 +1270,54 @@ function unlockSection(start: HTMLButtonElement): HTMLElement {
     );
   }
 
-  const plans = el("a", { class: "primary", href: "#/plan", text: "See the plans" });
-  const prove = el("button", { class: "ghost", type: "button", text: "Prove the domain" });
+  const foot = el("div", { class: "unlock-foot" }, [
+    el("a", { class: "primary", href: "#/plan", text: "See the plans" }),
+  ]);
 
-  // Scrolls to the procedure and opens it in one action. Two separate steps
-  // — find the section, then press the button in it — is where a reader who
-  // was persuaded stops being persuaded.
-  on(prove, "click", () => {
-    document.getElementById("domain-check")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (!start.disabled) start.click();
-  });
+  if (start) {
+    const prove = el("button", { class: "ghost", type: "button", text: "Prove the domain" });
+
+    // Scrolls to the procedure and opens it in one action. Two separate
+    // steps — find the section, then press the button in it — is where a
+    // reader who was persuaded stops being persuaded.
+    on(prove, "click", () => {
+      document
+        .getElementById("domain-check")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!start.disabled) start.click();
+    });
+
+    foot.append(
+      prove,
+      el("p", { class: "hint", style: "margin:0" }, [
+        "Two things unlock it: a plan, and proof the domain is yours to scan. ",
+        "The domain check is free and takes one DNS record — do it now and it is done.",
+      ]),
+    );
+  } else {
+    foot.append(
+      el("p", { class: "hint", style: "margin:0" }, [
+        "The DNS record is published and this site is proved. A plan is the only " +
+          "thing left between it and a scan.",
+      ]),
+    );
+  }
 
   return el("div", { class: "unlock" }, [
     sectionRule("The full scan"),
     el("p", {
       class: "blurb",
       style: "margin-top:1rem",
-      text:
-        "The check above reads what the site hands to every visitor, and it stays " +
-        "free forever. The full scan goes looking instead of reading, which is what " +
-        "the subscription pays for.",
+      text: start
+        ? "The check above reads what the site hands to every visitor, and it stays " +
+          "free forever. The full scan goes looking instead of reading, which is what " +
+          "the subscription pays for."
+        : "What you have seen so far is read from what this site hands to every " +
+          "visitor, and it stays free forever. The full scan goes looking instead of " +
+          "reading, which is what the subscription pays for.",
     }),
     list,
-    el("div", { class: "unlock-foot" }, [
-      plans,
-      prove,
-      el("p", { class: "hint", style: "margin:0" }, [
-        "Two things unlock it: a plan, and proof the domain is yours to scan. ",
-        "The domain check is free and takes one DNS record — do it now and it is done.",
-      ]),
-    ]),
+    foot,
   ]);
 }
 
