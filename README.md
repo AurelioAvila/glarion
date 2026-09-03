@@ -160,10 +160,9 @@ bash scripts/ci-local.sh
 That mirrors the hosted workflow — formatting, clippy, `cargo audit`
 (when installed) against every dependency, the suite with integration
 tests active, and an assertion that the gate tests ran rather than
-skipped. It is currently the only thing enforcing those checks: GitHub
-Actions will not start on this repository until the account has Actions
-billing configured. One advisory is deliberately ignored rather than
-silently absent from the count — see [`audit.toml`](audit.toml).
+skipped. Both run: the hosted `CI` workflow on every push, and this
+script locally for a faster loop. One advisory is deliberately ignored
+rather than silently absent from the count — see [`audit.toml`](audit.toml).
 
 ### The development database
 
