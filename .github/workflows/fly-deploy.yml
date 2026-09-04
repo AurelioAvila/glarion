@@ -45,10 +45,30 @@ jobs:
         if: ${{ env.FLY_API_TOKEN != '' }}
         run: flyctl deploy --remote-only
 
-  # Every green CI run deploys, but not every deploy is a release worth telling
-  # anyone about. This only fires when a GitHub Release is actually published —
-  # create one (with a tag) when there's something worth announcing.
-  announce:
+  announce_deploy:
+    name: Announce deployment to Discord
+    needs: deploy
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Announce to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping announcement"
+            exit 0
+          fi
+          SHORT_SHA=${COMMIT_SHA:0:7}
+          PAYLOAD=$(jq -n --arg sha "$SHORT_SHA" --arg run "$RUN_URL" \
+            '{content: ("@everyone Glarion has been updated.\n\nWebsite: https://glarion.app\nCommit: `" + $sha + "`\nDeployment: " + $run), allowed_mentions: {parse: ["everyone"]}}')
+          curl -sf --show-error -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK"
+
+  # Releases remain separate from routine deployment notices so their notes
+  # and public release link are preserved in full.
+  announce_release:
     name: Announce release to Discord
     if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-latest
