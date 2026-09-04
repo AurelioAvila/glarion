@@ -14,6 +14,11 @@ const result = document.getElementById('result');
 const DEFAULT_NOTE =
   'No account, no email. This reads only what the site already publishes to every visitor.';
 
+function scrollTo(node) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
+
 function setNote(text, isError) {
   // The note is a live region, so writing the same sentence again would
   // read it out again. Every check starts by restoring the default note,
@@ -41,7 +46,7 @@ form.addEventListener('submit', async (event) => {
   }
 
   button.disabled = true;
-  button.textContent = 'Checking';
+  button.textContent = 'Checking…';
   setNote(DEFAULT_NOTE, false);
   result.hidden = false;
   result.replaceChildren();
@@ -53,6 +58,7 @@ form.addEventListener('submit', async (event) => {
     'Looking for robots.txt and security.txt',
   ]) running.append(el('li', null, step));
   result.append(running);
+  requestAnimationFrame(() => scrollTo(result));
 
   try {
     const response = await fetch(`${api}/api/preview`, {
@@ -65,6 +71,8 @@ form.addEventListener('submit', async (event) => {
       result.hidden = true;
       result.replaceChildren();
       setNote(payload.message || 'That domain could not be checked.', true);
+      input.focus({ preventScroll: true });
+      scrollTo(document.getElementById('public-check'));
       return;
     }
     render(payload);
@@ -73,6 +81,8 @@ form.addEventListener('submit', async (event) => {
     result.hidden = true;
     result.replaceChildren();
     setNote('The check could not be run. Try again in a moment.', true);
+    input.focus({ preventScroll: true });
+    scrollTo(document.getElementById('public-check'));
   } finally {
     button.disabled = false;
     button.textContent = 'Check';
