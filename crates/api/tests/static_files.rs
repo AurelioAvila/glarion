@@ -23,6 +23,7 @@ fn web_dir() -> std::path::PathBuf {
     std::fs::write(dir.join("index.html"), "THE DASHBOARD SHELL").unwrap();
     std::fs::write(dir.join("privacy.html"), "THE PRIVACY POLICY").unwrap();
     std::fs::write(dir.join("terms.html"), "THE TERMS").unwrap();
+    std::fs::write(dir.join("sample-report.html"), "THE SAMPLE REPORT").unwrap();
     std::fs::write(dir.join("robots.txt"), "User-agent: *\nAllow: /").unwrap();
     std::fs::write(dir.join("sitemap.xml"), "<urlset></urlset>").unwrap();
     std::fs::write(dir.join("landing.js"), "// landing interaction").unwrap();
@@ -102,6 +103,7 @@ async fn public_documents_are_served_instead_of_the_landing_page() {
     for (path, expected) in [
         ("/privacy.html", "THE PRIVACY POLICY"),
         ("/terms.html", "THE TERMS"),
+        ("/sample-report.html", "THE SAMPLE REPORT"),
         ("/robots.txt", "User-agent: *"),
         ("/sitemap.xml", "<urlset>"),
         ("/landing.js", "landing interaction"),
