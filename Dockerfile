@@ -73,7 +73,7 @@ COPY --from=build /app/target/release/runner /usr/local/bin/runner
 #
 # glarion-mark.png is no longer referenced by any page, but emails already
 # in inboxes hotlink it, so the image keeps serving it.
-COPY web/landing.html web/index.html web/privacy.html web/terms.html \
+COPY web/landing.html web/index.html web/privacy.html web/terms.html web/sample-report.html \
      web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js \
      web/seo.css web/website-security-monitoring.html \
      web/agency-security-reports.html web/nuclei-monitoring.html \
