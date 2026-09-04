@@ -5,13 +5,17 @@
 <h1 align="center">Glarion</h1>
 
 <p align="center">
-  <strong>Website security monitoring for agencies that manage client sites.</strong><br>
-  Verify ownership, run controlled scans and turn noisy tool output into reports clients can act on.
+  <strong>Website security monitoring and client-ready reporting for digital agencies.</strong><br>
+  Know what changed before your client does.
 </p>
 
 <p align="center">
-  <a href="https://glarion.app"><strong>glarion.app</strong></a>
+  <a href="https://glarion.app"><strong>Check a website at glarion.app</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://glarion.app/sample-report.html"><strong>View a sample report</strong></a>
 </p>
+
+Glarion helps digital agencies monitor verified client websites, identify meaningful changes and turn technical findings into clear reports under the agency's own name. The ungated public check reads only what a website already publishes; paid full scans add controlled active checks, weekly or monthly monitoring and change-focused notifications.
 
 <p align="center">
   <a href="https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/AurelioAvila/glarion/ci.yml?style=for-the-badge&label=CI&color=52C78D" alt="Continuous integration status"></a>
@@ -160,9 +164,10 @@ bash scripts/ci-local.sh
 That mirrors the hosted workflow — formatting, clippy, `cargo audit`
 (when installed) against every dependency, the suite with integration
 tests active, and an assertion that the gate tests ran rather than
-skipped. Both run: the hosted `CI` workflow on every push, and this
-script locally for a faster loop. One advisory is deliberately ignored
-rather than silently absent from the count — see [`audit.toml`](audit.toml).
+skipped. Hosted checks also run in [GitHub Actions](https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml);
+check the run for the commit you are evaluating rather than relying on a
+previously successful build. One advisory is deliberately ignored rather than
+silently absent from the count — see [`audit.toml`](audit.toml).
 
 ### The development database
 
@@ -234,10 +239,9 @@ sender, and then the message that mattered goes unread too.
 
 Prices exclude VAT, which Stripe adds at checkout by country.
 
-Priced per account with a site allowance, not per site. The competition
-charges from about 90 USD per application, which is a sensible model for a
-company protecting its own domain and the wrong one for an agency looking
-after twenty of somebody else's.
+Priced per account with a site allowance, not per site. That structure is
+intended for agencies managing a portfolio of client websites rather than a
+single application.
 
 The site allowance is derived from the plan rather than stored beside it:
 two copies of the same number drift apart the moment either is written
