@@ -203,6 +203,38 @@ async fn browser_security_headers_are_present() {
 }
 
 #[tokio::test]
+async fn report_security_policy_survives_the_static_wrapper() {
+    let dir = web_dir();
+    let strict = "default-src 'none'; sandbox";
+    let router = with_static_files(
+        Router::new().route(
+            "/api/report",
+            axum::routing::get(move || async move {
+                (
+                    [(axum::http::header::CONTENT_SECURITY_POLICY, strict)],
+                    "report",
+                )
+            }),
+        ),
+        &dir,
+    );
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/api/report")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.headers()[axum::http::header::CONTENT_SECURITY_POLICY],
+        strict
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
 async fn static_responses_are_never_trusted_without_revalidation() {
     // A regression, not a preference: every static route was once served
     // with no Cache-Control header at all, so a browser that had loaded

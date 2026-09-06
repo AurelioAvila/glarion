@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-06T20:05:25.500Z",
+  "title": "Design System: Glarion landing",
+  "extensions": {
+    "colorMeta": {
+      "site-bg": {
+        "role": "neutral",
+        "displayName": "site bg",
+        "tonalRamp": [
+          "oklch(15% 0.012 90)",
+          "oklch(26% 0.012 90)",
+          "oklch(37% 0.012 90)",
+          "oklch(49% 0.012 90)",
+          "oklch(61% 0.012 90)",
+          "oklch(73% 0.012 90)",
+          "oklch(85% 0.012 90)",
+          "oklch(95% 0.012 90)"
+        ]
+      },
+      "site-surface": {
+        "role": "neutral",
+        "displayName": "site surface",
+        "tonalRamp": [
+          "oklch(15% 0.012 90)",
+          "oklch(26% 0.012 90)",
+          "oklch(37% 0.012 90)",
+          "oklch(49% 0.012 90)",
+          "oklch(61% 0.012 90)",
+          "oklch(73% 0.012 90)",
+          "oklch(85% 0.012 90)",
+          "oklch(95% 0.012 90)"
+        ]
+      },
+      "site-surface2": {
+        "role": "neutral",
+        "displayName": "site surface2",
+        "tonalRamp": [
+          "oklch(15% 0.012 90)",
+          "oklch(26% 0.012 90)",
+          "oklch(37% 0.012 90)",
+          "oklch(49% 0.012 90)",
+          "oklch(61% 0.012 90)",
+          "oklch(73% 0.012 90)",
+          "oklch(85% 0.012 90)",
+          "oklch(95% 0.012 90)"
+        ]
+      },
+      "site-line": {
+        "role": "neutral",
+        "displayName": "site line",
+        "tonalRamp": [
+          "oklch(15% 0.012 100)",
+          "oklch(26% 0.012 100)",
+          "oklch(37% 0.012 100)",
+          "oklch(49% 0.012 100)",
+          "oklch(61% 0.012 100)",
+          "oklch(73% 0.012 100)",
+          "oklch(85% 0.012 100)",
+          "oklch(95% 0.012 100)"
+        ]
+      },
+      "site-soft": {
+        "role": "neutral",
+        "displayName": "site soft",
+        "tonalRamp": [
+          "oklch(15% 0.012 100)",
+          "oklch(26% 0.012 100)",
+          "oklch(37% 0.012 100)",
+          "oklch(49% 0.012 100)",
+          "oklch(61% 0.012 100)",
+          "oklch(73% 0.012 100)",
+          "oklch(85% 0.012 100)",
+          "oklch(95% 0.012 100)"
+        ]
+      },
+      "site-text": {
+        "role": "neutral",
+        "displayName": "site text",
+        "tonalRamp": [
+          "oklch(15% 0.025 180)",
+          "oklch(26% 0.025 180)",
+          "oklch(37% 0.025 180)",
+          "oklch(49% 0.025 180)",
+          "oklch(61% 0.025 180)",
+          "oklch(73% 0.025 180)",
+          "oklch(85% 0.025 180)",
+          "oklch(95% 0.025 180)"
+        ]
+      },
+      "site-muted": {
+        "role": "neutral",
+        "displayName": "site muted",
+        "tonalRamp": [
+          "oklch(15% 0.025 165)",
+          "oklch(26% 0.025 165)",
+          "oklch(37% 0.025 165)",
+          "oklch(49% 0.025 165)",
+          "oklch(61% 0.025 165)",
+          "oklch(73% 0.025 165)",
+          "oklch(85% 0.025 165)",
+          "oklch(95% 0.025 165)"
+        ]
+      },
+      "site-quiet": {
+        "role": "neutral",
+        "displayName": "site quiet",
+        "tonalRamp": [
+          "oklch(15% 0.025 165)",
+          "oklch(26% 0.025 165)",
+          "oklch(37% 0.025 165)",
+          "oklch(49% 0.025 165)",
+          "oklch(61% 0.025 165)",
+          "oklch(73% 0.025 165)",
+          "oklch(85% 0.025 165)",
+          "oklch(95% 0.025 165)"
+        ]
+      },
+      "site-signal-clear": {
+        "role": "primary",
+        "displayName": "site signal clear",
+        "tonalRamp": [
+          "oklch(15% 0.095 165)",
+          "oklch(26% 0.095 165)",
+          "oklch(37% 0.095 165)",
+          "oklch(49% 0.095 165)",
+          "oklch(61% 0.095 165)",
+          "oklch(73% 0.095 165)",
+          "oklch(85% 0.095 165)",
+          "oklch(95% 0.095 165)"
+        ]
+      },
+      "site-signal-warning": {
+        "role": "primary",
+        "displayName": "site signal warning",
+        "tonalRamp": [
+          "oklch(15% 0.095 80)",
+          "oklch(26% 0.095 80)",
+          "oklch(37% 0.095 80)",
+          "oklch(49% 0.095 80)",
+          "oklch(61% 0.095 80)",
+          "oklch(73% 0.095 80)",
+          "oklch(85% 0.095 80)",
+          "oklch(95% 0.095 80)"
+        ]
+      },
+      "site-signal-alert": {
+        "role": "primary",
+        "displayName": "site signal alert",
+        "tonalRamp": [
+          "oklch(15% 0.15 30)",
+          "oklch(26% 0.15 30)",
+          "oklch(37% 0.15 30)",
+          "oklch(49% 0.15 30)",
+          "oklch(61% 0.15 30)",
+          "oklch(73% 0.15 30)",
+          "oklch(85% 0.15 30)",
+          "oklch(95% 0.15 30)"
+        ]
+      },
+      "checker-accent": {
+        "role": "primary",
+        "displayName": "checker accent",
+        "tonalRamp": [
+          "oklch(15% 0.055 130)",
+          "oklch(26% 0.055 130)",
+          "oklch(37% 0.055 130)",
+          "oklch(49% 0.055 130)",
+          "oklch(61% 0.055 130)",
+          "oklch(73% 0.055 130)",
+          "oklch(85% 0.055 130)",
+          "oklch(95% 0.055 130)"
+        ]
+      },
+      "checker-copy": {
+        "role": "neutral",
+        "displayName": "checker copy",
+        "tonalRamp": [
+          "oklch(15% 0.025 160)",
+          "oklch(26% 0.025 160)",
+          "oklch(37% 0.025 160)",
+          "oklch(49% 0.025 160)",
+          "oklch(61% 0.025 160)",
+          "oklch(73% 0.025 160)",
+          "oklch(85% 0.025 160)",
+          "oklch(95% 0.025 160)"
+        ]
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "action-transition",
+        "value": "background 0.18s ease, color 0.18s ease",
+        "purpose": "Button hover; disabled for reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "64rem"
+      },
+      {
+        "name": "stacked",
+        "value": "52rem"
+      },
+      {
+        "name": "mobile",
+        "value": "38rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action on paper.",
+      "html": "<button class=\"ds-button ds-primary\">Check a website</button>",
+      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-primary{background:var(--site-text,#192b29);color:var(--site-bg,#f5f3ed);border:1px solid var(--site-text,#192b29)}.ds-primary:hover{background:#31584b;border-color:#31584b}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Sample report and supporting actions.",
+      "html": "<button class=\"ds-button ds-secondary\">View sample report</button>",
+      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-secondary{background:transparent;color:var(--site-text,#192b29);border:1px solid var(--site-line,#c9c9c0)}.ds-secondary:hover{background:var(--site-surface2,#e7e5dd);border-color:var(--site-muted,#4e605b)}"
+    },
+    {
+      "name": "Checker action",
+      "kind": "button",
+      "refersTo": "button-check",
+      "description": "Contrasting action within the dark checker.",
+      "html": "<div class=\"ds-dark\"><button class=\"ds-button ds-check\">Check</button></div>",
+      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-dark{padding:1rem;background:var(--site-text,#192b29)}.ds-check{background:#cce3bc;color:var(--site-text,#192b29);border:1px solid #cce3bc;min-height:48px}.ds-check:hover{background:#e0efd6}.ds-check:focus-visible{outline-color:#cce3bc}"
+    },
+    {
+      "name": "Domain field",
+      "kind": "input",
+      "refersTo": "input-domain",
+      "description": "Visible label and paper field on the working surface.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-domain\">Website domain</label><input id=\"ds-domain\" placeholder=\"your-client.com\" type=\"text\" inputmode=\"url\"></div>",
+      "css": ".ds-field{padding:1.5rem;background:var(--site-text,#192b29);font-family:'Segoe UI',sans-serif}.ds-field label{display:block;color:#c1d1c9;font-size:.67rem;font-weight:600;margin-bottom:.4rem}.ds-field input{width:100%;padding:.66rem .75rem;background:var(--site-bg,#f5f3ed);color:var(--site-text,#192b29);caret-color:var(--site-text,#192b29);border:1px solid var(--site-bg,#f5f3ed);border-radius:3px;min-height:48px;font:16px/1.65 'Segoe UI',sans-serif}.ds-field input::placeholder{color:var(--site-quiet,#596b65)}.ds-field input:focus-visible{outline:3px solid #cce3bc;outline-offset:3px}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "description": "Restrained links and a filled account action.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Example navigation\"><a href=\"#how\">How it works</a><a href=\"#signin\">Sign in</a><a class=\"ds-nav-action\" href=\"#signup\">Start free</a></nav>",
+      "css": ".ds-nav{display:flex;gap:1.35rem;align-items:center;padding:1rem;background:var(--site-bg,#f5f3ed)}.ds-nav a{color:var(--site-muted,#4e605b);font:500 .88rem/1.4 'Segoe UI',sans-serif;text-decoration:none}.ds-nav a:hover{color:var(--site-text,#192b29)}.ds-nav .ds-nav-action{background:var(--site-text,#192b29);color:var(--site-bg,#f5f3ed);padding:.65rem 1.15rem;border:1px solid var(--site-line,#c9c9c0);border-radius:6px}.ds-nav a:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}"
+    },
+    {
+      "name": "Report evidence sheet",
+      "kind": "card",
+      "description": "Flat paper report with an explicit fictional-sample status.",
+      "html": "<article class=\"ds-report\"><div class=\"ds-report-head\"><strong>Website security review</strong><span>Fictional sample</span></div><p>Northstar Studio · example.com</p><div class=\"ds-finding\"><strong>Renew the TLS certificate</strong><span>High</span></div></article>",
+      "css": ".ds-report{background:#fffef9;color:#17191c;padding:2rem;border:1px solid #cdcec3;border-radius:2px;box-shadow:none;font:16px/1.65 'Segoe UI',sans-serif}.ds-report-head{display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid #c8c4bb;padding-bottom:1.2rem;font-size:.7rem}.ds-report-head span{background:#e8eadf;color:#46544c;padding:.2rem .45rem}.ds-report p{font-size:.85rem;font-weight:700}.ds-finding{display:flex;gap:.65rem;justify-content:space-between;border-bottom:1px solid #d7d3ca;padding:1rem 0;font-size:.86rem}.ds-finding span{font-size:.63rem;color:#a23025}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Agency Technical Journal",
+    "overview": "This records the built local landing proposal in `web/landing.html` and `web/landing.css`. It is not a user-approved brand replacement: audience and workflow preferences remain optional unanswered questions. The existing dark dashboard intentionally retains its earlier design and is outside this document's authority.\n\nIvory paper, forest ink and a literary display face give technical evidence room to be read. Ordinary controls stay compact and explicit, with thin rules organizing the page instead of decoration. The final CSS cascade, rather than superseded declarations earlier in the stylesheet, is the source of truth.",
+    "keyCharacteristics": [
+      "Warm paper and forest ink.",
+      "Serif headlines paired with practical sans-serif controls.",
+      "Flat evidence surfaces and visibly contrasting working areas."
+    ],
+    "rules": [
+      {
+        "name": "The Contextual Contrast Rule",
+        "body": "Dark working surfaces use their light text and focus treatments; paper surfaces use dark text and green focus treatments.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reading Hierarchy Rule",
+        "body": "Serif typography establishes the main reading hierarchy; forms, navigation and technical annotations remain functional and direct.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do preserve the reading hierarchy and contextual contrast treatments.",
+      "Do keep semantic status text alongside its color.",
+      "Do retain mobile scrolling hints, keyboard focus and reduced-motion behavior."
+    ],
+    "donts": [
+      "Don't apply this landing proposal automatically to the existing dark dashboard.",
+      "Don't infer user-approved brand preferences from this local implementation.",
+      "Don't revive overridden shadows or unused eyebrow styles as new house rules."
+    ]
+  }
+}

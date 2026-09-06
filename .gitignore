@@ -29,6 +29,7 @@ credentials.json
 .DS_Store
 Thumbs.db
 .preview/
+/.impeccable/review/
 
 # Frontend build output and dependencies
 web/node_modules/
