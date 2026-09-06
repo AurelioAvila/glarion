@@ -739,7 +739,10 @@ mod tests {
     async fn missing_configuration_is_a_failure_without_message_content() {
         let sender = mailer();
         let message = password_reset_email("Test", "https://example.invalid/SECRET", 60);
-        let error = sender.send("audit@example.invalid", &message).await.unwrap_err();
+        let error = sender
+            .send("audit@example.invalid", &message)
+            .await
+            .unwrap_err();
         assert!(!sender.last_send_ok());
         assert_eq!(error.to_string(), "email provider is not configured");
     }
