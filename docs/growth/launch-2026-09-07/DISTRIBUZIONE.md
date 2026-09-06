@@ -7,7 +7,9 @@ Nessun servizio a pagamento attivato. GitHub era già presente. Nessuna automazi
 | DEV Community | Organizzazione Glarion pubblica, logo, descrizione e collegamento al report configurati | https://dev.to/glarion |
 | YouTube | Canale Glarion pubblico, logo, descrizione e collegamento tracciato al sito salvati; nessun video pubblicato | https://www.youtube.com/@glarionapp |
 | SourceForge | Richiesta ricevuta, in attesa di revisione; non è ancora una scheda pubblicata | https://sourceforge.net/software/vendors/new_submitted |
-| SoftwareSuggest | Non inviata: il modulo richiede telefono e paese della sede, chiesti all'utente | https://www.softwaresuggest.com/vendors |
+| SoftwareSuggest | Primo passaggio accettato con sede Amsterdam e recapito fornito. Il sito dichiara inviata l'email di verifica. Scheda finale non inviata: mancano numero di persone e clienti | https://www.softwaresuggest.com/vendors |
+
+SoftwareSuggest: categoria selezionata Software / Website Security. Email di verifica non ancora trovata nella ricerca Outlook al momento del controllo. Non reinviare il primo passaggio senza verificare lo stato, per evitare duplicati. Le fasce obbligatorie iniziano da Freelancer per le persone e 1–25 per i clienti: non inventare clienti se sono zero. Il selettore delle città dipende dal paese del telefono: Amsterdam è stata selezionata nell'elenco olandese, poi è stato inserito il recapito internazionale italiano autorizzato. Verificare anche il paese nella scheda finale del portale.
 
 ## Articolo DEV
 
