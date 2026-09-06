@@ -48,3 +48,16 @@ In questo passaggio non sono stati verificati creazione effettiva di account, in
 - 23 test del report e 20 del frontend superati; controllo TypeScript superato. La prova contro testo ostile include la chiusura di style: i metadati nel margine vengono codificati integralmente come escape CSS.
 - Revisione indipendente: grafica a schermo pronta; correzioni del margine PDF e dell'intestazione lunga valutate risolte, disposizione finale ship locally al perimetro esaminato.
 - Landing: http://localhost:5186/ ; esempio aggiornato: http://localhost:5186/sample-report.html . Demo area clienti aggiornata con il nuovo generatore; nessuna pubblicazione eseguita.
+
+
+## Rilascio pubblico — 7 settembre 2026 (Europe/Rome)
+
+Approvazione utente: "ok va bene, procedi", dopo revisione delle anteprime.
+
+- Pubblicata la revisione 087663c su Fly, release v63, da codex/restyle-security-20260906. Immagine immutabile: registry.fly.io/glarion-api@sha256:e98c7d2f6619010e045d449f294a14a3328647f9bf916e1b40fb47f9956c7ddb.
+- Verifica completa locale superata: 292 test Rust, 20 frontend, controlli TypeScript, formattazione, Clippy, audit dipendenze; gate scansioni realmente eseguito su database dedicato. Dopo esaurimento disco, ripetuta compilazione seriale senza simboli debug, previa pulizia degli artefatti Cargo del solo progetto.
+- Aggiornate app e worker; controlli Fly superati. Nessuna migrazione o modifica ai segreti richiesta. Versione precedente disponibile: v62, registry.fly.io/glarion-api:deployment-01M1NRWMDDH9SDXR95Z37CV7ZJ.
+- Sul dominio pubblico: health 200; report, app, CSS, JavaScript, immagine e font 200 con SHA-256 identico agli artefatti locali. Landing nuova verificata nel browser; Cloudflare riscrive il solo contatto email e inserisce il relativo decoder, quindi il suo hash pubblico differisce dal file sorgente.
+- Profile/scans/targets/billing senza autenticazione: 401 con Cache-Control no-store. Non eseguiti pagamenti, invii email o nuove scansioni reali in produzione.
+- Branch salvato su GitHub; master resta alla base precedente. Rilascio diretto da CLI, senza attivare annunci Discord o pubblicazioni social. Prima di futuri rilasci da master, integrare il branch del restyle per evitare di sovrascriverlo.
+- Anteprime pubbliche: https://glarion.app/ e https://glarion.app/sample-report.html . Il sito non è più limitato alle anteprime locali descritte nelle sezioni precedenti.
