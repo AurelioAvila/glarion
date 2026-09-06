@@ -278,8 +278,14 @@ avoids both the shell dependency and duplicating what Nuclei's own
 
 ### Known limits
 
-- The rate limiters are per-process and keyed on the TCP peer address, so
-  they do not survive horizontal scaling and collapse to a single bucket
-  behind a reverse proxy. See `crates/api/src/rate_limit.rs`.
-- The resolved-address check cannot pin the address for an external scanner
-  process, leaving a small DNS-rebinding window between check and scan.
+- Production rate limits share PostgreSQL counters. Client attribution still
+  depends on a trusted proxy overwriting `Fly-Client-IP`; a chain of proxies
+  needs an operational check to avoid grouping unrelated visitors together.
+- Own HTTP requests pin validated addresses. Nuclei resolves independently and
+  is launched with its local-network restriction; worker egress isolation is
+  an additional operational boundary to verify.
+- The IPv6 destination policy deliberately excludes special-purpose and
+  transition ranges, including some legitimate non-website protocol services.
+- Passing tests and dependency audits does not establish complete security.
+  See [the local review](VERIFICA-SICUREZZA.md) for implemented changes,
+  evidence and outstanding infrastructure checks.
