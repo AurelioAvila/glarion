@@ -223,19 +223,14 @@ export const session = {
 /// Same origin in production, which is the default and needs no
 /// configuration. The meta tag overrides that when it is set.
 ///
-/// The localhost fallback exists so development does not require editing a
-/// tracked file — the reliable way for someone's machine-specific URL to
-/// get committed by accident.
-function apiBase(): string {
+/// Local previews use their serving origin too; a separate API requires
+/// an explicit meta tag instead of silently sending sessions to port 8080.
+export function apiBase(): string {
   const configured = document
     .querySelector<HTMLMetaElement>('meta[name="glarion-api"]')
     ?.content?.trim();
 
   if (configured) return configured.replace(/\/$/, "");
-
-  const { hostname, port } = window.location;
-  const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
-  if (isLocal && port !== "8080") return "http://localhost:8080";
 
   return "";
 }

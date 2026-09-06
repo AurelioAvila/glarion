@@ -1,0 +1,40 @@
+@font-face {
+  font-family: Manrope;
+  src: url('/fonts/manrope.ttf') format('truetype');
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  --bg: #faf7fb;
+  --raise: #ffffff;
+  --sink: #f2edf8;
+  --rule: #dcd2e5;
+  --rule-soft: #e9e1ee;
+  --ink: #2d103a;
+  --ink-2: #695174;
+  --ink-3: #745e7d;
+  --muted: #695174;
+  --quiet: #745e7d;
+  --alarm: #a33428;
+  --caution: #815b14;
+  --clear: #176a4f;
+  --accent: #bc294a;
+  --violet: #7345b2;
+  --chart-line: #7345b2;
+  --chart-fill: #7345b21a;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+html { scrollbar-color: #b49bc9 var(--bg); }
+body { background: var(--bg); color: var(--ink); font-family: Manrope, sans-serif; }
+::selection { background: #e2d0fa; color: var(--ink); }
+a, button, input, select, summary { -webkit-tap-highlight-color: #e2d0fa; }
+:focus-visible { outline: 3px solid var(--violet); outline-offset: 4px; }
+input { caret-color: var(--violet); }
+.skip { position: fixed; left: 1rem; top: -6rem; z-index: 120; padding: .8rem 1.2rem; background: var(--ink); color: white; border-radius: 8px; }
+.skip:focus { top: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

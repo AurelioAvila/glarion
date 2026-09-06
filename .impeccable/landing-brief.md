@@ -1,15 +1,13 @@
-# Glarion landing — built surface brief
+# Glarion landing — Prism built surface brief
 
-Status: reviewable local proposal, 2026-09-06. Optional audience/workflow clarification is unanswered; no claim of approved brand identity or production deployment.
+Status: built locally on 2026-09-06 from user-selected direction 6 (Prism), “la 6 mi piace.” Appearance is approved; deployment is not authorized. Surface: `web/landing.html` and `web/landing.css`. Mode: persuade. Agencies and freelancers managing client websites remain the repository-supported audience assumption.
 
-Surface: `web/landing.html`, with `web/landing.css`. Mode: persuade. Working audience: agencies and freelancers managing client websites, as supported by the repository.
+The first viewport combines a large plum/coral promise with an optical glass ring and an overlapping fictional portfolio overview. The visible sample label distinguishes illustration from actual dashboard capability. Primary action leads to the working public checker; the secondary action and overview link lead to the existing sample report. The checker sits in a lilac panel, followed by report value, workflow, comparison, limitations, current plans and FAQs.
 
-The first viewport pairs the monitoring promise with an explicitly fictional client report. The report provides concrete evidence of the output; the public checker follows as the working instrument. The rest of the page develops report usefulness, proof-before-scanning workflow, category comparison, scanner limits, current plans and FAQs.
+Mobile stacks copy, ring, sample overview and checker. The sample table scrolls inside a focusable region; the real checker retains its label, loading, error and result behavior. Full scans remain distinguished from public checks by current domain-control proof. English copy, prices, authentication and report destinations remain. No testimonials or growth results are invented.
 
-The checker remains responsive and preserves its existing behavior, labeled input, loading/result/error presentation and CTA destinations. Public checks are clearly distinguished from full scans requiring current domain-control proof. Reports keep observations attached to recommendations. No verified customer proof or conversion result is invented.
+Presentation: pearl ground, plum Manrope, coral headline emphasis, deep rose action buttons and lilac surfaces. Manrope and the decorative ring are local assets, with no external runtime asset requests. Dashboard and other routes are outside this landing change.
 
-Presentation uses the technical-journal direction: ivory, forest green, self-hosted Newsreader and flat ruled evidence. No new trackers or external font requests were introduced by this landing restyle. English copy, existing prices and logo remain; the dark dashboard intentionally keeps its existing visual design.
+Reference: `.preview/design-alternatives/option-6.png`; implementation direction: `.impeccable/prism-direction.md`. Independent reviewer disposition: ship for the scoped desktop/mobile first viewport, with no material fixes. This is a scoped visual review, not a whole-site audit or deployment claim.
 
-Review evidence: `.impeccable/review/desktop-hero.png`, `mobile-hero.png`, `mobile-workflow.png`, `mobile-comparison.png`. The independent review reported its three requested fixes resolved and a ship verdict for this scope. This records that review outcome, not a new independent audit or a deployment claim.
-
-Success to measure later: public-check starts and completions, sample-report visits, and qualified account creation. No baseline or improvement percentage has been established.
+Success to measure later: public-check starts/completions, sample-report visits and qualified account creation. No baseline or improvement percentage is established.

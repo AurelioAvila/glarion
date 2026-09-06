@@ -1,156 +1,118 @@
 ---
-name: Glarion landing
-description: A technical journal for evidence-led website monitoring.
+name: Glarion Prism
+description: Pearl surfaces, plum typography and optical glass for website monitoring.
 colors:
-  site-bg: "#f5f3ed"
-  site-surface: "#eeece5"
-  site-surface2: "#e7e5dd"
-  site-line: "#c9c9c0"
-  site-soft: "#deded4"
-  site-text: "#192b29"
-  site-muted: "#4e605b"
-  site-quiet: "#596b65"
+  site-bg: "#faf7fb"
+  surface-raised: "#ffffff"
+  site-surface: "#f2edf8"
+  site-surface2: "#eae1f5"
+  site-line: "#dcd2e5"
+  site-soft: "#e9e1ee"
+  site-text: "#2d103a"
+  site-muted: "#695174"
+  site-quiet: "#745e7d"
+  prism-accent: "#bc294a"
+  prism-violet: "#7345b2"
+  prism-coral: "#e74767"
   site-signal-clear: "#176a4f"
   site-signal-warning: "#815b14"
   site-signal-alert: "#a33428"
-  checker-accent: "#cce3bc"
-  checker-copy: "#c1d1c9"
 typography:
   display:
-    fontFamily: "Newsreader, Georgia, serif"
-    fontSize: "clamp(3.4rem, 4.8vw, 4.9rem)"
-    fontWeight: 450
-    lineHeight: 1.02
-    letterSpacing: "-0.025em"
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "clamp(3.5rem, 6vw, 5.9rem)"
+    fontWeight: 650
+    lineHeight: 1.01
+    letterSpacing: "-0.04em"
   headline:
-    fontFamily: "Newsreader, Georgia, serif"
-    fontSize: "clamp(2.2rem, 3.8vw, 3.7rem)"
-    fontWeight: 450
-    lineHeight: 1.1
-    letterSpacing: "-0.025em"
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "clamp(2rem, 3.5vw, 3.2rem)"
+    fontWeight: 650
+    lineHeight: 1.15
+    letterSpacing: "-0.04em"
   body:
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    fontFamily: "Manrope, sans-serif"
     fontSize: "16px"
     lineHeight: 1.65
-  navigation:
-    fontFamily: '"Segoe UI", sans-serif'
-    fontSize: "0.88rem"
-    fontWeight: 500
+  button:
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "0.9rem"
+    fontWeight: 600
     lineHeight: 1.4
 rounded:
-  field: "3px"
-  action: "6px"
-  panel: "8px"
-spacing:
-  compact: "0.75rem"
-  standard: "1rem"
-  roomy: "1.5rem"
-  panel: "2rem"
-  section-mobile: "3rem"
+  control: "8px"
+  panel: "14px"
+  tag: "6px"
 components:
   button-primary:
-    backgroundColor: "{colors.site-text}"
-    textColor: "{colors.site-bg}"
-    rounded: "{rounded.action}"
-    padding: "0.8rem 1.15rem"
+    backgroundColor: "{colors.prism-accent}"
+    textColor: "white"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "0.9rem 1.3rem"
   button-secondary:
     backgroundColor: "transparent"
     textColor: "{colors.site-text}"
-    rounded: "{rounded.action}"
-    padding: "0.8rem 1.15rem"
-  button-check:
-    backgroundColor: "{colors.checker-accent}"
-    textColor: "{colors.site-text}"
-    rounded: "{rounded.action}"
-    padding: "0.8rem 1.15rem"
-  input-domain:
-    backgroundColor: "{colors.site-bg}"
-    textColor: "{colors.site-text}"
-    rounded: "{rounded.field}"
-    padding: "0.66rem 0.75rem"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    padding: "0.9rem 1.3rem"
 ---
 
-# Design System: Glarion landing
+# Design System: Glarion Prism
 
 ## Overview
 
-**Creative North Star: "The Agency Technical Journal"**
+**Creative North Star: "Prism".** The built system follows user-selected alternative 6, approved with “la 6 mi piace.” The subsequent “ok vai avanti” approved extending Prism to the customer workspace and all remaining pages. Pearl surfaces, dark plum type, coral emphasis and translucent optical artwork give the marketing page its identity; operational and reading surfaces apply the same palette with quieter composition. This supersedes the agency-journal proposal across the implemented surfaces. Appearance approval does not authorize deployment.
 
-This records the built local landing proposal in `web/landing.html` and `web/landing.css`. It is not a user-approved brand replacement: audience and workflow preferences remain optional unanswered questions. The existing dark dashboard intentionally retains its earlier design and is outside this document's authority.
+Source of truth: the final cascade in `web/landing.css` and markup in `web/landing.html`; reference comp: `.preview/design-alternatives/option-6.png`.
 
-Ivory paper, forest ink and a literary display face give technical evidence room to be read. Ordinary controls stay compact and explicit, with thin rules organizing the page instead of decoration. The final CSS cascade, rather than superseded declarations earlier in the stylesheet, is the source of truth.
-
-**Key Characteristics:**
-- Warm paper and forest ink.
-- Serif headlines paired with practical sans-serif controls.
-- Flat evidence surfaces and visibly contrasting working areas.
+Shared non-landing tokens live in `web/prism.css`, with surface rules in `web/app.css`, `web/seo.css`, `web/privacy.css`, `web/terms.css` and `web/sample-report.css`. Generated reports keep their self-contained styles in `crates/report/src/html.rs`. Scope, validation and limitations are recorded in `.impeccable/workspace-brief.md`; the ship review covers nine captured visible viewports, not untested account, payment or scan workflows. Work remains local.
 
 ## Colors
 
-The primary palette combines dark green ink with warm neutral paper; semantic results retain separate clear, warning and alert colors.
+Primary actions use the deeper rose accent for white button text; coral supplies large headline emphasis. Violet supports interactive details and lilac tints organize supporting surfaces. Pearl backgrounds, plum text and muted plum descriptions carry ordinary reading. Existing green, amber and red signals retain their semantic roles in checker results.
 
-### Primary
-- Forest ink (`site-text`) anchors text, navigation actions and the checker surface.
-- Pale leaf (`checker-accent`) identifies the check action and its focus ring on the dark surface.
+In shared styles, `--bg`, `--sink`, `--rule`, `--ink`, `--ink-2` and `--ink-3` map respectively to the frontmatter's site background, surface, line, text, muted and quiet colors; `--raise` uses the raised white surface. `--accent` maps to rose and `--violet` to violet. The generated report uses the same plum, muted plum, divider and lilac palette on white, preserving its separate severity colors and agency identity.
 
-### Neutral
-- Ivory (`site-bg`) is the reading field and input surface.
-- Layered paper (`site-surface`, `site-surface2`) supports secondary surfaces and hover states.
-- Rule and soft rule (`site-line`, `site-soft`) separate information.
-- Muted and quiet ink support descriptions and metadata; checker copy has its own lighter foreground.
-
-**The Contextual Contrast Rule.** Dark working surfaces use their light text and focus treatments; paper surfaces use dark text and green focus treatments.
+**The Evidence Rule.** Status color accompanies readable status text; illustrations and fictional data remain explicitly identified.
 
 ## Typography
 
-**Display Font:** self-hosted Newsreader with Georgia and serif fallbacks. The normal variable font is served from `/fonts/newsreader.ttf`, with swap loading.
+Manrope is self-hosted at `/fonts/manrope.ttf`, with the bundled OFL license. It supplies display, body and controls; inherited technical result annotations may retain the system monospace stack. Headlines use compact spacing and balanced wraps. Hero emphasis is upright coral type. Body copy stays readable, with section introductions limited to 65 characters per line where possible.
 
-**Body Font:** platform sans-serif; explicit Segoe UI fallbacks are used for navigation and several labels. Monospace remains for technical result metadata, identifiers and finding numbers, not as the display voice.
-
-Display and headline sizes are fluid, with a modest weight and tight tracking. Body text is comfortable and restrained; section descriptions use a 1.75 line height and up to 66ch, while the hero description uses 48ch. Newsreader also distinguishes report totals and plan prices; these numbers use tabular figures.
-
-**The Reading Hierarchy Rule.** Serif typography establishes the main reading hierarchy; forms, navigation and technical annotations remain functional and direct.
+Workspace copy uses 15px/1.65 Manrope and compact headings (`clamp(1.85rem, 3vw, 2.55rem)`). Guides and legal pages use 16px/1.7 Manrope. Downloadable generated reports deliberately retain their system sans-serif stack at 16px/1.65 so a single attachment needs no new external font resources.
 
 ## Layout
 
-The main container is at most 78rem with 4rem total desktop gutters. Hero columns balance copy and evidence at 1.1:1; the checker spans both. Main sections use 4.5rem vertical padding and thin top dividers.
+The landing desktop container is capped at 88rem with 5rem total horizontal clearance. At 1100px and below, clearance becomes 3rem; below 38rem it becomes 2rem. The sticky header measures 90px on desktop and 74px below 52rem.
 
-At 64rem, gaps and panel padding tighten. At 52rem, the hero, checker, evidence and workflow become single-column; gutters total 2.5rem and sections use 3rem padding. At 38rem, gutters total 2rem, the hero heading is 3.45rem, and the domain field and check action remain side by side with a shrinking field. The comparison keeps its 42rem table width inside a keyboard-focusable horizontal scroller, with a visible mobile hint. Report metrics stay in three columns. Pricing becomes stacked on small screens.
+Below 52rem, content and checker stack and the illustrative portfolio sidebar disappears. Navigation keeps sign-in and the account action. Below 38rem, the ring enters document flow between the hero copy and sample overview; the overview table keeps a 630px minimum width inside its own keyboard-focusable horizontal scroll region. The checker input and button remain side by side. Comparison content scrolls locally with a visible mobile hint. Mobile display type uses `clamp(2.8rem, 12vw, 4.3rem)`.
+
+Workspace navigation uses a fixed 224px white sidebar and lilac active links with `aria-current`; at 900px it becomes a sticky wrapping header retaining navigation links. Main content caps at 78rem. Account entry pairs the reused ring with a half-width form, hiding the artwork and expanding the form at 900px. At 46rem, forms and facts stack and tabs wrap. Guides cap their shell at 66rem and article at 48rem; legal reading content caps at 52rem. These reading surfaces use an 80px header. Sample reports remove the rounded page edge at 58rem and keep evidence text wrapping.
 
 ## Elevation & Depth
 
-The visible landing is flat. The report preview and checker explicitly remove inherited shadows; paper boundaries, spacing and tonal contrast create separation. Do not derive a new shadow vocabulary from overridden legacy declarations.
+Workspace content is flat: white ledgers and sidebar on pearl, with lilac form groups and selection. The command palette uses modal lift (`0 24px 60px #2d103a33`). The sample report shares the landing portfolio's restrained lift; print removes its shadow and rounded page edge.
+
+The illustrative portfolio floats on a restrained violet shadow (`0 18px 54px #52337316`). The checker and final action panel are flat lilac surfaces. Local decorative artwork at `web/prism-ring.png` provides optical depth through masking and multiply blending. Its one-time settling animation lasts 1.1s; reduced-motion preference disables animation, transitions and smooth scrolling.
 
 ## Shapes
 
-Thin rules and mostly rectangular evidence dominate. Actions have softly rounded corners, fields use a smaller radius, and the checker and closing panel use the larger panel radius. The existing brand mark sits in a circular ink background. This mix reflects function rather than imposing one radius on everything.
+Controls have softly rounded corners, larger panels use the panel radius, and sample status tags use the smaller tag radius. Thin dividers organize tables and later page sections. The retained brand mark sits in a plum circle.
 
 ## Components
 
-### Buttons
+Operational actions have a 44px minimum height; inputs have a 46px minimum, white fill, lilac border and violet focus treatment. Workspace focus is violet, error notices announce as alerts, and the skip link moves focus without changing the hash route. Reading callouts use thin violet or neutral dividers. Legal print removes navigation; generated reports keep A4 layout, severity labels and findings together and hide save controls. Shared styles honor reduced motion.
 
-Primary actions use forest ink on paper; secondary and ghost actions are transparent with a thin rule. The checker reverses the scheme with pale leaf on ink. Actions have a minimum height of 44px; the check action and input use 48px. Hover changes background and, for outlined actions, border color. Disabled buttons reduce opacity. Focus outlines remain visible; reduced-motion preferences disable transitions.
+Primary actions use rose fill and deepen on hover. Secondary actions and account navigation use plum text with a muted lilac border, gaining a lilac background on hover. Main actions and checker controls have a 48px minimum height.
 
-### Inputs / Fields
+The checker uses a labeled light input, dark text, violet caret and an explicit red error message; loading, results and live announcements remain functional. Native FAQ disclosure semantics remain intact. Focus remains visible: generic focus is violet while the more specific inherited link, button and input rules retain the green outline.
 
-The public domain input uses an explicit visible label, paper background, dark text and caret, a descriptive note, and an error note with a contrasting light red treatment on the dark panel. The result region retains polite live announcements. Preserve these semantics alongside appearance.
-
-### Navigation
-
-The sticky ivory header is 80px high on desktop and 70px below 52rem. Ordinary links use muted sans-serif text; the account action is filled ink. Mobile retains sign-in and the account action while hiding secondary links.
-
-### Evidence and containers
-
-The fictional report is a flat paper sheet with ruled findings, visible textual severity, and a clearly marked sample badge. The working checker is a contrasting full-width panel. Workflow, pricing and FAQ use aligned rows and dividers. The FAQ keeps native disclosure semantics and a visible focus treatment.
+The portfolio overview is a fictional illustration, with a visible sample label and an actual link to the sample report. Its sidebar and tags do not imply implemented dashboard functionality. The ring is decorative and hidden from assistive technology. All new artwork and font requests resolve locally.
 
 ## Do's and Don'ts
 
-### Do:
-- **Do** preserve the reading hierarchy and contextual contrast treatments.
-- **Do** keep semantic status text alongside its color.
-- **Do** retain mobile scrolling hints, keyboard focus and reduced-motion behavior.
-
-### Don't:
-- **Don't** apply this landing proposal automatically to the existing dark dashboard.
-- **Don't** infer user-approved brand preferences from this local implementation.
-- **Don't** revive overridden shadows or unused eyebrow styles as new house rules.
+- **Do** preserve the selected pearl, plum, coral and lilac hierarchy and local Manrope asset.
+- **Do** preserve focus, reduced motion, fictional-data labeling and local table scrolling.
+- **Do** apply the approved Prism palette across workspace and reading surfaces while retaining their operational density, evidence and print behavior.
+- **Don't** treat illustrative portfolio controls as delivered dashboard features or appearance approval as deployment authorization.

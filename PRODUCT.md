@@ -31,6 +31,16 @@ No claim of complete security, guaranteed revenue or substitution for a manual p
 README.md, backend enforcement and tests, sample-report.html (fictional sample).
 No verified customer testimonials or conversion benchmarks supplied.
 
+## Confirmed Visual Direction
+
+The user selected alternative 6, Prism: pearl, lilac and coral, dark plum
+sans-serif typography and an iridescent optical ring. After approving the landing,
+the user said “ok vai avanti” to extending Prism to the customer workspace and
+all remaining pages, including account entry, guides, legal pages and reports.
+This authorizes the local restyle; it does not record approval to publish it.
+Operational surfaces preserve working forms, navigation and security states;
+reading surfaces preserve evidence, agency identity and print behavior.
+
 ## Product Principles
 
 - Make public-check limitations visible before and after use.

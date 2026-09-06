@@ -337,11 +337,11 @@ fn render_footer(html: &mut String, meta: &ReportMeta) {
 /// turns it into a PDF without a rendering service.
 const STYLES: &str = r#"<style>
   :root {
-    --ink: #16191d;
-    --muted: #5c6470;
-    --line: #e2e5ea;
+    --ink: #2d103a;
+    --muted: #695174;
+    --line: #dcd2e5;
     --bg: #ffffff;
-    --accent: #1f4ed8;
+    --accent: #7345b2;
   }
   * { box-sizing: border-box; }
   body {
@@ -352,7 +352,7 @@ const STYLES: &str = r#"<style>
     color: var(--ink);
     font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  h1 { font-size: 1.9rem; line-height: 1.2; margin: .4rem 0 .6rem; }
+  h1 { font-size: 2.2rem; line-height: 1.15; letter-spacing: -.03em; margin: .4rem 0 .6rem; }
   h2 { font-size: 1.15rem; margin: 2.6rem 0 .3rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
   h3 { font-size: 1rem; margin: 0; }
   .cover { border-bottom: 2px solid var(--ink); padding-bottom: 1.6rem; }
@@ -361,14 +361,14 @@ const STYLES: &str = r#"<style>
   .by { text-transform: uppercase; letter-spacing: .07em; }
   .subject { font-size: 1.05rem; margin: .2rem 0; }
   .headline { font-size: 1.1rem; font-weight: 600; margin: 1.4rem 0 0; }
-  .tally { display: flex; gap: 2.5rem; margin: 1.2rem 0 0; padding: 0; }
+  .tally { display: flex; flex-wrap: wrap; gap: 1.2rem 2.5rem; margin: 1.5rem 0 0; padding: 1.2rem; background: #f2edf8; border-radius: 12px; }
   .tally div { margin: 0; }
   .tally dt { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
   .tally dd { margin: .1rem 0 0; font-size: 1.5rem; font-weight: 600; }
   .blurb { color: var(--muted); font-size: .9rem; margin: .5rem 0 1.4rem; }
   .empty { color: var(--muted); margin: 1rem 0; }
   .finding { padding: 1.1rem 0 1.3rem; border-bottom: 1px solid var(--line); }
-  .finding-head { display: flex; align-items: baseline; gap: .7rem; }
+  .finding-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .7rem; }
   .pill {
     flex: none; font-size: .68rem; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; padding: .2rem .5rem; border-radius: 3px;
@@ -395,7 +395,7 @@ const STYLES: &str = r#"<style>
   .save {
     display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
     margin: 0 0 2.2rem; padding: .8rem 1rem;
-    border: 1px solid var(--line); border-radius: 6px; background: #f8f9fb;
+    border: 1px solid var(--line); border-radius: 8px; background: #f2edf8;
   }
   .save button {
     font: inherit; font-size: .88rem; font-weight: 600;
