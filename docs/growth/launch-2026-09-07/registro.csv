@@ -1,0 +1,5 @@
+id,canale,tema,lingua,stato,data_pubblicazione,url_pubblico,minuti_lavoro,impression,clic,conversazioni_qualificate,verifiche_dominio_attribuite,fonte_dati,data_rilevazione,note
+01,linkedin,report_cliente,,bozza,,,,,,,,,,"Lingua e pubblicazione da confermare; nessuna metrica rilevata"
+02,linkedin,priorita_csp,,bozza,,,,,,,,,,"Pubblicazione non programmata"
+03,linkedin,checklist_report,,bozza,,,,,,,,,,"Pubblicazione non programmata"
+04,linkedin,demo_video,,copione,,,,,,,,,,"Video non ancora registrato"

@@ -61,3 +61,8 @@ Cominciare da una dimostrazione LinkedIn e da prove con agenzie pertinenti.
 Sono esperimenti proposti per la coerenza con il pubblico di Glarion, non canali
 di efficacia già dimostrata. Ampliare solo quando sappiamo quali messaggi
 portano al primo sito verificato.
+
+
+## Preparazione operativa del 7 settembre 2026
+
+Primo kit pronto in `docs/growth/launch-2026-09-07/LEGGIMI.md`: tre post in italiano/inglese, checklist riutilizzabile, copione demo e registro delle metriche. Verificata accessibilita pubblica di sitemap e pagine principali; nessuna attribuzione analytics aggiunta. Profilo LinkedIn Aurelio Avila raggiungibile con sessione autenticata; lingua e autorizzazione del primo post richieste all'utente. Nessun post inviato o scheduler attivato in questa preparazione.
