@@ -10,7 +10,7 @@ Preparata il 7 settembre 2026. Budget aggiuntivo: zero euro; tempo operativo ind
 - `registro.csv`: registro locale per pubblicazione, dati disponibili e conversazioni. Celle vuote = dato non disponibile, non zero.
 - `seo-check.json`: risposte pubbliche controllate in questa sessione.
 
-## Primo canale
+## Primo canale — indicazione iniziale superata
 
 LinkedIn del fondatore: Aurelio Avila, https://www.linkedin.com/in/aurelio-avila-aa40133a4/ . Profilo raggiungibile con sessione autenticata il 7 settembre; non modificati titolo professionale o biografia. È una scelta iniziale per la coerenza con il pubblico delle agenzie, non un canale con efficacia già dimostrata per Glarion.
 
@@ -63,3 +63,10 @@ Con Search Console disponibile: selezionare la proprietà esistente; ispezionare
 - Reddit, spam e regole delle comunità: https://support.reddithelp.com/hc/en-us/articles/360043504051-Spam
 - Product Hunt, modalità e gratuità del lancio: https://www.producthunt.com/launch/how-product-hunt-works
 - MDN, CSP report-only usata nel contenuto 02: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy-Report-Only
+
+
+## Correzione dell'utente: solo identità aziendali
+
+L'utente ha rifiutato la pubblicazione sul profilo personale e vuole pagine a nome delle proprie aziende. Non pubblicare né programmare i testi del fondatore sul profilo Aurelio Avila. Per Glarion usare una pagina aziendale con nome/logo del marchio; il profilo personale serve soltanto alla gestione. Adeguare i testi alla voce aziendale.
+
+Verifica effettiva LinkedIn: selezionando Azienda nella creazione di una pagina compare "Non hai abbastanza collegamenti per poter creare una pagina LinkedIn". Nessuna pagina creata. Non sono stati inviati inviti di collegamento, modificati profili o avviati abbonamenti. Non è indicata una soglia numerica: non inventarla. Serve un profilo amministratore idoneo, oppure collegamenti professionali autentici sul profilo esistente prima di riprovare.
