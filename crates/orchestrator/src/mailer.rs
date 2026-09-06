@@ -109,10 +109,10 @@ impl Mailer {
     /// when nothing was sent. See `last_send_ok` for why this is not
     /// per-recipient.
     pub fn last_send_ok(&self) -> bool {
-        self.last_send_ok.load(Ordering::Relaxed)
+        self.is_configured() && self.last_send_ok.load(Ordering::Relaxed)
     }
 
-    /// Sends a message, or logs it when no provider is configured.
+    /// Sends a message, returning an error when no provider is configured.
     ///
     /// Errors are returned rather than swallowed so a caller can decide
     /// what to tell the user, but note that signup deliberately does not
@@ -738,6 +738,10 @@ mod tests {
     #[tokio::test]
     async fn missing_configuration_is_a_failure_without_message_content() {
         let sender = mailer();
+        assert!(
+            !sender.last_send_ok(),
+            "missing configuration is unhealthy before the first attempt"
+        );
         let message = password_reset_email("Test", "https://example.invalid/SECRET", 60);
         let error = sender
             .send("audit@example.invalid", &message)
