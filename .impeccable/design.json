@@ -1,204 +1,72 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-06T20:05:25.500Z",
-  "title": "Design System: Glarion landing",
+  "generatedAt": "2026-09-06T21:49:51.6489383Z",
+  "title": "Design System: Glarion Prism",
   "extensions": {
     "colorMeta": {
       "site-bg": {
         "role": "neutral",
-        "displayName": "site bg",
-        "tonalRamp": [
-          "oklch(15% 0.012 90)",
-          "oklch(26% 0.012 90)",
-          "oklch(37% 0.012 90)",
-          "oklch(49% 0.012 90)",
-          "oklch(61% 0.012 90)",
-          "oklch(73% 0.012 90)",
-          "oklch(85% 0.012 90)",
-          "oklch(95% 0.012 90)"
-        ]
-      },
-      "site-surface": {
-        "role": "neutral",
-        "displayName": "site surface",
-        "tonalRamp": [
-          "oklch(15% 0.012 90)",
-          "oklch(26% 0.012 90)",
-          "oklch(37% 0.012 90)",
-          "oklch(49% 0.012 90)",
-          "oklch(61% 0.012 90)",
-          "oklch(73% 0.012 90)",
-          "oklch(85% 0.012 90)",
-          "oklch(95% 0.012 90)"
-        ]
-      },
-      "site-surface2": {
-        "role": "neutral",
-        "displayName": "site surface2",
-        "tonalRamp": [
-          "oklch(15% 0.012 90)",
-          "oklch(26% 0.012 90)",
-          "oklch(37% 0.012 90)",
-          "oklch(49% 0.012 90)",
-          "oklch(61% 0.012 90)",
-          "oklch(73% 0.012 90)",
-          "oklch(85% 0.012 90)",
-          "oklch(95% 0.012 90)"
-        ]
-      },
-      "site-line": {
-        "role": "neutral",
-        "displayName": "site line",
-        "tonalRamp": [
-          "oklch(15% 0.012 100)",
-          "oklch(26% 0.012 100)",
-          "oklch(37% 0.012 100)",
-          "oklch(49% 0.012 100)",
-          "oklch(61% 0.012 100)",
-          "oklch(73% 0.012 100)",
-          "oklch(85% 0.012 100)",
-          "oklch(95% 0.012 100)"
-        ]
-      },
-      "site-soft": {
-        "role": "neutral",
-        "displayName": "site soft",
-        "tonalRamp": [
-          "oklch(15% 0.012 100)",
-          "oklch(26% 0.012 100)",
-          "oklch(37% 0.012 100)",
-          "oklch(49% 0.012 100)",
-          "oklch(61% 0.012 100)",
-          "oklch(73% 0.012 100)",
-          "oklch(85% 0.012 100)",
-          "oklch(95% 0.012 100)"
-        ]
+        "displayName": "Pearl ground"
       },
       "site-text": {
         "role": "neutral",
-        "displayName": "site text",
-        "tonalRamp": [
-          "oklch(15% 0.025 180)",
-          "oklch(26% 0.025 180)",
-          "oklch(37% 0.025 180)",
-          "oklch(49% 0.025 180)",
-          "oklch(61% 0.025 180)",
-          "oklch(73% 0.025 180)",
-          "oklch(85% 0.025 180)",
-          "oklch(95% 0.025 180)"
-        ]
+        "displayName": "Dark plum"
       },
-      "site-muted": {
-        "role": "neutral",
-        "displayName": "site muted",
-        "tonalRamp": [
-          "oklch(15% 0.025 165)",
-          "oklch(26% 0.025 165)",
-          "oklch(37% 0.025 165)",
-          "oklch(49% 0.025 165)",
-          "oklch(61% 0.025 165)",
-          "oklch(73% 0.025 165)",
-          "oklch(85% 0.025 165)",
-          "oklch(95% 0.025 165)"
-        ]
-      },
-      "site-quiet": {
-        "role": "neutral",
-        "displayName": "site quiet",
-        "tonalRamp": [
-          "oklch(15% 0.025 165)",
-          "oklch(26% 0.025 165)",
-          "oklch(37% 0.025 165)",
-          "oklch(49% 0.025 165)",
-          "oklch(61% 0.025 165)",
-          "oklch(73% 0.025 165)",
-          "oklch(85% 0.025 165)",
-          "oklch(95% 0.025 165)"
-        ]
-      },
-      "site-signal-clear": {
+      "prism-accent": {
         "role": "primary",
-        "displayName": "site signal clear",
-        "tonalRamp": [
-          "oklch(15% 0.095 165)",
-          "oklch(26% 0.095 165)",
-          "oklch(37% 0.095 165)",
-          "oklch(49% 0.095 165)",
-          "oklch(61% 0.095 165)",
-          "oklch(73% 0.095 165)",
-          "oklch(85% 0.095 165)",
-          "oklch(95% 0.095 165)"
-        ]
+        "displayName": "Deep rose action"
       },
-      "site-signal-warning": {
-        "role": "primary",
-        "displayName": "site signal warning",
-        "tonalRamp": [
-          "oklch(15% 0.095 80)",
-          "oklch(26% 0.095 80)",
-          "oklch(37% 0.095 80)",
-          "oklch(49% 0.095 80)",
-          "oklch(61% 0.095 80)",
-          "oklch(73% 0.095 80)",
-          "oklch(85% 0.095 80)",
-          "oklch(95% 0.095 80)"
-        ]
+      "prism-coral": {
+        "role": "secondary",
+        "displayName": "Coral emphasis"
       },
-      "site-signal-alert": {
-        "role": "primary",
-        "displayName": "site signal alert",
-        "tonalRamp": [
-          "oklch(15% 0.15 30)",
-          "oklch(26% 0.15 30)",
-          "oklch(37% 0.15 30)",
-          "oklch(49% 0.15 30)",
-          "oklch(61% 0.15 30)",
-          "oklch(73% 0.15 30)",
-          "oklch(85% 0.15 30)",
-          "oklch(95% 0.15 30)"
-        ]
-      },
-      "checker-accent": {
-        "role": "primary",
-        "displayName": "checker accent",
-        "tonalRamp": [
-          "oklch(15% 0.055 130)",
-          "oklch(26% 0.055 130)",
-          "oklch(37% 0.055 130)",
-          "oklch(49% 0.055 130)",
-          "oklch(61% 0.055 130)",
-          "oklch(73% 0.055 130)",
-          "oklch(85% 0.055 130)",
-          "oklch(95% 0.055 130)"
-        ]
-      },
-      "checker-copy": {
-        "role": "neutral",
-        "displayName": "checker copy",
-        "tonalRamp": [
-          "oklch(15% 0.025 160)",
-          "oklch(26% 0.025 160)",
-          "oklch(37% 0.025 160)",
-          "oklch(49% 0.025 160)",
-          "oklch(61% 0.025 160)",
-          "oklch(73% 0.025 160)",
-          "oklch(85% 0.025 160)",
-          "oklch(95% 0.025 160)"
-        ]
+      "prism-violet": {
+        "role": "secondary",
+        "displayName": "Prism violet"
       }
     },
-    "shadows": [],
+    "typographyMeta": {
+      "display": {
+        "displayName": "Manrope display",
+        "purpose": "Compact balanced hero headline; local variable font with OFL license."
+      },
+      "body": {
+        "displayName": "Manrope body",
+        "purpose": "Landing, workspace and reading copy use local Manrope; technical annotations retain monospace. Self-contained generated reports use system sans-serif without new external resources."
+      }
+    },
+    "shadows": [
+      { "name": "command-palette", "value": "0 24px 60px #2d103a33", "purpose": "Lift the operational command dialog above otherwise flat white and pearl surfaces." },
+      {
+        "name": "portfolio-float",
+        "value": "0 18px 54px #52337316",
+        "purpose": "Illustrative portfolio and sample report receive restrained violet lift; sample report print removes it."
+      }
+    ],
     "motion": [
       {
         "name": "action-transition",
-        "value": "background 0.18s ease, color 0.18s ease",
-        "purpose": "Button hover; disabled for reduced motion."
+        "value": "background .2s ease, border-color .2s ease",
+        "purpose": "Action hover transitions; disabled for reduced motion."
+      },
+      {
+        "name": "prism-settle",
+        "value": "1.1s cubic-bezier(.16,1,.3,1) both",
+        "purpose": "Decorative ring settles from translateY(16px), rotate(-3deg) and reduced saturation; disabled for reduced motion."
       }
     ],
     "breakpoints": [
+      { "name": "workspace-header", "value": "900px" },
+      { "name": "workspace-form-stack", "value": "46rem" },
+      { "name": "guide-stack", "value": "42rem" },
+      { "name": "report-page", "value": "58rem" },
+      {
+        "name": "wide-desktop",
+        "value": "1450px"
+      },
       {
         "name": "compact-desktop",
-        "value": "64rem"
+        "value": "1100px"
       },
       {
         "name": "stacked",
@@ -215,78 +83,45 @@
       "name": "Primary action",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Main action on paper.",
-      "html": "<button class=\"ds-button ds-primary\">Check a website</button>",
-      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-primary{background:var(--site-text,#192b29);color:var(--site-bg,#f5f3ed);border:1px solid var(--site-text,#192b29)}.ds-primary:hover{background:#31584b;border-color:#31584b}"
+      "description": "Deep rose public-check action with a visible inherited green focus outline.",
+      "html": "<button class=\"ds-primary\">Check a website</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:.9rem 1.3rem;border-radius:8px;font:600 .9rem/1.4 Manrope,sans-serif;background:var(--prism-accent,#bc294a);color:white;border:1px solid var(--prism-accent,#bc294a);cursor:pointer;transition:background .2s ease,border-color .2s ease}.ds-primary:hover{background:#a5203e;border-color:#a5203e}.ds-primary:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
     },
     {
       "name": "Secondary action",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Sample report and supporting actions.",
-      "html": "<button class=\"ds-button ds-secondary\">View sample report</button>",
-      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-secondary{background:transparent;color:var(--site-text,#192b29);border:1px solid var(--site-line,#c9c9c0)}.ds-secondary:hover{background:var(--site-surface2,#e7e5dd);border-color:var(--site-muted,#4e605b)}"
-    },
-    {
-      "name": "Checker action",
-      "kind": "button",
-      "refersTo": "button-check",
-      "description": "Contrasting action within the dark checker.",
-      "html": "<div class=\"ds-dark\"><button class=\"ds-button ds-check\">Check</button></div>",
-      "css": ".ds-button{display:inline-block;padding:.8rem 1.15rem;border-radius:6px;font:650 .9rem/1.65 'Segoe UI',sans-serif;min-height:44px;cursor:pointer;transition:background .18s ease,color .18s ease}.ds-button:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}.ds-button:disabled{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-dark{padding:1rem;background:var(--site-text,#192b29)}.ds-check{background:#cce3bc;color:var(--site-text,#192b29);border:1px solid #cce3bc;min-height:48px}.ds-check:hover{background:#e0efd6}.ds-check:focus-visible{outline-color:#cce3bc}"
-    },
-    {
-      "name": "Domain field",
-      "kind": "input",
-      "refersTo": "input-domain",
-      "description": "Visible label and paper field on the working surface.",
-      "html": "<div class=\"ds-field\"><label for=\"ds-domain\">Website domain</label><input id=\"ds-domain\" placeholder=\"your-client.com\" type=\"text\" inputmode=\"url\"></div>",
-      "css": ".ds-field{padding:1.5rem;background:var(--site-text,#192b29);font-family:'Segoe UI',sans-serif}.ds-field label{display:block;color:#c1d1c9;font-size:.67rem;font-weight:600;margin-bottom:.4rem}.ds-field input{width:100%;padding:.66rem .75rem;background:var(--site-bg,#f5f3ed);color:var(--site-text,#192b29);caret-color:var(--site-text,#192b29);border:1px solid var(--site-bg,#f5f3ed);border-radius:3px;min-height:48px;font:16px/1.65 'Segoe UI',sans-serif}.ds-field input::placeholder{color:var(--site-quiet,#596b65)}.ds-field input:focus-visible{outline:3px solid #cce3bc;outline-offset:3px}"
-    },
-    {
-      "name": "Navigation",
-      "kind": "nav",
-      "description": "Restrained links and a filled account action.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"Example navigation\"><a href=\"#how\">How it works</a><a href=\"#signin\">Sign in</a><a class=\"ds-nav-action\" href=\"#signup\">Start free</a></nav>",
-      "css": ".ds-nav{display:flex;gap:1.35rem;align-items:center;padding:1rem;background:var(--site-bg,#f5f3ed)}.ds-nav a{color:var(--site-muted,#4e605b);font:500 .88rem/1.4 'Segoe UI',sans-serif;text-decoration:none}.ds-nav a:hover{color:var(--site-text,#192b29)}.ds-nav .ds-nav-action{background:var(--site-text,#192b29);color:var(--site-bg,#f5f3ed);padding:.65rem 1.15rem;border:1px solid var(--site-line,#c9c9c0);border-radius:6px}.ds-nav a:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}"
-    },
-    {
-      "name": "Report evidence sheet",
-      "kind": "card",
-      "description": "Flat paper report with an explicit fictional-sample status.",
-      "html": "<article class=\"ds-report\"><div class=\"ds-report-head\"><strong>Website security review</strong><span>Fictional sample</span></div><p>Northstar Studio · example.com</p><div class=\"ds-finding\"><strong>Renew the TLS certificate</strong><span>High</span></div></article>",
-      "css": ".ds-report{background:#fffef9;color:#17191c;padding:2rem;border:1px solid #cdcec3;border-radius:2px;box-shadow:none;font:16px/1.65 'Segoe UI',sans-serif}.ds-report-head{display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid #c8c4bb;padding-bottom:1.2rem;font-size:.7rem}.ds-report-head span{background:#e8eadf;color:#46544c;padding:.2rem .45rem}.ds-report p{font-size:.85rem;font-weight:700}.ds-finding{display:flex;gap:.65rem;justify-content:space-between;border-bottom:1px solid #d7d3ca;padding:1rem 0;font-size:.86rem}.ds-finding span{font-size:.63rem;color:#a23025}"
+      "description": "Outlined supporting action leading to the sample report.",
+      "html": "<a class=\"ds-secondary\" href=\"/sample-report.html\">View sample report</a>",
+      "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:.9rem 1.3rem;border-radius:8px;font:600 .9rem/1.4 Manrope,sans-serif;background:transparent;color:var(--site-text,#2d103a);border:1px solid #ab91ba;text-decoration:none;transition:background .2s ease,border-color .2s ease}.ds-secondary:hover{background:#ede4f6;border-color:#7345b2}.ds-secondary:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
     }
   ],
   "narrative": {
-    "northStar": "The Agency Technical Journal",
-    "overview": "This records the built local landing proposal in `web/landing.html` and `web/landing.css`. It is not a user-approved brand replacement: audience and workflow preferences remain optional unanswered questions. The existing dark dashboard intentionally retains its earlier design and is outside this document's authority.\n\nIvory paper, forest ink and a literary display face give technical evidence room to be read. Ordinary controls stay compact and explicit, with thin rules organizing the page instead of decoration. The final CSS cascade, rather than superseded declarations earlier in the stylesheet, is the source of truth.",
+    "northStar": "Prism",
+    "overview": "The locally built landing follows user-selected alternative 6, approved with ‘la 6 mi piace.’ Pearl surfaces, dark plum Manrope, coral emphasis, lilac panels and local optical artwork define this surface. It supersedes the landing’s earlier agency-journal proposal. The subsequent user approval “ok vai avanti” extends Prism to workspace and all remaining pages: quiet white and pearl operational surfaces, lilac selection and reading panels, rose actions, and preserved semantic statuses. Appearance approval does not authorize deployment.",
     "keyCharacteristics": [
-      "Warm paper and forest ink.",
-      "Serif headlines paired with practical sans-serif controls.",
-      "Flat evidence surfaces and visibly contrasting working areas."
+      "Pearl ground and dark plum Manrope.",
+      "Coral display emphasis with deeper rose actions.",
+      "Optical glass ring and softly lifted fictional portfolio overview.",
+      "Local font and artwork; responsive stacking and contained table scrolling."
     ],
     "rules": [
       {
-        "name": "The Contextual Contrast Rule",
-        "body": "Dark working surfaces use their light text and focus treatments; paper surfaces use dark text and green focus treatments.",
+        "name": "The Evidence Rule",
+        "body": "Status color accompanies readable status text; illustrations and fictional data remain explicitly identified.",
         "section": "colors"
-      },
-      {
-        "name": "The Reading Hierarchy Rule",
-        "body": "Serif typography establishes the main reading hierarchy; forms, navigation and technical annotations remain functional and direct.",
-        "section": "typography"
       }
     ],
     "dos": [
-      "Do preserve the reading hierarchy and contextual contrast treatments.",
-      "Do keep semantic status text alongside its color.",
-      "Do retain mobile scrolling hints, keyboard focus and reduced-motion behavior."
+      "Do preserve the selected color hierarchy and local assets.",
+      "Do preserve keyboard focus, reduced motion and fictional-data labels.",
+      "Do use 44px operational actions, 46px inputs, violet workspace focus and a wrapping mobile navigation header.",
+      "Do preserve self-contained generated-report styling, agency identity, severity text and print rules."
     ],
     "donts": [
-      "Don't apply this landing proposal automatically to the existing dark dashboard.",
-      "Don't infer user-approved brand preferences from this local implementation.",
-      "Don't revive overridden shadows or unused eyebrow styles as new house rules."
+      "Don't obscure operational evidence, navigation or report print behavior when applying Prism across routes.",
+      "Don't present the illustrative overview as delivered dashboard functionality.",
+      "Don't interpret appearance approval or the scoped ship review as deployment authorization."
     ]
   }
 }

@@ -34,7 +34,7 @@ function pages(): string[] {
 }
 
 /// The :root custom properties declared inside a page's <style> blocks.
-function tokensOf(page: string, includeLinked = false): Map<string, string> {
+function tokensOf(page: string, includeLinked = true): Map<string, string> {
   const html = readFileSync(join(WEB, page), "utf8");
   const inline = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
     .map((match) => match[1] ?? "")
@@ -44,8 +44,8 @@ function tokensOf(page: string, includeLinked = false): Map<string, string> {
   ]
     .map((match) => readFileSync(join(WEB, match[1]!), "utf8"))
     .join("\n");
-  // The shared inline dashboard/legal tokens are one system. External
-  // marketing stylesheets have independent palettes, tested separately.
+  // Read linked styles in document order, including shared Prism tokens.
+  // Testing only inline styles would silently skip the extracted app theme.
   const styles = inline + (includeLinked ? "\n" + linked : "");
 
   const found = new Map<string, string>();
@@ -128,7 +128,7 @@ test("text tokens are legible on the background they sit on", () => {
   }
 });
 
-test("marketing text and status tokens remain legible on the editorial surface", () => {
+test("marketing text and status tokens remain legible on the Prism surface", () => {
   const tokens = tokensOf("landing.html", true);
   const background = tokens.get("site-bg");
   assert.ok(
