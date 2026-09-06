@@ -7,9 +7,11 @@ Nessun servizio a pagamento attivato. GitHub era già presente. Nessuna automazi
 | DEV Community | Organizzazione Glarion pubblica, logo, descrizione e collegamento al report configurati | https://dev.to/glarion |
 | YouTube | Canale Glarion pubblico, logo, descrizione e collegamento tracciato al sito salvati; nessun video pubblicato | https://www.youtube.com/@glarionapp |
 | SourceForge | Richiesta ricevuta, in attesa di revisione; non è ancora una scheda pubblicata | https://sourceforge.net/software/vendors/new_submitted |
-| SoftwareSuggest | Primo passaggio accettato con sede Amsterdam e recapito fornito. Il sito dichiara inviata l'email di verifica. Scheda finale non inviata: mancano numero di persone e clienti | https://www.softwaresuggest.com/vendors |
+| SoftwareSuggest | Account verificato tramite email e profilo aziendale salvato. Sede Netherlands / Amsterdam, personale Freelancer, clienti 1–25. Scheda software non ancora creata | https://www.softwaresuggest.com/vendorsportal/index.php?r=company/updateCompany |
 
-SoftwareSuggest: categoria selezionata Software / Website Security. Email di verifica non ancora trovata nella ricerca Outlook al momento del controllo. Non reinviare il primo passaggio senza verificare lo stato, per evitare duplicati. Le fasce obbligatorie iniziano da Freelancer per le persone e 1–25 per i clienti: non inventare clienti se sono zero. Il selettore delle città dipende dal paese del telefono: Amsterdam è stata selezionata nell'elenco olandese, poi è stato inserito il recapito internazionale italiano autorizzato. Verificare anche il paese nella scheda finale del portale.
+SoftwareSuggest: utente conferma una persona e cinque clienti; selezionate le fasce corrispondenti. Accesso effettuato con codice email; nessuna credenziale conservata nei documenti. Profilo aziendale aggiornato e valori riletti dopo nuova navigazione: Netherlands, Amsterdam, Freelancer, 1–25. Corretto il paese inizialmente derivato dal prefisso telefonico italiano. Non ripetere la registrazione: il modulo conferma che la società è già registrata.
+
+Il gestore prodotti mostrava «No Software Found». Due tentativi di compilazione di Add Software sono stati interrotti dal ritorno alla pagina Promote/Upgrade prima del salvataggio; osservato anche ERR_CONNECTION_CLOSED durante il recupero della pagina. Nessuna opzione a pagamento attivata e nessuna scheda software pubblicata o inviata confermata. Categoria e presentazione previste: Website Security, Glarion, Website monitoring and clear client reports for agencies. Riprendere dal portale autenticato, non dal modulo di registrazione.
 
 ## Articolo DEV
 
