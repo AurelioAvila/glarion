@@ -5,11 +5,8 @@
 //! hosts block outbound port 587/465, and a blocked SMTP connection hangs
 //! until a timeout instead of failing fast.
 //!
-//! When no API key is configured — local development — messages are logged
-//! instead of sent. That is deliberate and loud: the confirmation link is
-//! printed so the flow can be exercised end to end without a mail account,
-//! and `is_configured` lets a caller tell the difference rather than
-//! assuming delivery happened.
+//! Missing configuration is a send failure, never a successful delivery.
+//! Message bodies are not logged because they can contain recovery tokens.
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -112,10 +109,10 @@ impl Mailer {
     /// when nothing was sent. See `last_send_ok` for why this is not
     /// per-recipient.
     pub fn last_send_ok(&self) -> bool {
-        self.last_send_ok.load(Ordering::Relaxed)
+        self.is_configured() && self.last_send_ok.load(Ordering::Relaxed)
     }
 
-    /// Sends a message, or logs it when no provider is configured.
+    /// Sends a message, returning an error when no provider is configured.
     ///
     /// Errors are returned rather than swallowed so a caller can decide
     /// what to tell the user, but note that signup deliberately does not
@@ -130,16 +127,7 @@ impl Mailer {
     /// a transport error, is recorded by `send` rather than by each branch.
     async fn deliver(&self, to: &str, message: &Message) -> anyhow::Result<()> {
         let Some(api_key) = &self.api_key else {
-            tracing::warn!(
-                to = %to,
-                subject = %message.subject,
-                "email not sent: RESEND_API_KEY is unset. Body follows for development."
-            );
-            // The text part, not the HTML: in a terminal a confirmation link
-            // buried in inlined table markup is unreadable, and reading that
-            // link back out is the whole point of logging it.
-            tracing::info!("{}", message.text);
-            return Ok(());
+            anyhow::bail!("email provider is not configured");
         };
 
         let payload = ResendPayload {
@@ -161,11 +149,7 @@ impl Mailer {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            anyhow::bail!(
-                "email provider refused ({status}): {}",
-                truncate(&body, 300)
-            );
+            anyhow::bail!("email provider refused ({status})");
         }
 
         Ok(())
@@ -193,10 +177,6 @@ impl Mailer {
     pub fn reset_link(&self, token: &str) -> String {
         self.app_link(&format!("/reset/{token}"))
     }
-}
-
-fn truncate(text: &str, max: usize) -> String {
-    text.chars().take(max).collect()
 }
 
 /// Escapes text for inclusion in an HTML email body.
@@ -755,6 +735,22 @@ mod tests {
     /// opened a page where nothing happened and left an account that could
     /// never be confirmed. Nothing failed, nothing logged, and the mail
     /// showed as delivered — so it read as a spam problem for a day.
+    #[tokio::test]
+    async fn missing_configuration_is_a_failure_without_message_content() {
+        let sender = mailer();
+        assert!(
+            !sender.last_send_ok(),
+            "missing configuration is unhealthy before the first attempt"
+        );
+        let message = password_reset_email("Test", "https://example.invalid/SECRET", 60);
+        let error = sender
+            .send("audit@example.invalid", &message)
+            .await
+            .unwrap_err();
+        assert!(!sender.last_send_ok());
+        assert_eq!(error.to_string(), "email provider is not configured");
+    }
+
     #[test]
     fn links_into_the_app_do_not_point_at_the_marketing_page() {
         let link = mailer().verification_link("abc123");
