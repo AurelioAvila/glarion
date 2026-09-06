@@ -11,11 +11,11 @@ Nessun servizio a pagamento attivato. GitHub era già presente. Nessuna automazi
 
 ## Articolo DEV
 
-Articolo salvato online come bozza sotto l'organizzazione Glarion, ID 2251142. La pagina conferma «Unpublished Post». Copia locale: [DEV-ARTICLE.md](DEV-ARTICLE.md).
+Articolo pubblicato sotto l'organizzazione Glarion, ID 2251142, il 7 settembre 2026. Pagina pubblica verificata con data, autore, tag security e dichiarazione AI Fully Autonomous. Copia locale: [DEV-ARTICLE.md](DEV-ARTICLE.md).
 
-Non pubblicare automaticamente: DEV mostra il nome del profilo autore e la pagina organizzazione collega il membro personale. Questo limite è stato comunicato all'utente, che preferisce un'identità pubblica aziendale.
+L'utente ha chiarito che il vincolo sul nome personale riguarda soltanto LinkedIn; sugli altri canali autorizzati il nome dell'autore è consentito. La pubblicazione DEV segue questa correzione.
 
-Editor autenticato: https://dev.to/glarion/turn-a-website-security-finding-into-a-client-ready-next-step-2j84-temp-slug-2251142/edit
+URL pubblico: https://dev.to/glarion/turn-a-website-security-finding-into-a-client-ready-next-step-5cch
 
 ## Misurazione
 
