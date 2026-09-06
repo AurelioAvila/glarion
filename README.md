@@ -135,9 +135,9 @@ confirmation mail becomes phishing). With no key configured, messages are
 logged instead of sent and the confirmation link appears in the API output,
 so the signup flow can be exercised locally without a mail account.
 
-The dashboard talks to the same origin it is served from. On localhost it
-falls back to port 8080, so development needs no configuration and no
-machine-specific URL can be committed by accident.
+The dashboard talks to the same origin it is served from, including local
+previews on a custom port. If frontend and API are served separately, set the
+`glarion-api` meta tag explicitly to the API origin.
 
 The runner needs [`nuclei`](https://github.com/projectdiscovery/nuclei) on
 `PATH`. A job whose tool is missing fails with a recorded reason rather
