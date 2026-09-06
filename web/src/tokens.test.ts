@@ -34,11 +34,19 @@ function pages(): string[] {
 }
 
 /// The :root custom properties declared inside a page's <style> blocks.
-function tokensOf(page: string): Map<string, string> {
+function tokensOf(page: string, includeLinked = false): Map<string, string> {
   const html = readFileSync(join(WEB, page), "utf8");
-  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+  const inline = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
     .map((match) => match[1] ?? "")
     .join("\n");
+  const linked = [
+    ...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"?#]+\.css)"/g),
+  ]
+    .map((match) => readFileSync(join(WEB, match[1]!), "utf8"))
+    .join("\n");
+  // The shared inline dashboard/legal tokens are one system. External
+  // marketing stylesheets have independent palettes, tested separately.
+  const styles = inline + (includeLinked ? "\n" + linked : "");
 
   const found = new Map<string, string>();
   for (const block of styles.matchAll(/:root\s*\{([\s\S]*?)\}/g)) {
@@ -54,14 +62,17 @@ function tokensOf(page: string): Map<string, string> {
 
 function relativeLuminance(hex: string): number {
   const digits = hex.replace("#", "");
-  const full = digits.length === 3 ? [...digits].map((c) => c + c).join("") : digits;
+  const full =
+    digits.length === 3 ? [...digits].map((c) => c + c).join("") : digits;
 
   // Written as a function of the offset rather than an array lookup: under
   // noUncheckedIndexedAccess every index is possibly undefined, and coercing
   // that away would hide a genuinely malformed colour instead of failing on it.
   const channel = (offset: number): number => {
     const value = parseInt(full.slice(offset, offset + 2), 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    return value <= 0.04045
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
   };
 
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
@@ -114,5 +125,29 @@ test("text tokens are legible on the background they sit on", () => {
           `${ratio.toFixed(2)}:1, under ${AA_BODY_TEXT}:1`,
       );
     }
+  }
+});
+
+test("marketing text and status tokens remain legible on the editorial surface", () => {
+  const tokens = tokensOf("landing.html", true);
+  const background = tokens.get("site-bg");
+  assert.ok(
+    background,
+    "landing stylesheet must be included in the token checks",
+  );
+  for (const name of [
+    "site-text",
+    "site-muted",
+    "site-quiet",
+    "site-signal-clear",
+    "site-signal-warning",
+    "site-signal-alert",
+  ]) {
+    const color = tokens.get(name);
+    assert.ok(color, `missing ${name}`);
+    assert.ok(
+      contrast(color, background) >= AA_BODY_TEXT,
+      `${name} must meet AA contrast`,
+    );
   }
 });
