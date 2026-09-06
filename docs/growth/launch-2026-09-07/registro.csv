@@ -7,4 +7,4 @@ id,canale,tema,lingua,stato,data_pubblicazione,url_pubblico,minuti_lavoro,impres
 06,devto,client_report_article,en,pubblico,2026-09-07,https://dev.to/glarion/turn-a-website-security-finding-into-a-client-ready-next-step-5cch,,,,,,,UI pubblica,2026-09-07,"ID 2251142; firma personale autorizzata; dichiarazione AI presente"
 07,youtube,canale_azienda,en,pubblico,2026-09-07,https://www.youtube.com/@glarionapp,,,,,,,UI pubblica,2026-09-07,"Logo descrizione e link salvati; nessun video pubblicato"
 08,sourceforge,scheda_prodotto,en,in_revisione,,,,,,,,,Ricevuta richiesta,2026-09-07,"Request Received; URL pubblico non disponibile"
-09,softwaresuggest,scheda_prodotto,en,registrazione_parziale,,,,,,,,,Modulo vendor,2026-09-07,"Primo passaggio accettato; verifica email annunciata; scheda finale richiede persone e clienti"
+09,softwaresuggest,scheda_prodotto,en,profilo_azienda_salvato,,,,,,,,,Portale autenticato,2026-09-07,"Dati confermati salvati e riletti; scheda prodotto non creata per interruzione del modulo"
