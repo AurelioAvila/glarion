@@ -3,3 +3,10 @@ target
 .env.local
 web/node_modules
 web/dist
+
+# Local previews, browser profiles and design evidence never enter remote builds.
+.preview
+.impeccable
+.claude
+.env
+.env.*
