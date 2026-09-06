@@ -239,6 +239,12 @@ pub fn router(state: AppState) -> Router {
             "/api/profile",
             get(routes::profile::get_profile).put(routes::profile::update_profile),
         )
+        // Authenticated findings, profiles and session responses must not be
+        // retained by browsers or shared intermediary caches.
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -341,7 +347,8 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
             STRICT_TRANSPORT_SECURITY,
             HeaderValue::from_static("max-age=31536000; includeSubDomains"),
         ))
-        .layer(SetResponseHeaderLayer::overriding(
+        // Downloaded reports supply a stricter sandboxed policy.
+        .layer(SetResponseHeaderLayer::if_not_present(
             CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
                 "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-WLJsZgWYV6G+rcHqpPVxt4ubAAbZ46TYUXUFnDlN0W4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests",

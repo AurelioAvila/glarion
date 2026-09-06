@@ -81,6 +81,8 @@ COPY web/landing.html web/index.html web/privacy.html web/terms.html web/sample-
      web/glarion-mark-64.png web/glarion-mark-180.png \
      web/glarion-mark-192.png web/glarion-mark-512.png web/glarion-mark.png web/og.png web/
 COPY --from=web /web/dist web/dist
+COPY web/landing.css web/landing.css
+COPY web/fonts web/fonts
 
 RUN chown -R glarion:glarion /app
 USER glarion
