@@ -1,0 +1,22 @@
+:root {
+  --paper: #ffffff;
+  --report-ink: #2d103a;
+  --report-muted: #695174;
+  --report-line: #dcd2e5;
+}
+body { background: var(--bg); font-family: Manrope, sans-serif; }
+.sample-bar { color: var(--ink-2); font-size: .85rem; align-items: center; }
+.sample-bar strong, .sample-bar a { color: var(--ink); }
+.sample-bar a { padding-block: .7rem; }
+.page { border-radius: 14px; box-shadow: 0 18px 54px #52337316; }
+h1 { font-weight: 650; letter-spacing: -.04em; }
+.flag { background: #eee4ff; border: 0; border-radius: 6px; color: #59357e; font-family: Manrope, sans-serif; text-transform: none; }
+.tally { background: var(--sink); padding: 1rem; gap: 1rem; border-radius: 12px; }
+.tally div { background: transparent; padding: .4rem; }
+.tally dd { font-family: Manrope, sans-serif; font-weight: 650; }
+.evidence { border-left-width: 1px; overflow-wrap: anywhere; }
+.limits { background: var(--sink); border-radius: 10px; }
+.finding-head { flex-wrap: wrap; }
+@media(max-width:58rem) { .page { border-radius: 0; } .sample-bar { flex-wrap: wrap; } .tally { grid-template-columns: repeat(3, 1fr); } }
+@media(max-width:380px) { .tally { gap: .3rem; padding: .7rem; } .tally dt { font-size: .7rem; } }
+@media print { body { background: white; } .page { border-radius: 0; box-shadow: none; } }
