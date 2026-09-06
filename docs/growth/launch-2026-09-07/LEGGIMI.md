@@ -65,8 +65,8 @@ Con Search Console disponibile: selezionare la proprietà esistente; ispezionare
 - MDN, CSP report-only usata nel contenuto 02: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy-Report-Only
 
 
-## Correzione dell'utente: solo identità aziendali
+## Preferenza aggiornata: identità aziendale obbligatoria solo su LinkedIn
 
-L'utente ha rifiutato la pubblicazione sul profilo personale e vuole pagine a nome delle proprie aziende. Non pubblicare né programmare i testi del fondatore sul profilo Aurelio Avila. Per Glarion usare una pagina aziendale con nome/logo del marchio; il profilo personale serve soltanto alla gestione. Adeguare i testi alla voce aziendale.
+L'utente ha chiarito il 7 settembre 2026 che il rifiuto del nome e cognome riguarda soltanto LinkedIn. Su LinkedIn usare la pagina aziendale Glarion, senza pubblicare o programmare post sul profilo personale. Sugli altri canali già autorizzati è consentito mostrare il nome personale come autore, inclusa DEV Community. Restano esclusi X e Instagram personale; non riutilizzare canali di altri prodotti.
 
 Verifica effettiva LinkedIn: selezionando Azienda nella creazione di una pagina compare "Non hai abbastanza collegamenti per poter creare una pagina LinkedIn". Nessuna pagina creata. Non sono stati inviati inviti di collegamento, modificati profili o avviati abbonamenti. Non è indicata una soglia numerica: non inventarla. Serve un profilo amministratore idoneo, oppure collegamenti professionali autentici sul profilo esistente prima di riprovare.
