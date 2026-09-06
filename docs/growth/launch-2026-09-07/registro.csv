@@ -3,3 +3,8 @@ id,canale,tema,lingua,stato,data_pubblicazione,url_pubblico,minuti_lavoro,impres
 02,linkedin,priorita_csp,,bozza,,,,,,,,,,"Pubblicazione non programmata"
 03,linkedin,checklist_report,,bozza,,,,,,,,,,"Pubblicazione non programmata"
 04,linkedin,demo_video,,copione,,,,,,,,,,"Video non ancora registrato"
+05,devto,pagina_azienda,en,pubblico,2026-09-07,https://dev.to/glarion,,,,,,,UI pubblica,2026-09-07,"Organizzazione creata; profilo membro personale visibile"
+06,devto,client_report_article,en,bozza,,,,,,,,,UI bozza,2026-09-07,"ID 2251142; non pubblicato per firma personale visibile"
+07,youtube,canale_azienda,en,pubblico,2026-09-07,https://www.youtube.com/@glarionapp,,,,,,,UI pubblica,2026-09-07,"Logo descrizione e link salvati; nessun video pubblicato"
+08,sourceforge,scheda_prodotto,en,in_revisione,,,,,,,,,Ricevuta richiesta,2026-09-07,"Request Received; URL pubblico non disponibile"
+09,softwaresuggest,scheda_prodotto,en,dati_mancanti,,,,,,,,,Modulo vendor,2026-09-07,"Non inviata; servono telefono e paese sede"
