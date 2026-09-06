@@ -38,3 +38,13 @@ Demo area clienti: http://127.0.0.1:5192/app/#/targets
 La demo è separata, usa dati fittizi esplicitamente etichettati e rifiuta modifiche, pagamenti e scansioni. Il report scaricabile nella demo è un esempio indipendente dai conteggi dell’elenco. Il server dimostrativo è in `.preview`, escluso dal pacchetto di produzione.
 
 In questo passaggio non sono stati verificati creazione effettiva di account, invio email, pagamenti o scansioni reali. Non è stata pubblicata alcuna modifica. Le correzioni di sicurezza precedenti sono conservate; questo restyle non equivale a una nuova verifica completa della sicurezza.
+
+
+## Report: chiarezza e impaginazione — 7 settembre 2026
+
+- Report pubblico dimostrativo e report generati condividono lo stesso generatore: riepilogo, prime tre azioni collegate ai dettagli, conseguenza/intervento separati, evidenze visibili, osservazioni distinte dai controlli superati.
+- Il campione usa dati dichiaratamente fittizi e conserva questa indicazione nel PDF. Metadati social e canonical conservati. Il pulsante stampa pubblico usa uno script locale compatibile con la CSP; per il documento servito in sandbox rimangono disponibili stampa del browser e Ctrl/Cmd+P.
+- Impaginazione A4 verificata su tre pagine con Chrome 152: identità in un riquadro del margine inferiore, separato dai contenuti. Verificati anche nomi lunghi su desktop, telefono e PDF. La ripetizione nel margine richiede il supporto del browser ai CSS page margin boxes; non è stata verificata su altri browser.
+- 23 test del report e 20 del frontend superati; controllo TypeScript superato. La prova contro testo ostile include la chiusura di style: i metadati nel margine vengono codificati integralmente come escape CSS.
+- Revisione indipendente: grafica a schermo pronta; correzioni del margine PDF e dell'intestazione lunga valutate risolte, disposizione finale ship locally al perimetro esaminato.
+- Landing: http://localhost:5186/ ; esempio aggiornato: http://localhost:5186/sample-report.html . Demo area clienti aggiornata con il nuovo generatore; nessuna pubblicazione eseguita.

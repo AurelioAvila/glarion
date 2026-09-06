@@ -14,6 +14,7 @@
 //! through [`escape`]; the only HTML in the output is written here.
 
 use chrono::{DateTime, Utc};
+use std::fmt::Write;
 
 use orchestrator::triage::{Disposition, Priority, TriagedFinding, TriagedScan};
 
@@ -116,10 +117,26 @@ pub fn render_html(meta: &ReportMeta, scan: &TriagedScan) -> String {
         escape(meta.scanned_at.format("%e %B %Y").to_string().trim())
     ));
     html.push_str(STYLES);
+    // Encode every scalar as a CSS escape: scanner/agency text must never
+    // terminate a CSS string or the surrounding HTML style element.
+    let identity = format!(
+        "{} · prepared by {} · {}",
+        meta.target_domain,
+        meta.agency_name,
+        meta.scanned_at.format("%e %B %Y")
+    );
+    let css_identity: String = identity
+        .chars()
+        .map(|ch| format!("\\{:x} ", ch as u32))
+        .collect();
+    html.push_str(&format!("<style>@page {{ @bottom-center {{ content: \"{css_identity}\"; font: 8pt/1.4 'Segoe UI', sans-serif; color: #695174; vertical-align: middle; overflow-wrap: anywhere; }} }}</style>\n"));
     html.push_str("</head>\n<body>\n");
 
+    render_running_footer(&mut html, meta);
     render_save_bar(&mut html);
+    html.push_str("<main class=\"report\" id=\"report\">\n");
     render_header(&mut html, meta, scan);
+    render_action_plan(&mut html, scan);
     render_section(
         &mut html,
         "Needs attention",
@@ -136,7 +153,7 @@ pub fn render_html(meta: &ReportMeta, scan: &TriagedScan) -> String {
     );
     render_inventory(&mut html, scan);
     render_footer(&mut html, meta);
-    render_running_footer(&mut html, meta);
+    html.push_str("</main>\n");
 
     html.push_str("</body>\n</html>\n");
     html
@@ -164,8 +181,8 @@ fn render_save_bar(html: &mut String) {
     html.push_str(
         "<div class=\"save\">\n\
          <button type=\"button\" onclick=\"window.print()\">Save as PDF</button>\n\
-         <span>Choose &ldquo;Save as PDF&rdquo; as the destination. \
-         Turn off headers and footers for a clean document.</span>\n\
+         <span>Use Print or Ctrl/Cmd+P, then choose &ldquo;Save as PDF&rdquo;. \
+         Turn off browser headers and footers.</span>\n\
          </div>\n",
     );
 }
@@ -196,9 +213,10 @@ fn render_header(html: &mut String, meta: &ReportMeta, scan: &TriagedScan) {
     ));
 
     html.push_str(&format!(
-        "<p class=\"headline\">{}</p>\n",
+        "<div class=\"overview\"><p class=\"headline\">{}</p>\n",
         escape(&headline(scan))
     ));
+    html.push_str("<p class=\"summary-note\">A snapshot of the website's public surface. Use the findings below to plan fixes and review decisions.</p>\n");
 
     html.push_str("<dl class=\"tally\">\n");
     html.push_str(&format!(
@@ -210,10 +228,36 @@ fn render_header(html: &mut String, meta: &ReportMeta, scan: &TriagedScan) {
         scan.review.len()
     ));
     html.push_str(&format!(
-        "<div><dt>Checked, no issue</dt><dd>{}</dd></div>\n",
+        "<div><dt>For reference</dt><dd>{}</dd></div>\n",
         scan.inventory.len()
     ));
-    html.push_str("</dl>\n</header>\n");
+    html.push_str("</dl></div>\n</header>\n");
+}
+
+fn render_action_plan(html: &mut String, scan: &TriagedScan) {
+    html.push_str("<nav class=\"report-nav\" aria-label=\"Report sections\"><a href=\"#actions\">Action required</a>");
+    if !scan.review.is_empty() {
+        html.push_str("<a href=\"#decisions\">Decisions</a>");
+    }
+    if !scan.inventory.is_empty() {
+        html.push_str("<a href=\"#reference\">Reference</a>");
+    }
+    html.push_str("<a href=\"#scope\">Scope &amp; limits</a></nav>\n");
+    if scan.actionable.is_empty() {
+        return;
+    }
+    html.push_str("<section class=\"action-plan\"><h2>Start with these actions</h2><p class=\"blurb\">Review these priorities with the team responsible for the website. Each item links to its evidence and recommended fix.</p><ol class=\"plan-list\">\n");
+    for (index, finding) in scan.actionable.iter().take(3).enumerate() {
+        html.push_str(&format!("<li><span class=\"pill {}\">{}</span><a href=\"#action-{}\">{}<span class=\"plan-arrow\" aria-hidden=\"true\"> &rarr;</span></a></li>\n", priority_class(finding.priority), priority_label(finding.priority), index+1, escape(&finding.title)));
+    }
+    html.push_str("</ol>");
+    if scan.actionable.len() > 3 {
+        html.push_str(&format!(
+            "<a class=\"all-actions\" href=\"#actions\">View all {} actions</a>",
+            scan.actionable.len()
+        ));
+    }
+    html.push_str("</section>\n");
 }
 
 fn render_section(
@@ -227,7 +271,7 @@ fn render_section(
         // An empty "needs attention" section is the best possible result,
         // so it is stated rather than left as a gap on the page.
         if disposition == Disposition::Act {
-            html.push_str("<section>\n<h2>Needs attention</h2>\n");
+            html.push_str("<section id=\"actions\">\n<h2>Needs attention</h2>\n");
             html.push_str(
                 "<p class=\"empty\">Nothing in this scan requires a fix.</p>\n</section>\n",
             );
@@ -235,19 +279,24 @@ fn render_section(
         return;
     }
 
-    html.push_str("<section>\n");
+    let (section_id, prefix) = if disposition == Disposition::Act {
+        ("actions", "action")
+    } else {
+        ("decisions", "decision")
+    };
+    html.push_str(&format!("<section id=\"{section_id}\">\n"));
     html.push_str(&format!("<h2>{}</h2>\n", escape(heading)));
     html.push_str(&format!("<p class=\"blurb\">{}</p>\n", escape(blurb)));
 
-    for finding in findings {
-        render_finding(html, finding);
+    for (index, finding) in findings.iter().enumerate() {
+        render_finding(html, finding, prefix, index + 1);
     }
 
     html.push_str("</section>\n");
 }
 
-fn render_finding(html: &mut String, finding: &TriagedFinding) {
-    html.push_str("<article class=\"finding\">\n<div class=\"finding-head\">\n");
+fn render_finding(html: &mut String, finding: &TriagedFinding, prefix: &str, number: usize) {
+    html.push_str(&format!("<article class=\"finding\" id=\"{prefix}-{number}\">\n<div class=\"finding-head\"><span class=\"finding-ref\">{} {number:02}</span>\n", if prefix == "action" { "Action" } else { "Decision" }));
     html.push_str(&format!(
         "<span class=\"pill {}\">{}</span>\n",
         priority_class(finding.priority),
@@ -264,16 +313,18 @@ fn render_finding(html: &mut String, finding: &TriagedFinding) {
     }
 
     if let Some(guidance) = &finding.guidance {
-        html.push_str(&format!("<p class=\"why\">{}</p>\n", escape(&guidance.why)));
+        html.push_str(&format!("<div class=\"finding-body\"><div class=\"impact\"><h4>Why it matters</h4><p class=\"why\">{}</p></div>\n", escape(&guidance.why)));
         html.push_str(&format!(
-            "<p class=\"fix\"><span class=\"fix-label\">What to do</span> {}</p>\n",
+            "<div class=\"fix\"><h4 class=\"fix-label\">What to do</h4><p>{}</p></div></div>\n",
             escape(&guidance.fix)
         ));
+    } else {
+        html.push_str("<p class=\"why\">Confirm this observation with the website team and decide whether a change is needed. No specific remediation guidance is available for this finding.</p>\n");
     }
 
     if let Some(evidence) = &finding.evidence {
         html.push_str(&format!(
-            "<p class=\"evidence\"><span class=\"evidence-label\">Observed</span> <code>{}</code></p>\n",
+            "<div class=\"evidence\"><h4 class=\"evidence-label\">Observed evidence</h4><code>{}</code></div>\n",
             escape(evidence)
         ));
     }
@@ -288,9 +339,18 @@ fn render_inventory(html: &mut String, scan: &TriagedScan) {
         return;
     }
 
-    html.push_str("<section class=\"appendix\">\n<h2>Also checked</h2>\n");
+    let appendix_class = if scan.inventory.len() > 8 {
+        "appendix appendix-long"
+    } else {
+        "appendix"
+    };
+    write!(
+        html,
+        "<section class=\"{appendix_class}\" id=\"reference\">\n<h2>For reference</h2>\n"
+    )
+    .unwrap();
     html.push_str(
-        "<p class=\"blurb\">Verified during this scan and found unremarkable.</p>\n<ul>\n",
+        "<p class=\"blurb\">Observations kept for context, not classified as actions or decisions. These are not a count of passed security tests.</p>\n<ul>\n",
     );
 
     for finding in &scan.inventory {
@@ -319,7 +379,7 @@ fn render_running_footer(html: &mut String, meta: &ReportMeta) {
 }
 
 fn render_footer(html: &mut String, meta: &ReportMeta) {
-    html.push_str("<footer>\n");
+    html.push_str("<footer id=\"scope\">\n<h2>Scope &amp; limits</h2>\n");
     html.push_str(&format!(
         "<p>Prepared by {} for {}.</p>\n",
         escape(&meta.agency_name),
@@ -327,7 +387,8 @@ fn render_footer(html: &mut String, meta: &ReportMeta) {
     ));
     html.push_str(
         "<p class=\"caveat\">An automated scan reports what it can observe from outside. \
-         It is not a substitute for a manual review of the application.</p>\n",
+         Findings describe the scan date; they do not prove a website is secure today. \
+         This report is not a manual penetration test or a compliance certification.</p>\n",
     );
     html.push_str("</footer>\n");
 }
@@ -335,125 +396,7 @@ fn render_footer(html: &mut String, meta: &ReportMeta) {
 /// Inline stylesheet. Inline because the document has to survive being
 /// emailed as a single attachment, and because a print stylesheet is what
 /// turns it into a PDF without a rendering service.
-const STYLES: &str = r#"<style>
-  :root {
-    --ink: #2d103a;
-    --muted: #695174;
-    --line: #dcd2e5;
-    --bg: #ffffff;
-    --accent: #7345b2;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0 auto;
-    padding: 3rem 1.5rem 4rem;
-    max-width: 46rem;
-    background: var(--bg);
-    color: var(--ink);
-    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  h1 { font-size: 2.2rem; line-height: 1.15; letter-spacing: -.03em; margin: .4rem 0 .6rem; }
-  h2 { font-size: 1.15rem; margin: 2.6rem 0 .3rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
-  h3 { font-size: 1rem; margin: 0; }
-  .cover { border-bottom: 2px solid var(--ink); padding-bottom: 1.6rem; }
-  .logo { max-height: 44px; max-width: 200px; margin-bottom: 1rem; }
-  .by, .date { color: var(--muted); font-size: .85rem; margin: .2rem 0; }
-  .by { text-transform: uppercase; letter-spacing: .07em; }
-  .subject { font-size: 1.05rem; margin: .2rem 0; }
-  .headline { font-size: 1.1rem; font-weight: 600; margin: 1.4rem 0 0; }
-  .tally { display: flex; flex-wrap: wrap; gap: 1.2rem 2.5rem; margin: 1.5rem 0 0; padding: 1.2rem; background: #f2edf8; border-radius: 12px; }
-  .tally div { margin: 0; }
-  .tally dt { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
-  .tally dd { margin: .1rem 0 0; font-size: 1.5rem; font-weight: 600; }
-  .blurb { color: var(--muted); font-size: .9rem; margin: .5rem 0 1.4rem; }
-  .empty { color: var(--muted); margin: 1rem 0; }
-  .finding { padding: 1.1rem 0 1.3rem; border-bottom: 1px solid var(--line); }
-  .finding-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .7rem; }
-  .pill {
-    flex: none; font-size: .68rem; font-weight: 700; letter-spacing: .06em;
-    text-transform: uppercase; padding: .2rem .5rem; border-radius: 3px;
-    border: 1px solid currentColor;
-  }
-  .p-urgent { color: #8c1d18; }
-  .p-high   { color: #a03604; }
-  .p-medium { color: #7a5c00; }
-  .p-low    { color: #40566d; }
-  .p-none   { color: var(--muted); }
-  .why { margin: .6rem 0 .5rem; }
-  .fix { margin: .5rem 0; }
-  .fix-label, .evidence-label {
-    font-size: .7rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: var(--muted); margin-right: .35rem;
-  }
-  .seen { color: var(--muted); font-size: .85rem; margin: .35rem 0 0; }
-  .evidence { margin: .5rem 0 0; font-size: .88rem; }
-  code { background: #f4f5f7; padding: .1rem .3rem; border-radius: 3px; word-break: break-all; }
-  .appendix ul { columns: 2; column-gap: 2rem; padding-left: 1.1rem; color: var(--muted); font-size: .88rem; }
-  .appendix li { margin: .15rem 0; break-inside: avoid; }
-  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
-  .caveat { font-size: .8rem; }
-  .save {
-    display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
-    margin: 0 0 2.2rem; padding: .8rem 1rem;
-    border: 1px solid var(--line); border-radius: 8px; background: #f2edf8;
-  }
-  .save button {
-    font: inherit; font-size: .88rem; font-weight: 600;
-    padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 4px;
-    background: var(--ink); color: #fff; cursor: pointer;
-  }
-  .save span { color: var(--muted); font-size: .82rem; }
-
-  /* What turns this page into a document an agency can send a client.
-     Everything here exists because the default browser output gets one of
-     these wrong. */
-  @page {
-    size: A4;
-    /* Room at the foot for the running identifier below. */
-    margin: 16mm 15mm 22mm;
-  }
-  @media print {
-    body { padding: 0; max-width: none; font-size: 10.5pt; }
-
-    /* The severity pills carry their meaning in colour, and browsers drop
-       colour when printing unless told not to. A report whose "urgent" and
-       "low" print as identical grey text is a report that has lost the one
-       distinction it exists to draw. */
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-    /* The button is interface, not content. */
-    .save { display: none; }
-
-    /* A finding split across a page break separates a problem from its fix,
-       which is exactly the pairing the reader is scanning for. */
-    .finding, .appendix li, .tally { break-inside: avoid; }
-    h2 { break-after: avoid; }
-    h3 { break-after: avoid; }
-    p { orphans: 3; widows: 3; }
-
-    /* The inventory is reference material. Starting it on its own page keeps
-       it from swallowing the tail of the findings, which is the part anyone
-       actually reads. */
-    .appendix { break-before: page; }
-
-    /* Repeats on every printed page in every current browser: this is the
-       one way to get a running footer without a paged-media engine. It is
-       what stops page four of a printout, once it has been separated from
-       page one, from being an anonymous list of somebody's vulnerabilities. */
-    .running {
-        display: block;
-        position: fixed;
-        bottom: -14mm; left: 0; right: 0;
-        border-top: 1px solid var(--line);
-        padding-top: 2mm;
-        color: var(--muted); font-size: 8pt;
-    }
-  }
-  /* Hidden on screen: on a scrolling page a fixed footer is a floating bar
-     over the content, and the same information is already in the footer. */
-  .running { display: none; }
-</style>
-"#;
+const STYLES: &str = concat!("<style>\n", include_str!("report.css"), "\n</style>\n");
 
 #[cfg(test)]
 mod tests {
@@ -660,7 +603,10 @@ mod tests {
 
         let html = render_html(&meta(), &scan);
 
-        assert_eq!(html.matches("CDN debug headers exposed").count(), 1);
+        // The title also appears in the linked action summary, but the
+        // repeated observations must still produce just one detail block.
+        assert!(html.contains("CDN debug headers exposed"));
+        assert_eq!(html.matches("<article class=\"finding\"").count(), 1);
         assert!(html.contains("Observed 2 times."));
     }
 
@@ -670,6 +616,26 @@ mod tests {
             escape(r#"<a href="x" onclick='y'>&</a>"#),
             "&lt;a href=&quot;x&quot; onclick=&#x27;y&#x27;&gt;&amp;&lt;/a&gt;"
         );
+    }
+
+    #[test]
+    fn action_summary_links_to_details_without_inventing_passed_checks() {
+        let html = render_html(&meta(), &csp_scan());
+        assert!(html.contains("href=\"#action-1\""));
+        assert!(html.contains("id=\"action-1\""));
+        assert!(html.contains("For reference"));
+        assert!(!html.contains("Checked, no issue"));
+        assert!(html.contains("Why it matters"));
+        assert!(html.contains("Observed evidence"));
+    }
+
+    #[test]
+    fn missing_guidance_is_explicit_instead_of_looking_complete() {
+        let mut scan = csp_scan();
+        scan.actionable[0].guidance = None;
+        let html = render_html(&meta(), &scan);
+        assert!(html.contains("No specific remediation guidance is available"));
+        assert!(html.contains("Observed evidence"));
     }
 
     #[test]
@@ -751,8 +717,8 @@ mod tests {
         assert!(running.contains("example.com"));
         assert!(running.contains("Northgate Studio"));
         assert!(
-            html.contains("position: fixed"),
-            "only a fixed element repeats on every printed page"
+            html.contains("@bottom-center"),
+            "page margin boxes reserve a separate identity band on every printed page"
         );
     }
 
@@ -778,10 +744,19 @@ mod tests {
         // interpolated, and it was written after the two that already had
         // tests. Same rule: the agency is a customer, not an author.
         let mut m = meta();
-        m.agency_name = "</div><script>alert(1)</script>".to_string();
+        m.agency_name = "</style></div><script>alert(1)</script>".to_string();
         let html = render_html(&m, &csp_scan());
 
         assert!(!html.contains("<script>alert(1)</script>"));
         assert!(html.contains("&lt;script&gt;"));
+        let print_style = html
+            .split("<style>@page")
+            .nth(1)
+            .unwrap()
+            .split("</style>")
+            .next()
+            .unwrap();
+        assert!(!print_style.contains("<"));
+        assert!(print_style.contains("\\3c \\2f \\73 \\74 \\79 \\6c \\65 \\3e "));
     }
 }

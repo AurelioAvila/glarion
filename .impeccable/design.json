@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-06T21:49:51.6489383Z",
+  "generatedAt": "2026-09-06T22:14:19.1568729Z",
   "title": "Design System: Glarion Prism",
   "extensions": {
     "colorMeta": {
@@ -32,15 +32,24 @@
       },
       "body": {
         "displayName": "Manrope body",
-        "purpose": "Landing, workspace and reading copy use local Manrope; technical annotations retain monospace. Self-contained generated reports use system sans-serif without new external resources."
+        "purpose": "Landing, workspace and reading copy use local Manrope; technical annotations retain monospace. Reports declare Manrope, Segoe UI, sans-serif: the public sample loads local Manrope, while standalone reports use available fallback without new font requests."
       }
     },
     "shadows": [
-      { "name": "command-palette", "value": "0 24px 60px #2d103a33", "purpose": "Lift the operational command dialog above otherwise flat white and pearl surfaces." },
+      {
+        "name": "command-palette",
+        "value": "0 24px 60px #2d103a33",
+        "purpose": "Lift the operational command dialog above otherwise flat white and pearl surfaces."
+      },
       {
         "name": "portfolio-float",
         "value": "0 18px 54px #52337316",
-        "purpose": "Illustrative portfolio and sample report receive restrained violet lift; sample report print removes it."
+        "purpose": "Illustrative landing portfolio receives restrained violet lift."
+      },
+      {
+        "name": "report-document",
+        "value": "0 20px 65px #3921470d",
+        "purpose": "White reading document on pearl; removed on mobile and in print."
       }
     ],
     "motion": [
@@ -56,10 +65,18 @@
       }
     ],
     "breakpoints": [
-      { "name": "workspace-header", "value": "900px" },
-      { "name": "workspace-form-stack", "value": "46rem" },
-      { "name": "guide-stack", "value": "42rem" },
-      { "name": "report-page", "value": "58rem" },
+      {
+        "name": "workspace-header",
+        "value": "900px"
+      },
+      {
+        "name": "workspace-form-stack",
+        "value": "46rem"
+      },
+      {
+        "name": "guide-stack",
+        "value": "42rem"
+      },
       {
         "name": "wide-desktop",
         "value": "1450px"
@@ -75,6 +92,10 @@
       {
         "name": "mobile",
         "value": "38rem"
+      },
+      {
+        "name": "report-stack",
+        "value": "700px"
       }
     ]
   },
@@ -94,34 +115,49 @@
       "description": "Outlined supporting action leading to the sample report.",
       "html": "<a class=\"ds-secondary\" href=\"/sample-report.html\">View sample report</a>",
       "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:.9rem 1.3rem;border-radius:8px;font:600 .9rem/1.4 Manrope,sans-serif;background:transparent;color:var(--site-text,#2d103a);border:1px solid #ab91ba;text-decoration:none;transition:background .2s ease,border-color .2s ease}.ds-secondary:hover{background:#ede4f6;border-color:#7345b2}.ds-secondary:focus-visible{outline:3px solid var(--site-signal-clear,#176a4f);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
+    },
+    {
+      "name": "Report recommended action",
+      "kind": "custom",
+      "description": "Quiet lilac action panel beside the consequence column; explanations stack on mobile and evidence stays visible below.",
+      "html": "<div class=\"ds-report-fix\"><h4>What to do</h4><p>Review the recommended fix with the team responsible for the website.</p></div>",
+      "css": ".ds-report-fix{background:#f2edf8;color:#2d103a;padding:1rem 1.2rem;border-radius:12px;font-family:Manrope,\"Segoe UI\",sans-serif}.ds-report-fix h4{margin:0 0 .45rem;font-size:.8rem;font-weight:700;line-height:1.4}.ds-report-fix p{margin:0;font-size:.9rem;line-height:1.75;overflow-wrap:anywhere}"
     }
   ],
   "narrative": {
     "northStar": "Prism",
-    "overview": "The locally built landing follows user-selected alternative 6, approved with ‘la 6 mi piace.’ Pearl surfaces, dark plum Manrope, coral emphasis, lilac panels and local optical artwork define this surface. It supersedes the landing’s earlier agency-journal proposal. The subsequent user approval “ok vai avanti” extends Prism to workspace and all remaining pages: quiet white and pearl operational surfaces, lilac selection and reading panels, rose actions, and preserved semantic statuses. Appearance approval does not authorize deployment.",
+    "overview": "The locally built landing follows user-selected alternative 6, approved with ‘la 6 mi piace.’ Pearl surfaces, dark plum Manrope, coral emphasis, lilac panels and local optical artwork define this surface. It supersedes the landing’s earlier agency-journal proposal. The subsequent user approval “ok vai avanti” extends Prism to workspace and all remaining pages: quiet white and pearl operational surfaces, lilac selection and reading panels, rose actions, and preserved semantic statuses. Appearance approval does not authorize deployment. Reports extend Prism in Read mode: a conclusion and honest action/decision/reference counts, up to three linked priorities, two-column consequence and action explanations, and visible evidence. The public fictional sample shares the production renderer. The local report finish review resolved print footer identity and long agency-header issues; appearance review does not authorize deployment.",
     "keyCharacteristics": [
       "Pearl ground and dark plum Manrope.",
       "Coral display emphasis with deeper rose actions.",
       "Optical glass ring and softly lifted fictional portfolio overview.",
-      "Local font and artwork; responsive stacking and contained table scrolling."
+      "Local font and artwork; responsive stacking and contained table scrolling.",
+      "Reports use a 1080px reading document, stacked findings at 700px, and agency identity preserved in A4 print."
     ],
     "rules": [
       {
         "name": "The Evidence Rule",
         "body": "Status color accompanies readable status text; illustrations and fictional data remain explicitly identified.",
         "section": "colors"
+      },
+      {
+        "name": "Report reading and print",
+        "section": "layout",
+        "body": "A4 margins: 15mm top/sides and 22mm bottom. The bottom-center page margin box repeats domain, agency and date with CSS hex-escaped identity text. Agency copy reserves 12rem right clearance on desktop and print, reset to zero on mobile. Up to eight reference items flow after findings; longer inventory starts a new page. Hide save/navigation in print, retain the fictional sample note."
       }
     ],
     "dos": [
       "Do preserve the selected color hierarchy and local assets.",
       "Do preserve keyboard focus, reduced motion and fictional-data labels.",
       "Do use 44px operational actions, 46px inputs, violet workspace focus and a wrapping mobile navigation header.",
-      "Do preserve self-contained generated-report styling, agency identity, severity text and print rules."
+      "Do preserve self-contained generated-report styling, agency identity, severity text and print rules.",
+      "Do link the top three actionable priorities to full findings, preserve visible evidence and state missing guidance explicitly."
     ],
     "donts": [
       "Don't obscure operational evidence, navigation or report print behavior when applying Prism across routes.",
       "Don't present the illustrative overview as delivered dashboard functionality.",
-      "Don't interpret appearance approval or the scoped ship review as deployment authorization."
+      "Don't interpret appearance approval or the scoped ship review as deployment authorization.",
+      "Do not turn reference observations into passed security checks or introduce invented report scores, deadlines or guarantees."
     ]
   }
 }

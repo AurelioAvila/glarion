@@ -66,7 +66,7 @@ components:
 
 Source of truth: the final cascade in `web/landing.css` and markup in `web/landing.html`; reference comp: `.preview/design-alternatives/option-6.png`.
 
-Shared non-landing tokens live in `web/prism.css`, with surface rules in `web/app.css`, `web/seo.css`, `web/privacy.css`, `web/terms.css` and `web/sample-report.css`. Generated reports keep their self-contained styles in `crates/report/src/html.rs`. Scope, validation and limitations are recorded in `.impeccable/workspace-brief.md`; the ship review covers nine captured visible viewports, not untested account, payment or scan workflows. Work remains local.
+Shared non-landing tokens live in `web/prism.css`, with surface rules in `web/app.css`, `web/seo.css`, `web/privacy.css` and `web/terms.css`. Generated reports embed `crates/report/src/report.css` through `crates/report/src/html.rs`; `crates/report/examples/sample_report.rs` produces the public sample from the same renderer. Workspace scope and limitations remain in `.impeccable/workspace-brief.md`. The report refinement is recorded in `.impeccable/report-brief.md`, with reviewed desktop, mobile and browser-generated PDF artifacts under `.impeccable/review/report/`. Its local finish review resolved the print identity/footer and long agency-header issues; it does not validate account, payment or live scan workflows. Work remains local.
 
 ## Colors
 
@@ -80,7 +80,7 @@ In shared styles, `--bg`, `--sink`, `--rule`, `--ink`, `--ink-2` and `--ink-3` m
 
 Manrope is self-hosted at `/fonts/manrope.ttf`, with the bundled OFL license. It supplies display, body and controls; inherited technical result annotations may retain the system monospace stack. Headlines use compact spacing and balanced wraps. Hero emphasis is upright coral type. Body copy stays readable, with section introductions limited to 65 characters per line where possible.
 
-Workspace copy uses 15px/1.65 Manrope and compact headings (`clamp(1.85rem, 3vw, 2.55rem)`). Guides and legal pages use 16px/1.7 Manrope. Downloadable generated reports deliberately retain their system sans-serif stack at 16px/1.65 so a single attachment needs no new external font resources.
+Workspace copy uses 15px/1.65 Manrope and compact headings (`clamp(1.85rem, 3vw, 2.55rem)`). Guides and legal pages use 16px/1.7 Manrope. Report body uses 16px/1.65 with the stack `Manrope, Segoe UI, sans-serif`: the public sample loads local Manrope through `prism.css`, while standalone reports make no new font requests and use the available fallback. Report titles use `clamp(2.3rem, 4.7vw, 3.8rem)` at 650 weight; visible evidence uses wrapping system monospace. Print body is 10pt, with explanations at 9.5pt.
 
 ## Layout
 
@@ -88,11 +88,15 @@ The landing desktop container is capped at 88rem with 5rem total horizontal clea
 
 Below 52rem, content and checker stack and the illustrative portfolio sidebar disappears. Navigation keeps sign-in and the account action. Below 38rem, the ring enters document flow between the hero copy and sample overview; the overview table keeps a 630px minimum width inside its own keyboard-focusable horizontal scroll region. The checker input and button remain side by side. Comparison content scrolls locally with a visible mobile hint. Mobile display type uses `clamp(2.8rem, 12vw, 4.3rem)`.
 
-Workspace navigation uses a fixed 224px white sidebar and lilac active links with `aria-current`; at 900px it becomes a sticky wrapping header retaining navigation links. Main content caps at 78rem. Account entry pairs the reused ring with a half-width form, hiding the artwork and expanding the form at 900px. At 46rem, forms and facts stack and tabs wrap. Guides cap their shell at 66rem and article at 48rem; legal reading content caps at 52rem. These reading surfaces use an 80px header. Sample reports remove the rounded page edge at 58rem and keep evidence text wrapping.
+Workspace navigation uses a fixed 224px white sidebar and lilac active links with `aria-current`; at 900px it becomes a sticky wrapping header retaining navigation links. Main content caps at 78rem. Account entry pairs the reused ring with a half-width form, hiding the artwork and expanding the form at 900px. At 46rem, forms and facts stack and tabs wrap. Guides cap their shell at 66rem and article at 48rem; legal reading content caps at 52rem. These reading surfaces use an 80px header.
+
+Reports use Read mode: a 1080px white document with `clamp(1.4rem, 5vw, 4rem)` padding, an agency/client/domain/date cover, a plum summary and linked priorities before the findings. Consequence and proposed action sit in two columns with a 2rem gap; at 700px and below they stack, page rounding and shadow disappear, and the date enters normal flow. Agency text wraps with 12rem of right clearance for the date on desktop and in print; mobile resets that clearance to zero. Evidence remains visible and wraps without horizontal scrolling.
+
+Print uses A4 with 15mm top/side and 22mm bottom margins. The cover, action plan, findings and individual inventory items avoid internal page breaks. Up to eight reference observations follow findings naturally; more than eight start a new page. A bottom-center page margin box repeats domain, agency and date in a separate identity band; dynamic identity text is CSS hex-escaped. Save controls and report navigation disappear, but the public sample's fictional-data note stays visible. Print removes the page shadow, radius and screen padding.
 
 ## Elevation & Depth
 
-Workspace content is flat: white ledgers and sidebar on pearl, with lilac form groups and selection. The command palette uses modal lift (`0 24px 60px #2d103a33`). The sample report shares the landing portfolio's restrained lift; print removes its shadow and rounded page edge.
+Workspace content is flat: white ledgers and sidebar on pearl, with lilac form groups and selection. The command palette uses modal lift (`0 24px 60px #2d103a33`). Reports use a restrained document shadow (`0 20px 65px #3921470d`) on pearl; mobile and print remove it.
 
 The illustrative portfolio floats on a restrained violet shadow (`0 18px 54px #52337316`). The checker and final action panel are flat lilac surfaces. Local decorative artwork at `web/prism-ring.png` provides optical depth through masking and multiply blending. Its one-time settling animation lasts 1.1s; reduced-motion preference disables animation, transitions and smooth scrolling.
 
@@ -110,9 +114,13 @@ The checker uses a labeled light input, dark text, violet caret and an explicit 
 
 The portfolio overview is a fictional illustration, with a visible sample label and an actual link to the sample report. Its sidebar and tags do not imply implemented dashboard functionality. The ring is decorative and hidden from assistive technology. All new artwork and font requests resolve locally.
 
+The report summary leads with a conclusion and three truthful counts: need attention, worth a decision and for reference. Up to three actionable priorities link to their full findings, with an all-actions link when needed. Each finding pairs a readable priority label with “Why it matters,” a lilac “What to do” panel and visible “Observed evidence”; missing guidance is explicit. Reference observations are not passed security tests. Scope and limits remain part of the document. The save button is a 44px plum control; report links use violet hover and visible violet focus. Report smooth scrolling respects reduced motion.
+
 ## Do's and Don'ts
 
 - **Do** preserve the selected pearl, plum, coral and lilac hierarchy and local Manrope asset.
 - **Do** preserve focus, reduced motion, fictional-data labeling and local table scrolling.
 - **Do** apply the approved Prism palette across workspace and reading surfaces while retaining their operational density, evidence and print behavior.
+- **Do** keep report priorities linked to their visible evidence, retain agency identity and the printable fictional sample label, and preserve honest reference counts.
+- **Don't** add invented report scores, deadlines, passed-check claims or security guarantees; standalone report typography must not introduce new font requests.
 - **Don't** treat illustrative portfolio controls as delivered dashboard features or appearance approval as deployment authorization.
