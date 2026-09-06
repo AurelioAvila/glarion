@@ -68,3 +68,8 @@ sono coperti dal codice; la custodia operativa delle chiavi resta da verificare.
 Queste attività non sono dichiarate completate. Un WAF o un test automatico
 non sostituiscono autenticazione, isolamento, aggiornamenti e recuperabilità.
 Riferimento: [OWASP REST Security](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html).
+
+
+## Aggiornamento distribuzione — 7 settembre 2026
+
+Le correzioni descritte sono ora distribuite con la release Fly v63 (revisione 087663c). Verificati sul dominio pubblico rifiuto degli accessi non autenticati e Cache-Control no-store. La CSP specifica dei report e il filtro delle destinazioni restano coperti dai test locali; non sono stati eseguiti attacchi o scansioni nuove in produzione. I controlli operativi elencati sopra non sono dichiarati completati. Dettagli e rollback in VERIFICA-PRISM.md.
