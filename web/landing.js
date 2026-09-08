@@ -1,3 +1,6 @@
+import { acquisitionHeaders, recordPage } from "/dist/acquisition.js";
+recordPage("landing_view");
+
 /*
   The free check, wired to the same endpoint the product uses. Values from
   remote sites are always rendered as text, never interpreted as markup.
@@ -63,7 +66,7 @@ form.addEventListener('submit', async (event) => {
   try {
     const response = await fetch(`${api}/api/preview`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...acquisitionHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -125,7 +128,7 @@ function render(payload) {
   if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
 
   const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Scan this properly');
+  const signup = el('a', 'primary', 'Set up full monitoring');
   // Carries the domain across. The account form asks for seven fields and
   // an email round-trip, and until it knew this it ended by asking for the
   // domain the reader had typed here a minute earlier — the one part of the
@@ -202,7 +205,7 @@ function emailCapture(domain) {
     try {
       const response = await fetch(`${api}/api/preview/email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...acquisitionHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain, email: address }),
       });
       const payload = await response.json().catch(() => ({}));
