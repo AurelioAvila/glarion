@@ -3,3 +3,17 @@ target
 .env.local
 web/node_modules
 web/dist
+
+# Local previews, browser profiles and design evidence never enter remote builds.
+.preview
+.impeccable
+.claude
+.env
+.env.*
+
+# Marketing media and local tooling are not application build inputs.
+docs
+*.mp4
+*.wav
+*.mp3
+**/__pycache__
