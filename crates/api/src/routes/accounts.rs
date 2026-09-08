@@ -165,6 +165,7 @@ struct PendingConfirmation {
 pub async fn signup(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(body): Json<SignupRequest>,
 ) -> ApiResult<Json<SignupResponse>> {
     // Rate limited alongside login: unlimited signup is an account-flooding
@@ -250,6 +251,7 @@ pub async fn signup(
     .execute(&state.pool)
     .await?;
 
+    crate::growth::record(&state, &headers, "signup_created").await;
     send_verification(&state, &email, &first_name, &token);
 
     Ok(Json(signup_answer(mail_healthy, email)))
