@@ -202,6 +202,7 @@ pub struct MessageResponse {
 }
 
 pub async fn run_preview(
+    headers: axum::http::HeaderMap,
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(body): Json<PreviewRequest>,
@@ -217,7 +218,19 @@ pub async fn run_preview(
         return Err(ApiError::TooManyRequests);
     }
 
-    let result = preview(&body.domain).await.map_err(|error| match error {
+    crate::growth::record(&state, &headers, "preview_started").await;
+    let outcome = preview(&body.domain).await;
+    crate::growth::record(
+        &state,
+        &headers,
+        match &outcome {
+            Ok(_) => "preview_completed",
+            Err(PreviewError::InvalidTarget(_)) => "preview_rejected",
+            Err(PreviewError::Unreachable(_)) => "preview_failed",
+        },
+    )
+    .await;
+    let result = outcome.map_err(|error| match error {
         PreviewError::InvalidTarget(message) => ApiError::BadRequest(message),
         PreviewError::Unreachable(domain) => {
             ApiError::BadRequest(format!("We could not reach {domain}."))

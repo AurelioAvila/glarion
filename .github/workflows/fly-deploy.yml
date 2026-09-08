@@ -25,7 +25,8 @@ jobs:
   deploy:
     name: Deploy app
     # A failed, cancelled or skipped CI run must not reach production.
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    # Publisher signing is local; never bypass it with an unsigned CI rebuild.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     env:

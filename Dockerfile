@@ -18,7 +18,7 @@ COPY migrations migrations
 # checked-in .sqlx cache (via `cargo sqlx prepare`) avoids that requirement
 # during the container build. If none exists yet, this build must run with
 # DATABASE_URL pointing at a reachable database instead.
-RUN cargo build --release --bin api --bin runner
+RUN cargo build --release --bin api --bin runner --bin growth_report
 
 # --- the frontend ------------------------------------------------------
 
@@ -66,6 +66,7 @@ RUN useradd --system --create-home --home-dir /home/glarion glarion
 WORKDIR /app
 COPY --from=build /app/target/release/api /usr/local/bin/api
 COPY --from=build /app/target/release/runner /usr/local/bin/runner
+COPY --from=build /app/target/release/growth_report /usr/local/bin/growth_report
 
 # The API serves these itself — see with_static_files. One origin for the
 # page and the endpoints it calls means no CORS entry to maintain, and one

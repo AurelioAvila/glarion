@@ -1,3 +1,14 @@
+import { recordPage } from "./acquisition.js";
+let growthSignupSeen = false;
+function countSignupView(): void {
+  if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
+    growthSignupSeen = true;
+    recordPage("signup_view");
+  }
+}
+window.addEventListener("hashchange", countSignupView);
+countSignupView();
+
 // The dashboard.
 //
 // Plain TypeScript with hash routing and no framework, matching the rest of
