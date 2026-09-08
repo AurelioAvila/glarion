@@ -23,12 +23,12 @@ Glarion helps digital agencies monitor verified client websites, identify meanin
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-proprietary-7C7E88?style=for-the-badge" alt="Proprietary license"></a>
 </p>
 
-> **Built around authorization, not assumptions.** Full scans require a plan and current DNS or `.well-known` ownership proof, are checked again at execution time, and reject private, loopback and cloud-metadata destinations. Every queued scan retains an authorization trail.
+> **Built around authorization, not assumptions.** Full scans require a plan and current DNS or `.well-known` ownership proof, checked again at execution time. Targets are checked for private, loopback and cloud-metadata addresses before scanning; external-scanner enforcement has the limitations described below. Every queued scan retains an authorization trail.
 
 | Proof point | What is enforced |
 |---|---|
 | **Target authorization** | Two independent ownership gates, including expiry at execution time |
-| **SSRF resistance** | Resolved-address validation and address pinning close DNS-rebinding paths |
+| **SSRF controls** | Resolved-address checks, address pinning for internal fetches, and a Nuclei local-network restriction; see [network boundaries](#where-traffic-can-be-aimed) and [known limits](#known-limits) |
 | **Safe scan policy** | Detection-only allowlist, rate limits and no fuzzing, brute force or denial-of-service templates |
 | **Verified quality** | Live-database integration tests and mutation checks over the authorization gate |
 | **Actionable output** | Findings are normalized and triaged into self-contained client reports |
@@ -88,10 +88,23 @@ infrastructure or at the cloud metadata service. Two layers handle this:
 
 - `crates/orchestrator/src/domain.rs` rejects targets *written* as an IP
   literal, as `localhost`, or under an internal suffix.
-- `crates/orchestrator/src/net_guard.rs` rejects targets that *resolve* to
-  a non-public address, which is what stops a public domain deliberately
-  pointed at private space. Outbound HTTPS additionally pins the connection
-  to the address that passed the check, closing the DNS-rebinding window.
+- [`net_guard.rs`](crates/orchestrator/src/net_guard.rs) checks resolved
+  addresses and rejects the target if any address matches its non-public
+  address filters, including private, loopback and cloud-metadata addresses.
+
+The connection boundary differs by caller. Internal HTTPS fetches configure
+the client to use a validated address and disable redirects; the TLS probe
+connects directly to a validated socket address. See
+[`verification.rs`](crates/orchestrator/src/verification.rs),
+[`preview.rs`](crates/orchestrator/src/preview.rs) and
+[`tls.rs`](crates/orchestrator/src/tools/tls.rs).
+
+The external [Nuclei wrapper](crates/orchestrator/src/tools/nuclei.rs)
+checks addresses immediately before spawning the scanner, but passes a
+hostname, not a pinned address. It always adds
+`-restrict-local-network-access`. That is a separate scanner-side control;
+its enforcement depends on the installed Nuclei implementation. These
+controls do not establish that every DNS-rebinding path is closed.
 
 Intensity is capped independently of authorization: detection-only tools on
 an allowlist, six scans per target per day, an enforced request rate, and
@@ -161,13 +174,15 @@ exercised. Before pushing, run the full set of checks:
 bash scripts/ci-local.sh
 ```
 
-That mirrors the hosted workflow — formatting, clippy, `cargo audit`
-(when installed) against every dependency, the suite with integration
-tests active, and an assertion that the gate tests ran rather than
-skipped. Hosted checks also run in [GitHub Actions](https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml);
-check the run for the commit you are evaluating rather than relying on a
-previously successful build. One advisory is deliberately ignored rather than
-silently absent from the count — see [`audit.toml`](audit.toml).
+The local script runs formatting, clippy, the integration suite and an
+assertion that the gate tests ran rather than skipped. It also runs
+`cargo audit` when installed, and frontend checks when their dependencies
+are installed. [GitHub Actions](https://github.com/AurelioAvila/glarion/actions/workflows/ci.yml)
+runs formatting, clippy, frontend checks and the database-backed suite,
+including the gate-test assertion; it does not currently run `cargo audit`.
+Check the run for the commit you are evaluating rather than relying on a
+previously successful build. One advisory is deliberately ignored by the
+local audit — see [`.cargo/audit.toml`](.cargo/audit.toml).
 
 ### The development database
 
@@ -281,5 +296,9 @@ avoids both the shell dependency and duplicating what Nuclei's own
 - The rate limiters are per-process and keyed on the TCP peer address, so
   they do not survive horizontal scaling and collapse to a single bucket
   behind a reverse proxy. See `crates/api/src/rate_limit.rs`.
-- The resolved-address check cannot pin the address for an external scanner
-  process, leaving a small DNS-rebinding window between check and scan.
+- Nuclei resolves the hostname independently after Glarion's address check,
+  so a DNS change can occur between that check and a scanner connection.
+  Glarion passes `-restrict-local-network-access`, but its unit test checks
+  the presence of the flag, not end-to-end DNS-rebinding resistance of the
+  installed scanner. Do not treat this as a guarantee that scanning is safe
+  against every SSRF or DNS-rebinding scenario.
