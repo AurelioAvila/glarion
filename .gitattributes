@@ -17,3 +17,6 @@
 
 # Cargo.lock is generated; collapse it in diffs and reviews.
 Cargo.lock linguist-generated=true
+
+# Authenticode signatures bind exact bytes, including line endings.
+docs/releases/**/image-manifest.ps1 -text
