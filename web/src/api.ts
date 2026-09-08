@@ -1,3 +1,4 @@
+import { acquisitionHeaders } from "./acquisition.js";
 // Typed client for the Glarion API.
 //
 // Every response shape here mirrors a Rust type in crates/api. They are
@@ -240,7 +241,7 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = acquisitionHeaders();
   const token = session.token();
   if (token) headers["authorization"] = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";

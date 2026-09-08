@@ -1,0 +1,64 @@
+[
+  {
+    "file": "01-report-next-step.mp4",
+    "title": "A Security Finding Needs a Next Step | Glarion",
+    "description": "See the impact, next step and evidence in a fictional sample report. Explore it without signing up: https://glarion.app/sample-report.html?utm_source=youtube\n\nIllustrative, fictional report data. Automated checks are not a security guarantee or a manual penetration test. Full scans require a paid plan and current proof of domain control.\nMusic: Halfway In, Anno Domini Beats, YouTube Audio Library.",
+    "tags": [
+      "Glarion",
+      "website security",
+      "digital agencies",
+      "client reporting",
+      "website monitoring"
+    ],
+    "duration": 19.100000000000005,
+    "sha256": "bd08715d3d5b96d42c52c15664b90d3b43070606a8914eb5fe13a115f51b40f9",
+    "source_segments": [
+      [
+        22.8,
+        33.0
+      ],
+      [
+        56.55,
+        61.5
+      ],
+      [
+        67.45,
+        71.4
+      ]
+    ],
+    "format": "1920x1080 landscape, regular video (not a Short)",
+    "status": "prepared locally, not uploaded",
+    "decode": "passed"
+  },
+  {
+    "file": "02-verified-monitoring.mp4",
+    "title": "From Verified Domains to Client Reports | Glarion",
+    "description": "Paid monitoring for verified domains, weekly or monthly schedules and agency-branded reports. Start with a limited free public check: https://glarion.app/?utm_source=youtube\n\nIllustrative, fictional report data. Automated checks are not a security guarantee or a manual penetration test. Full scans require a paid plan and current proof of domain control.\nMusic: Halfway In, Anno Domini Beats, YouTube Audio Library.",
+    "tags": [
+      "Glarion",
+      "website security",
+      "digital agencies",
+      "client reporting",
+      "website monitoring"
+    ],
+    "duration": 25.25,
+    "sha256": "6bc6d34499c8448cf8739d91c16b1b01486cfeeda7fd8593c5e89e54c1deecc6",
+    "source_segments": [
+      [
+        33.55,
+        49.3
+      ],
+      [
+        50.1,
+        55.65
+      ],
+      [
+        67.45,
+        71.4
+      ]
+    ],
+    "format": "1920x1080 landscape, regular video (not a Short)",
+    "status": "prepared locally, not uploaded",
+    "decode": "passed"
+  }
+]

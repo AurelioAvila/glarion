@@ -2,6 +2,7 @@ pub mod auth;
 pub mod billing;
 pub mod config;
 pub mod error;
+pub mod growth;
 pub mod rate_limit;
 pub mod routes;
 pub mod state;
@@ -62,6 +63,7 @@ pub async fn run() -> Result<()> {
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::CONTENT_TYPE,
                 axum::http::HeaderName::from_static("x-glarion-csrf"),
+                axum::http::HeaderName::from_static("x-glarion-source"),
             ])
             .allow_credentials(true)
             .allow_methods([
@@ -171,6 +173,7 @@ pub fn router(state: AppState) -> Router {
             post(routes::billing::start_checkout),
         )
         .route("/api/billing/portal", post(routes::billing::open_portal))
+        .route("/api/growth/page", post(growth::page))
         .route("/api/preview", post(routes::preview::run_preview))
         .route("/api/preview/email", post(routes::preview::email_preview))
         .route("/api/auth/signup", post(routes::accounts::signup))
