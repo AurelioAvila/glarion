@@ -1,3 +1,4 @@
+import { acquisitionHeaders } from "./acquisition.js";
 // Typed client for the Glarion API.
 //
 // Every response shape here mirrors a Rust type in crates/api. They are
@@ -223,19 +224,14 @@ export const session = {
 /// Same origin in production, which is the default and needs no
 /// configuration. The meta tag overrides that when it is set.
 ///
-/// The localhost fallback exists so development does not require editing a
-/// tracked file — the reliable way for someone's machine-specific URL to
-/// get committed by accident.
-function apiBase(): string {
+/// Local previews use their serving origin too; a separate API requires
+/// an explicit meta tag instead of silently sending sessions to port 8080.
+export function apiBase(): string {
   const configured = document
     .querySelector<HTMLMetaElement>('meta[name="glarion-api"]')
     ?.content?.trim();
 
   if (configured) return configured.replace(/\/$/, "");
-
-  const { hostname, port } = window.location;
-  const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
-  if (isLocal && port !== "8080") return "http://localhost:8080";
 
   return "";
 }
@@ -245,7 +241,7 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = acquisitionHeaders();
   const token = session.token();
   if (token) headers["authorization"] = `Bearer ${token}`;
   if (body !== undefined) headers["content-type"] = "application/json";
