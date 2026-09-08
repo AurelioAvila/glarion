@@ -1,0 +1,32 @@
+[
+  {
+    "Path": "/robots.txt",
+    "Status": 200,
+    "NoIndex": false,
+    "XRobots": ""
+  },
+  {
+    "Path": "/sitemap.xml",
+    "Status": 200,
+    "NoIndex": false,
+    "XRobots": ""
+  },
+  {
+    "Path": "/",
+    "Status": 200,
+    "NoIndex": false,
+    "XRobots": ""
+  },
+  {
+    "Path": "/sample-report.html",
+    "Status": 200,
+    "NoIndex": false,
+    "XRobots": ""
+  },
+  {
+    "Path": "/agency-security-reports.html",
+    "Status": 200,
+    "NoIndex": false,
+    "XRobots": ""
+  }
+]

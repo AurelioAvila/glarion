@@ -314,6 +314,7 @@ pub async fn start_verification(
 /// Performs the actual ownership check against the most recent pending
 /// token for this target.
 pub async fn check_verification(
+    headers: axum::http::HeaderMap,
     State(state): State<AppState>,
     user: AuthUser,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -397,10 +398,10 @@ pub async fn check_verification(
     let now = Utc::now();
     let expires_at = expiry_from(now);
 
-    sqlx::query(
+    let updated = sqlx::query(
         "update target_verifications
          set verified_at = $1, expires_at = $2, method = $3
-         where id = $4",
+         where id = $4 and verified_at is null",
     )
     .bind(now)
     .bind(expires_at)
@@ -409,6 +410,9 @@ pub async fn check_verification(
     .execute(&state.pool)
     .await?;
 
+    if updated.rows_affected() == 1 {
+        crate::growth::record(&state, &headers, "domain_verified").await;
+    }
     Ok(Json(CheckVerificationResponse {
         verified: true,
         expires_at: Some(expires_at),

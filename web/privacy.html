@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0b0b0c">
+<meta name="theme-color" content="#faf7fb">
 <title>Privacy Policy — Glarion</title>
 <meta name="robots" content="noindex">
 <meta name="description" content="How Glarion collects, uses, protects and deletes account and website-monitoring data.">
@@ -11,60 +11,15 @@
 <link rel="icon" type="image/png" href="/glarion-mark-64.png">
 <link rel="apple-touch-icon" href="/glarion-mark-180.png">
 <link rel="manifest" href="/site.webmanifest">
-<style>
-:root {
-  --bg: #0b0b0c; --rule: #22232a; --ink: #f0f0f2; --ink-2: #9c9ea8; --ink-3: #7c7e88;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
-a:hover { text-decoration-color: var(--ink); }
-header { border-bottom: 1px solid var(--rule); }
-.top-inner { max-width: 44rem; margin: 0 auto; padding: 0 2rem; height: 54px; display: flex; align-items: center; }
-.wordmark {
-  display: inline-flex; align-items: center; gap: .65rem;
-  font-family: var(--mono); font-size: .8rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase;
-}
-.brand-mark { width: 26px; height: 26px; object-fit: contain; flex: 0 0 auto; }
-main { max-width: 44rem; margin: 0 auto; padding: 3.5rem 2rem 6rem; }
-h1 { font-size: 1.9rem; letter-spacing: -.02em; margin: 0 0 .4rem; }
-.updated {
-  font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--ink-3); margin: 0 0 3rem;
-}
-h2 {
-  font-size: .78rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
-  margin: 2.75rem 0 1rem; padding-bottom: .6rem; border-bottom: 1px solid var(--rule);
-}
-h2:first-of-type { margin-top: 0; }
-p { color: var(--ink-2); margin: 0 0 1.1rem; }
-ul { color: var(--ink-2); margin: 0 0 1.1rem; padding-left: 1.2rem; }
-li { margin: .4rem 0; }
-strong { color: var(--ink); font-weight: 560; }
-code {
-  font-family: var(--mono); font-size: .87em; color: var(--ink);
-  background: #131315; padding: .1rem .35rem; border-radius: 3px;
-}
-table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: .89rem; }
-th, td { text-align: left; padding: .6rem .8rem .6rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
-td { color: var(--ink-2); }
-.notice {
-  margin: 0 0 2.5rem; padding-left: .9rem; border-left: 2px solid var(--rule); color: var(--ink-3); font-size: .89rem;
-}
-</style>
+<link rel="stylesheet" href="/prism.css">
+<link rel="stylesheet" href="/privacy.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header><div class="top-inner"><a class="wordmark" href="/"><img class="brand-mark" src="/glarion-mark-64.png" alt="" width="26" height="26"><span>Glarion</span></a></div></header>
-<main>
+<main id="main">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated 30 August 2026</p>
+  <p class="updated">Last updated 8 September 2026</p>
 
   <p class="notice">
     This is a small, single-operator service. Where this policy names "we"
@@ -177,12 +132,24 @@ td { color: var(--ink-2); }
     the Italian data protection authority.
   </p>
 
-  <h2>Cookies and tracking</h2>
+  <h2>Cookies and measurement</h2>
   <p>
-    Glarion sets no analytics, advertising, or tracking cookies. The only
-    thing stored in your browser is the session token that keeps you
-    signed in, which is not a cookie and is never sent to anyone but this
-    site.
+    A first-party, HttpOnly session cookie keeps you signed in. Browser storage
+    also supports sign-in state and carrying your entered domain into setup.
+    We do not set advertising cookies.
+  </p>
+  <p>
+    We count page views, public-check outcomes, new registrations and successful
+    domain verifications by day and channel. These counters contain no IP address,
+    email, domain, account ID, full referring URL or unique visitor identifier.
+    They count operations, not individual people. Security logs are separate.
+  </p>
+  <p>
+    A channel label (such as YouTube or DEV) is kept in session storage for the
+    current browser tab. Measurement is skipped when Do Not Track or Global
+    Privacy Control is enabled, or browser storage is unavailable. To disable
+    it for this tab, open <a href="/?growth=off">Glarion with measurement off</a>.
+    No channel label is sent to an advertising provider.
   </p>
 
   <h2>Changes to this policy</h2>

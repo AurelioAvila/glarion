@@ -148,9 +148,9 @@ confirmation mail becomes phishing). With no key configured, messages are
 logged instead of sent and the confirmation link appears in the API output,
 so the signup flow can be exercised locally without a mail account.
 
-The dashboard talks to the same origin it is served from. On localhost it
-falls back to port 8080, so development needs no configuration and no
-machine-specific URL can be committed by accident.
+The dashboard talks to the same origin it is served from, including local
+previews on a custom port. If frontend and API are served separately, set the
+`glarion-api` meta tag explicitly to the API origin.
 
 The runner needs [`nuclei`](https://github.com/projectdiscovery/nuclei) on
 `PATH`. A job whose tool is missing fails with a recorded reason rather
@@ -293,9 +293,18 @@ avoids both the shell dependency and duplicating what Nuclei's own
 
 ### Known limits
 
-- The rate limiters are per-process and keyed on the TCP peer address, so
-  they do not survive horizontal scaling and collapse to a single bucket
-  behind a reverse proxy. See `crates/api/src/rate_limit.rs`.
+- Production rate limits share PostgreSQL counters. Client attribution still
+  depends on a trusted proxy overwriting `Fly-Client-IP`; a chain of proxies
+  needs an operational check to avoid grouping unrelated visitors together.
+- Own HTTP requests pin validated addresses. Nuclei resolves independently and
+  is launched with its local-network restriction; worker egress isolation is
+  an additional operational boundary to verify.
+- The IPv6 destination policy deliberately excludes special-purpose and
+  transition ranges, including some legitimate non-website protocol services.
+- Passing tests and dependency audits does not establish complete security.
+  See [the local review](VERIFICA-SICUREZZA.md) for implemented changes,
+  evidence and outstanding infrastructure checks.
+
 - Nuclei resolves the hostname independently after Glarion's address check,
   so a DNS change can occur between that check and a scanner connection.
   Glarion passes `-restrict-local-network-access`, but its unit test checks

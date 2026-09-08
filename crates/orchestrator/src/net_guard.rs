@@ -46,7 +46,7 @@ pub fn is_public_ip(ip: IpAddr) -> bool {
 fn is_public_ipv4(ip: Ipv4Addr) -> bool {
     let [a, b, ..] = ip.octets();
 
-    !(ip.is_unspecified()          // 0.0.0.0/8
+    !(a == 0                      // all of 0.0.0.0/8, not just 0.0.0.0
         || ip.is_loopback()        // 127.0.0.0/8
         || ip.is_private()         // 10/8, 172.16/12, 192.168/16
         || ip.is_link_local()      // 169.254.0.0/16 — cloud metadata
@@ -68,12 +68,15 @@ fn is_public_ipv6(ip: Ipv6Addr) -> bool {
 
     let segments = ip.segments();
 
-    !(ip.is_unspecified()
-        || ip.is_loopback()
-        || ip.is_multicast()
-        || (segments[0] & 0xfe00) == 0xfc00      // fc00::/7 unique local
-        || (segments[0] & 0xffc0) == 0xfe80      // fe80::/10 link-local
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8)) // 2001:db8::/32
+    // Only native global unicast destinations. Translation and tunnelling
+    // prefixes can encode private IPv4 destinations and must not become an
+    // alternate route around the IPv4 guard. Conservatively exclude IETF
+    // protocol assignments too: these are not ordinary website targets.
+    (segments[0] & 0xe000) == 0x2000
+        && !(segments[0] == 0x2001 && segments[1] < 0x0200) // 2001::/23
+        && segments[0] != 0x2002 // 6to4
+        && !(segments[0] == 0x2001 && segments[1] == 0x0db8) // documentation
+        && !(segments[0] == 0x3fff && (segments[1] & 0xf000) == 0) // 3fff::/20
 }
 
 /// Resolves `domain` and returns its addresses, refusing the whole name if
@@ -169,6 +172,9 @@ mod tests {
     #[test]
     fn unspecified_broadcast_and_reserved_are_refused() {
         assert!(!is_public_ip(ip("0.0.0.0")));
+        assert!(!is_public_ip(ip("0.1.2.3")));
+        assert!(!is_public_ip(ip("0.255.255.255")));
+        assert!(!is_public_ip(ip("::ffff:0.1.2.3")));
         assert!(!is_public_ip(ip("255.255.255.255")));
         assert!(!is_public_ip(ip("240.0.0.1")));
         assert!(!is_public_ip(ip("::")));
@@ -208,6 +214,33 @@ mod tests {
         assert!(!is_public_ip(ip("::ffff:169.254.169.254")));
         assert!(!is_public_ip(ip("::ffff:10.0.0.1")));
         assert!(is_public_ip(ip("::ffff:8.8.8.8")));
+    }
+
+    #[test]
+    fn ipv6_special_and_transition_ranges_are_refused() {
+        for address in [
+            "::127.0.0.1",
+            "64:ff9b::a00:1",
+            "64:ff9b:1::1",
+            "100::1",
+            "100:0:0:1::1",
+            "2001::1",
+            "2001:2::1",
+            "2002:7f00:1::1",
+            "3fff::1",
+            "3fff:fff:ffff::1",
+            "5f00::1",
+            "fec0::1",
+        ] {
+            assert!(!is_public_ip(ip(address)), "accepted {address}");
+        }
+        for address in [
+            "2606:4700:4700::1111",
+            "2001:4860:4860::8888",
+            "2a06:98c1:3121::7",
+        ] {
+            assert!(is_public_ip(ip(address)), "rejected {address}");
+        }
     }
 
     #[tokio::test]

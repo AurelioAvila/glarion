@@ -1,3 +1,14 @@
+import { recordPage } from "./acquisition.js";
+let growthSignupSeen = false;
+function countSignupView(): void {
+  if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
+    growthSignupSeen = true;
+    recordPage("signup_view");
+  }
+}
+window.addEventListener("hashchange", countSignupView);
+countSignupView();
+
 // The dashboard.
 //
 // Plain TypeScript with hash routing and no framework, matching the rest of
@@ -7,9 +18,8 @@
 //
 // Two ideas run through the layouts, both from what this product is for.
 //
-// Colour is reserved for security state. The chrome is achromatic, so the
-// only coloured marks on a page are the ones that mean something is wrong,
-// needs a decision, or is fine. See the note at the top of index.html.
+// Prism uses plum and lilac for navigation. Security states keep their own
+// contrasting colours and explicit labels, independent of the brand accents.
 //
 // Change is the subject, not inventory. An agency's job is noticing that a
 // site got worse, so the sites view leads with a written assessment and
@@ -63,7 +73,7 @@ function stopPolling(): void {
 // --- shared pieces ---------------------------------------------------------
 
 function notice(kind: "error" | "ok" | "info", message: string): HTMLElement {
-  return el("p", { class: `notice notice-${kind}`, role: "status", text: message });
+  return el("p", { class: `notice notice-${kind}`, role: kind === "error" ? "alert" : "status", text: message });
 }
 
 /// Turns a thrown value into something worth showing.
@@ -671,19 +681,22 @@ async function renderTargets(): Promise<void> {
   }
 
   const addPanel = addTargetForm();
+  addPanel.id = "add-site-panel";
   // Open already if it arrived carrying a domain from the free check. An
   // account with sites in it hides this panel behind a button, and a
   // prefilled box nobody can see is the same as no prefill at all.
   const carrying = Boolean(addPanel.querySelector("input")?.value);
   addPanel.hidden = !carrying;
 
-  const addButton = el("button", { class: "ghost", type: "button", text: "Add a site" });
+  const addButton = el("button", { class: "primary", type: "button", text: "Add a site", "aria-controls": "add-site-panel", "aria-expanded": String(carrying) });
   on(addButton, "click", () => {
     addPanel.hidden = !addPanel.hidden;
+    addButton.setAttribute("aria-expanded", String(!addPanel.hidden));
     if (!addPanel.hidden) addPanel.querySelector("input")?.focus();
   });
 
   container.append(
+    el("div", { class: "workspace-heading" }, [el("h1", { text: "Your websites" }), el("p", { text: "Monitor client sites and review the changes that need your attention." })]),
     standingStatement(rows),
     el("div", { class: "head-row" }, [el("div"), addButton]),
     addPanel,
@@ -946,7 +959,7 @@ function firstRun(): HTMLElement {
       step(
         "2",
         "Prove the domain is yours",
-        "A one-time DNS record. We only ever scan sites whose owner asked us to.",
+        "Use a DNS record or a hosted verification file. Proof lasts 30 days and is checked again before a full scan.",
       ),
       step(
         "3",
@@ -975,6 +988,8 @@ function addTargetForm(): HTMLElement {
     autocapitalize: "none",
     autocorrect: "off",
     spellcheck: false,
+    inputmode: "url",
+    maxlength: 253,
   });
   const client = el("input", { type: "text", placeholder: "Optional" });
   const button = submitButton("Add");
@@ -1973,7 +1988,7 @@ async function renderSettings(): Promise<void> {
     });
   });
 
-  container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Your details"), form]));
+  container.append(form);
 
   const plan = el("p", { class: "muted" }, [
     "Your plan, what it includes, and every other plan: ",
@@ -2028,7 +2043,7 @@ function changePasswordSection(email: string | null): HTMLElement {
     required: true,
     autocomplete: "current-password",
   });
-  const next = el("input", { type: "password", required: true, autocomplete: "new-password" });
+  const next = el("input", { type: "password", required: true, autocomplete: "new-password", minlength: 12 });
   const confirmation = el("input", {
     type: "password",
     required: true,
@@ -2479,7 +2494,7 @@ function renderNav(): void {
 
   const section = window.location.hash.split("/")[1] ?? "";
   const link = (href: string, text: string, matches: string[]): HTMLElement =>
-    el("a", { href, text, class: matches.includes(section) ? "active" : undefined });
+    el("a", { href, text, class: matches.includes(section) ? "active" : undefined, "aria-current": matches.includes(section) ? "page" : undefined });
 
   // Without something on screen saying so, a keyboard-first interface is
   // just an interface nobody knows is keyboard-first.
@@ -2518,6 +2533,8 @@ function routeInner(): void {
   const path = separator === -1 ? hash : hash.slice(0, separator);
   const query = new URLSearchParams(separator === -1 ? "" : hash.slice(separator + 1));
   const parts = path.split("/").filter(Boolean);
+  const accountEntry = ["signin", "signup", "forgot", "reset", "verify", "confirm-email"].includes(parts[0] ?? "");
+  document.body.dataset.shell = !session.isSignedIn || accountEntry ? "auth" : "workspace";
 
   // Taken before the session is consulted, because the better version of
   // this visitor is already signed in: an agency that pays for this and has
@@ -2609,4 +2626,12 @@ window.addEventListener("hashchange", () => {
   palette.close();
   route();
 });
-window.addEventListener("DOMContentLoaded", route);
+window.addEventListener("DOMContentLoaded", () => {
+  // A skip link moves focus without changing the hash-router's route.
+  document.querySelector<HTMLAnchorElement>("a.skip")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    root().focus();
+    root().scrollIntoView({ block: "start" });
+  });
+  route();
+});

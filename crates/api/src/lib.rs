@@ -2,6 +2,7 @@ pub mod auth;
 pub mod billing;
 pub mod config;
 pub mod error;
+pub mod growth;
 pub mod rate_limit;
 pub mod routes;
 pub mod state;
@@ -62,6 +63,7 @@ pub async fn run() -> Result<()> {
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::CONTENT_TYPE,
                 axum::http::HeaderName::from_static("x-glarion-csrf"),
+                axum::http::HeaderName::from_static("x-glarion-source"),
             ])
             .allow_credentials(true)
             .allow_methods([
@@ -171,6 +173,7 @@ pub fn router(state: AppState) -> Router {
             post(routes::billing::start_checkout),
         )
         .route("/api/billing/portal", post(routes::billing::open_portal))
+        .route("/api/growth/page", post(growth::page))
         .route("/api/preview", post(routes::preview::run_preview))
         .route("/api/preview/email", post(routes::preview::email_preview))
         .route("/api/auth/signup", post(routes::accounts::signup))
@@ -239,6 +242,12 @@ pub fn router(state: AppState) -> Router {
             "/api/profile",
             get(routes::profile::get_profile).put(routes::profile::update_profile),
         )
+        // Authenticated findings, profiles and session responses must not be
+        // retained by browsers or shared intermediary caches.
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -341,7 +350,8 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
             STRICT_TRANSPORT_SECURITY,
             HeaderValue::from_static("max-age=31536000; includeSubDomains"),
         ))
-        .layer(SetResponseHeaderLayer::overriding(
+        // Downloaded reports supply a stricter sandboxed policy.
+        .layer(SetResponseHeaderLayer::if_not_present(
             CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
                 "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-WLJsZgWYV6G+rcHqpPVxt4ubAAbZ46TYUXUFnDlN0W4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests",
