@@ -8,7 +8,7 @@ pub mod routes;
 pub mod state;
 
 use anyhow::{Context, Result};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Redirect};
 use axum::routing::{get, post, put};
 use axum::Router;
 use sqlx::postgres::PgPoolOptions;
@@ -378,12 +378,40 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
             HeaderValue::from_static("same-origin"),
         ));
 
+    // Said in a header rather than only in the document, because a `<meta
+    // name=robots>` tag is worth exactly as much as the crawler's
+    // willingness to parse HTML, and nothing at all to the ones that read
+    // headers and stop. Both are applied to the same URLs.
+    let noindex = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-robots-tag"),
+        HeaderValue::from_static("noindex"),
+    );
+
     router
         // Explicit, because ServeDir would otherwise answer `/` with
         // index.html — which here is the dashboard shell, not the front
         // door. Getting this wrong shows a signed-out visitor a blank
         // application instead of the page that explains it.
         .route_service("/", revalidate.clone().service(ServeFile::new(&landing)))
+        // The two files behind `/` and `/app`, reachable under their own
+        // names through the static fallback, and therefore two more copies
+        // of pages that already exist. The landing page carries a canonical
+        // tag pointing home, which Google honours — "alternate page with
+        // proper canonical" is one of the five exclusions on this property
+        // — but a canonical is a request and a redirect is not, and a
+        // future edit that drops the tag would silently publish the
+        // duplicate. One address per page, enforced here.
+        .route("/landing.html", get(|| async { Redirect::permanent("/") }))
+        .route("/index.html", get(|| async { Redirect::permanent("/app") }))
+        // The address the scanner puts in its own User-Agent header, so it
+        // is the one a site owner types after finding Glarion in their
+        // access log. It answered 404 from the day that header shipped.
+        // The page lives at the extension the rest of the site uses; this
+        // sends the advertised form to it rather than duplicating it.
+        .route(
+            "/about-our-checks",
+            get(|| async { Redirect::permanent("/about-our-checks.html") }),
+        )
         // The shareable result: /check?d=example.com is the same page, which
         // reads the query string and runs the check on load. A link an agency
         // can send to its client is the cheapest way this product travels,
@@ -395,10 +423,7 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         .route_service(
             "/check",
             ServiceBuilder::new()
-                .layer(SetResponseHeaderLayer::overriding(
-                    HeaderName::from_static("x-robots-tag"),
-                    HeaderValue::from_static("noindex"),
-                ))
+                .layer(noindex.clone())
                 .layer(revalidate.clone())
                 .service(ServeFile::new(&landing)),
         )
@@ -406,8 +431,26 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         // `/app` without a trailing slash, deliberately: the shell asks for
         // /dist/app.js absolutely, but any relative URL a future edit adds
         // would resolve against the wrong base under `/app/`.
-        .route_service("/app", revalidate.clone().service(ServeFile::new(&shell)))
-        .route_service("/app/", revalidate.clone().service(ServeFile::new(&shell)))
+        //
+        // Noindexed at the header, and no longer disallowed in robots.txt:
+        // a crawler told not to fetch a URL cannot read the noindex inside
+        // it, which is how a blocked page still ends up in the index under
+        // its bare address. Letting the crawler in to be turned away is the
+        // only instruction that actually removes it.
+        .route_service(
+            "/app",
+            ServiceBuilder::new()
+                .layer(noindex.clone())
+                .layer(revalidate.clone())
+                .service(ServeFile::new(&shell)),
+        )
+        .route_service(
+            "/app/",
+            ServiceBuilder::new()
+                .layer(noindex)
+                .layer(revalidate.clone())
+                .service(ServeFile::new(&shell)),
+        )
         .fallback_service(
             revalidate.service(ServeDir::new(web_root).append_index_html_on_directories(false)),
         )
