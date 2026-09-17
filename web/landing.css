@@ -667,7 +667,7 @@ footer {
 
 
 /* Prism — user-selected direction 6. */
-@font-face{font-family:Manrope;src:url('/fonts/manrope.ttf') format('truetype');font-weight:200 800;font-display:swap}
+@font-face{font-family:Manrope;src:url('/fonts/manrope.woff2') format('woff2'),url('/fonts/manrope.ttf') format('truetype');font-weight:200 800;font-display:swap}
 :root{--prism-accent:#bc294a;--prism-violet:#7345b2;--prism-coral:#e74767}
 body{font-family:Manrope,sans-serif}
 ::selection{background:#e2d0fa;color:#2d103a}
