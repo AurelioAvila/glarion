@@ -1,63 +1,95 @@
-# Restyle Prism — verifica locale
+# Prism restyle — historical validation record
 
-## Consegna
+## Delivery
 
-Direzione grafica 6 scelta dall’utente e successivamente estesa all’area clienti e alle altre pagine.
+The user selected visual direction 6, later extended to the customer area and other pages.
 
-- Homepage e ingresso account: perla, lilla, corallo, Manrope locale e anello ottico.
-- Area clienti: siti, dettaglio, scansioni, piano e impostazioni; navigazione mobile accessibile.
-- Guide, privacy, termini e report dimostrativo coerenti. Testi legali invariati.
-- Report generati: palette coerente, impaginazione adattabile e stampa, senza nuove richieste esterne.
+- Homepage and account entry: pearl, lilac, coral, locally hosted Manrope and an optical ring.
+- Customer area: sites, details, scans, plans and settings, with accessible mobile navigation.
+- Consistent guides, privacy, terms and sample report. Legal text was unchanged.
+- Generated reports: matching palette, responsive layout and print support, without new external requests.
 
-## Migliorie funzionali
+## Functional improvements
 
-- Le richieste dell’area clienti usano la stessa origine anche nelle anteprime locali, eliminando il rinvio implicito alla porta 8080.
-- Il collegamento per saltare al contenuto sposta il focus senza cambiare schermata.
-- Navigazione attiva e apertura del modulo per aggiungere un sito hanno stati accessibili espliciti.
-- Errori annunciati alle tecnologie assistive; lunghezza minima della nuova password allineata alle istruzioni.
-- Onboarding corretto: verifica via DNS o file, con validità di 30 giorni.
-- Rimosso il titolo duplicato nelle impostazioni.
+- Customer-area requests use the same origin in local previews, removing the implicit port 8080 fallback.
+- The skip link moves focus without changing the active screen.
+- Active navigation and the add-site form expose explicit accessible states.
+- Errors are announced to assistive technology; minimum new-password length matches the instructions.
+- Onboarding correctly describes DNS/file verification and its 30-day validity.
+- Removed the duplicate settings heading.
 
-## Evidenze
+## Evidence recorded at this stage
 
-- Build e controllo TypeScript superati.
-- 20 test frontend superati, inclusa la regressione sull’origine delle richieste e i token dei fogli di stile collegati.
-- 21 test del generatore di report superati, inclusi escaping e comportamento di stampa.
-- Accesso con credenziali volutamente inesistenti: risposta corretta dal servizio locale, senza richiesta alla porta 8080.
-- Navigazione da tastiera: focus sul contenuto, percorso corrente conservato.
-- Modulo aggiunta sito e collegamenti verificati; nessuno sconfinamento orizzontale nelle viste mobile controllate.
-- Pagine e nuovi asset serviti con risposta HTTP 200.
-- Revisione indipendente: `ship`, limitata alle aree visibili delle nove catture consegnate. Il rilevatore automatico era limitato al controllo testuale e non certifica il contrasto calcolato dal browser.
+- Build and TypeScript checks passed.
+- 20 frontend tests passed, including request-origin regression and linked stylesheet-token checks.
+- 21 report-generator tests passed, including escaping and print behavior.
+- Deliberately invalid credentials received the expected local-service response without requests to port 8080.
+- Keyboard navigation moved focus to content and preserved the current route.
+- The add-site form and links were checked; no horizontal overflow was found in the mobile views examined.
+- Pages and new assets returned HTTP 200.
+- Independent review: ready to ship within the visible areas of nine delivered captures.
+  The automated detector checked text only; it did not certify browser-computed contrast.
 
-## Anteprime e limiti
+## Previews and limitations
 
-Applicazione locale: http://localhost:5186/app/#/signin
+Historical local app: http://localhost:5186/app/#/signin
 
-Demo area clienti: http://127.0.0.1:5192/app/#/targets
+Historical customer-area demo: http://127.0.0.1:5192/app/#/targets
 
-La demo è separata, usa dati fittizi esplicitamente etichettati e rifiuta modifiche, pagamenti e scansioni. Il report scaricabile nella demo è un esempio indipendente dai conteggi dell’elenco. Il server dimostrativo è in `.preview`, escluso dal pacchetto di produzione.
+The separate demo uses explicitly labeled fictional data and rejects mutations,
+payments and scans. Its downloadable sample report is independent of the list
+counts. The demo server lives in `.preview`, excluded from production packaging.
 
-In questo passaggio non sono stati verificati creazione effettiva di account, invio email, pagamenti o scansioni reali. Non è stata pubblicata alcuna modifica. Le correzioni di sicurezza precedenti sono conservate; questo restyle non equivale a una nuova verifica completa della sicurezza.
+Actual account creation, email delivery, payments and real scans were not tested
+at this stage. Nothing had been published at that point. Earlier security
+corrections were preserved; the restyle was not a new comprehensive security audit.
 
+## Report clarity and layout — 7 September 2026
 
-## Report: chiarezza e impaginazione — 7 settembre 2026
+- Public sample and generated reports share a generator: summary, top three
+  actions linked to details, separate consequence/remediation sections, visible
+  evidence, and observations separated from passed checks.
+- The sample uses explicitly fictional data and retains that label in PDF.
+  Social metadata and canonical URL were preserved. Public printing uses a
+  CSP-compatible local script; browser printing and Ctrl/Cmd+P remain available
+  for the sandboxed document.
+- A4 layout was checked across three pages in Chrome 152. Identity sits in a
+  footer margin box, separate from content. Long names were checked on desktop,
+  phone and PDF. Repeating margins depend on CSS page-margin-box support and
+  were not verified in other browsers.
+- 23 report tests, 20 frontend tests and TypeScript checks passed. Hostile-text
+  coverage includes a closing style tag; margin metadata is fully CSS-escaped.
+- Independent review found the screen design ready and the PDF margin/long-title
+  corrections resolved within the reviewed local scope.
+- Historical preview: http://localhost:5186/ and
+  http://localhost:5186/sample-report.html . The customer demo used the updated
+  generator; no publication had occurred at this stage.
 
-- Report pubblico dimostrativo e report generati condividono lo stesso generatore: riepilogo, prime tre azioni collegate ai dettagli, conseguenza/intervento separati, evidenze visibili, osservazioni distinte dai controlli superati.
-- Il campione usa dati dichiaratamente fittizi e conserva questa indicazione nel PDF. Metadati social e canonical conservati. Il pulsante stampa pubblico usa uno script locale compatibile con la CSP; per il documento servito in sandbox rimangono disponibili stampa del browser e Ctrl/Cmd+P.
-- Impaginazione A4 verificata su tre pagine con Chrome 152: identità in un riquadro del margine inferiore, separato dai contenuti. Verificati anche nomi lunghi su desktop, telefono e PDF. La ripetizione nel margine richiede il supporto del browser ai CSS page margin boxes; non è stata verificata su altri browser.
-- 23 test del report e 20 del frontend superati; controllo TypeScript superato. La prova contro testo ostile include la chiusura di style: i metadati nel margine vengono codificati integralmente come escape CSS.
-- Revisione indipendente: grafica a schermo pronta; correzioni del margine PDF e dell'intestazione lunga valutate risolte, disposizione finale ship locally al perimetro esaminato.
-- Landing: http://localhost:5186/ ; esempio aggiornato: http://localhost:5186/sample-report.html . Demo area clienti aggiornata con il nuovo generatore; nessuna pubblicazione eseguita.
+## Public release — 7 September 2026 (Europe/Rome)
 
+The user approved proceeding after reviewing the previews.
 
-## Rilascio pubblico — 7 settembre 2026 (Europe/Rome)
+- Revision 087663c was deployed to Fly as release v63 from
+  codex/restyle-security-20260906. Immutable image:
+  registry.fly.io/glarion-api@sha256:e98c7d2f6619010e045d449f294a14a3328647f9bf916e1b40fb47f9956c7ddb.
+- Full local verification passed: 292 Rust tests, 20 frontend tests, TypeScript,
+  formatting, Clippy and dependency audits. Scan-gate tests ran against a dedicated
+  database. After disk exhaustion, compilation was repeated serially without debug
+  symbols following cleanup of this project's Cargo artifacts only.
+- App and worker were updated; Fly checks passed. No migration or secret change
+  was needed. Previous release: v62,
+  registry.fly.io/glarion-api:deployment-01M1NRWMDDH9SDXR95Z37CV7ZJ.
+- Public domain: health returned 200. Report, app, CSS, JavaScript, image and font
+  returned 200 with SHA-256 matching local artifacts. The landing was checked in
+  the browser. Cloudflare rewrites the contact email and injects its decoder,
+  so the public landing hash differs from the source file.
+- Unauthenticated profile/scans/targets/billing returned 401 with Cache-Control:
+  no-store. No production payments, emails or new real scans were performed.
+- The branch was saved to GitHub; master was still at the previous base at that
+  time. Deployment used the CLI without Discord announcements or social posts.
+  The recorded follow-up was to merge the restyle before later master deployments.
+- Public pages: https://glarion.app/ and https://glarion.app/sample-report.html .
+  The site was no longer limited to the earlier local previews.
 
-Approvazione utente: "ok va bene, procedi", dopo revisione delle anteprime.
-
-- Pubblicata la revisione 087663c su Fly, release v63, da codex/restyle-security-20260906. Immagine immutabile: registry.fly.io/glarion-api@sha256:e98c7d2f6619010e045d449f294a14a3328647f9bf916e1b40fb47f9956c7ddb.
-- Verifica completa locale superata: 292 test Rust, 20 frontend, controlli TypeScript, formattazione, Clippy, audit dipendenze; gate scansioni realmente eseguito su database dedicato. Dopo esaurimento disco, ripetuta compilazione seriale senza simboli debug, previa pulizia degli artefatti Cargo del solo progetto.
-- Aggiornate app e worker; controlli Fly superati. Nessuna migrazione o modifica ai segreti richiesta. Versione precedente disponibile: v62, registry.fly.io/glarion-api:deployment-01M1NRWMDDH9SDXR95Z37CV7ZJ.
-- Sul dominio pubblico: health 200; report, app, CSS, JavaScript, immagine e font 200 con SHA-256 identico agli artefatti locali. Landing nuova verificata nel browser; Cloudflare riscrive il solo contatto email e inserisce il relativo decoder, quindi il suo hash pubblico differisce dal file sorgente.
-- Profile/scans/targets/billing senza autenticazione: 401 con Cache-Control no-store. Non eseguiti pagamenti, invii email o nuove scansioni reali in produzione.
-- Branch salvato su GitHub; master resta alla base precedente. Rilascio diretto da CLI, senza attivare annunci Discord o pubblicazioni social. Prima di futuri rilasci da master, integrare il branch del restyle per evitare di sovrascriverlo.
-- Anteprime pubbliche: https://glarion.app/ e https://glarion.app/sample-report.html . Il sito non è più limitato alle anteprime locali descritte nelle sezioni precedenti.
+This document records historical checks and deployment state, not a certification
+of the current release. Legacy filenames are retained to preserve inbound links.
