@@ -1,44 +1,105 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Only canonical, indexable pages belong here. The dashboard behind /app
-  renders nothing without a session, while the legal pages deliberately use
-  noindex; listing any of them would send crawlers contradictory instructions.
+  Only canonical, indexable pages belong here.
+
+  Deliberately absent, and each for its own reason:
+
+    /app and /app/     the dashboard shell — noindex, and empty without a
+                       session anyway.
+    /check             the shareable result — noindex, because one URL per
+                       domain anybody ever checked is not a page.
+    /landing.html      301 to /. Same file, one address.
+    /index.html        301 to /app. Same file, one address.
+    /about-our-checks  301 to /about-our-checks.html, which is listed.
+
+  A sitemap entry for any of those would tell a crawler to fetch a URL and
+  then tell it to ignore what it found. `crates/api/tests/sitemap.rs`
+  checks this file against the directory it describes, so a page added
+  without a line here fails the build rather than quietly never ranking.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://glarion.app/</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://glarion.app/website-security-monitoring.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <loc>https://glarion.app/pricing.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/how-it-works.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/free-website-security-check.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/ssl-certificate-expiry-monitoring.html</loc>
+    <lastmod>2026-09-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://glarion.app/agency-security-reports.html</loc>
-    <lastmod>2026-09-04</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://glarion.app/nuclei-monitoring.html</loc>
-    <lastmod>2026-09-04</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://glarion.app/website-vulnerability-scanner.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <loc>https://glarion.app/email-spoofing-spf-dmarc.html</loc>
+    <lastmod>2026-09-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://glarion.app/sample-report.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/website-security-monitoring.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/agency-security-reports.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/website-vulnerability-scanner.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/nuclei-monitoring.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/about-our-checks.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/privacy.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://glarion.app/terms.html</loc>
+    <lastmod>2026-09-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
   </url>
 </urlset>
