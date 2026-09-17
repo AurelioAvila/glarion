@@ -14,4 +14,54 @@ article { max-width: 48rem; }
 .button { background: var(--accent); color: white; border-radius: 8px; min-height: 44px; display: inline-flex; align-items: center; }
 .button:hover { background: #a5203e; }
 .foot nav { flex-wrap: wrap; }
-@media(max-width:42rem) { .wrap { width: calc(100% - 2.5rem); } .nav { gap: 1rem; } .nav a { font-size: .76rem; } .summary { gap: 1.4rem; } }
+.nav { flex-wrap: wrap; }
+
+/* Plans, as rows. Three boxes side by side make the middle one look
+   chosen by us; a reader comparing an allowance wants the allowances
+   under each other. Same vocabulary as the landing page so the two
+   pages are recognisably one site. */
+.plans { list-style: none; margin: 2rem 0 0; padding: 0; }
+.plan { display: grid; grid-template-columns: 1fr auto; gap: .6rem 2rem; align-items: baseline; padding: 1.3rem 0; border-bottom: 1px solid var(--rule-soft); }
+.plan-name { font-weight: 650; font-size: 1.05rem; color: var(--ink); }
+.plan-detail { color: var(--muted); font-size: .92rem; margin-top: .25rem; }
+.plan-includes { color: var(--quiet); font-size: .82rem; margin-top: .3rem; }
+.plan-price { font-weight: 650; font-size: 1.05rem; text-align: right; white-space: nowrap; color: var(--ink); }
+.plan-price small { display: block; font-weight: 400; color: var(--quiet); font-size: .78rem; margin-top: .2rem; }
+
+/* Questions, answered in place. <details> rather than a script: the
+   browser already does this, and a closed answer is still in the
+   document for anything that reads it without running JavaScript. */
+details { border-bottom: 1px solid var(--rule-soft); padding: .1rem 0; }
+summary { cursor: pointer; padding: 1rem 0; font-weight: 650; color: var(--ink); list-style-position: outside; }
+summary:hover { color: var(--accent); }
+details p { margin: 0 0 1.1rem; max-width: 60ch; }
+
+/* Facts on hairlines, the same furniture the product uses for a result. */
+.spec { margin: 1.5rem 0 0; }
+.spec div { display: flex; gap: 1.25rem; align-items: baseline; padding: .7rem 0; border-bottom: 1px solid var(--rule-soft); }
+.spec dt { flex: none; width: 15rem; font-weight: 650; font-size: .9rem; color: var(--ink); }
+.spec dd { margin: 0; color: var(--muted); font-size: .9rem; }
+
+/* Where to go next. Every page here should hand the reader another one. */
+.more { list-style: none; margin: 1.25rem 0 0; padding: 0; }
+.more li { padding: .75rem 0; border-bottom: 1px solid var(--rule-soft); }
+.more a { font-weight: 650; color: var(--ink); text-decoration: none; }
+.more a:hover { color: var(--accent); }
+.more span { display: block; color: var(--quiet); font-size: .85rem; margin-top: .15rem; }
+
+code { font: .88em var(--mono); background: var(--sink); padding: .1em .35em; border-radius: 4px; }
+
+@media(max-width:42rem) {
+  .wrap { width: calc(100% - 2.5rem); }
+  .nav { gap: 1rem; }
+  .nav a { font-size: .76rem; }
+  .summary { gap: 1.4rem; }
+  /* The base sheet hides the first nav link at this width, which was fine
+     when the nav held two. It now holds four, and hiding one of them
+     hides a page. Wrapping keeps all of them reachable. */
+  .nav a:first-child { display: block; }
+  .plan { grid-template-columns: 1fr; }
+  .plan-price { text-align: left; }
+  .spec div { flex-direction: column; gap: .2rem; }
+  .spec dt { width: auto; }
+}
