@@ -72,20 +72,22 @@ COPY --from=build /app/target/release/growth_report /usr/local/bin/growth_report
 # page and the endpoints it calls means no CORS entry to maintain, and one
 # thing to deploy instead of two.
 #
+# The whole directory rather than a per-file list, because the list was
+# itself the bug: every page added since has also had to be remembered
+# here, and favicon.ico was not. It sat in the repository, passed review,
+# and answered 404 in production to every crawler and every browser that
+# skips the <link rel=icon> tag — a failure with no failing test, because
+# nothing on this side of the build knows what the other side expects.
+#
+# node_modules and dist never enter the build context (.dockerignore), so
+# the only things to drop are the TypeScript sources and package manifests:
+# they are the web stage's input, and the runtime has no use for them.
+#
 # glarion-mark.png is no longer referenced by any page, but emails already
 # in inboxes hotlink it, so the image keeps serving it.
-COPY web/landing.html web/index.html web/privacy.html web/terms.html web/sample-report.html \
-     web/robots.txt web/sitemap.xml web/site.webmanifest web/landing.js \
-     web/seo.css web/website-security-monitoring.html \
-     web/agency-security-reports.html web/nuclei-monitoring.html \
-     web/website-vulnerability-scanner.html \
-     web/glarion-mark-64.png web/glarion-mark-180.png \
-     web/glarion-mark-192.png web/glarion-mark-512.png web/glarion-mark.png web/og.png web/
+COPY web web
+RUN rm -rf web/src web/package.json web/package-lock.json web/tsconfig.json
 COPY --from=web /web/dist web/dist
-COPY web/prism-ring.png web/prism-ring.png
-COPY web/prism.css web/app.css web/privacy.css web/terms.css web/report-actions.js web/
-COPY web/landing.css web/landing.css
-COPY web/fonts web/fonts
 
 RUN chown -R glarion:glarion /app
 USER glarion
