@@ -112,7 +112,7 @@ pub async fn preview(domain: &str) -> Result<Preview, PreviewError> {
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .redirect(reqwest::redirect::Policy::none())
         .resolve(&domain, pinned)
-        .user_agent("Glarion/1.0 (+https://glarion.app/about-our-checks)")
+        .user_agent(crate::USER_AGENT)
         .build()
         .map_err(|_| PreviewError::Unreachable(domain.clone()))?;
 
