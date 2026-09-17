@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#faf7fb">
+<title>About the Glarion Crawler — What Our Checks Do</title>
+<meta name="description" content="Found Glarion/1.0 in your access log? This is exactly what it requested, why, how to tell a public check from an authorised scan, and how to block it.">
+<link rel="canonical" href="https://glarion.app/about-our-checks.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Glarion">
+<meta property="og:title" content="About the Glarion Crawler — What Our Checks Do">
+<meta property="og:description" content="The requests Glarion/1.0 makes, the ones it never makes, and how to stop it if you would rather it did not.">
+<meta property="og:url" content="https://glarion.app/about-our-checks.html">
+<meta property="og:image" content="https://glarion.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Glarion — website security monitoring for agencies">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="About the Glarion Crawler — What Our Checks Do">
+<meta name="twitter:description" content="The requests Glarion/1.0 makes, the ones it never makes, and how to stop it.">
+<meta name="twitter:image" content="https://glarion.app/og.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/glarion-mark-64.png">
+<link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/prism.css">
+<link rel="stylesheet" href="/seo.css">
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="/"><img src="/glarion-mark-64.png" alt="" width="32" height="32"><span>Glarion</span></a><nav class="nav"><a href="/how-it-works.html">How it works</a><a href="/pricing.html">Pricing</a><a href="/sample-report.html">Sample report</a><a href="/app/#/signin">Sign in</a></nav></div></header>
+
+<main class="wrap">
+<p class="eyebrow">For site owners</p>
+<h1>You found Glarion in your access log</h1>
+<p class="lede">This page is the address in our User-Agent header, so you are probably here because something identifying itself as <code>Glarion/1.0</code> requested a page on your site. Here is exactly what it asked for, why, and how to stop it.</p>
+
+<div class="summary">
+<div><strong>Three requests</strong><span>Homepage, robots.txt, security.txt. That is all.</span></div>
+<div><strong>Nothing guessed</strong><span>No path discovery, no admin paths, no probing.</span></div>
+<div><strong>Blockable</strong><span>Refuse the User-Agent and the check simply fails.</span></div>
+</div>
+
+<article>
+<section>
+<h2>What the request was</h2>
+<p>Glarion is a website security monitoring service. Somebody — very possibly you, or an agency that looks after your site — typed your domain into the free public check on our front page. That check makes exactly three HTTP requests:</p>
+<ul>
+<li><code>GET /</code> over HTTPS, to read the response headers.</li>
+<li><code>GET /robots.txt</code>.</li>
+<li><code>GET /.well-known/security.txt</code>.</li>
+</ul>
+<p>It also opens one TLS connection to read your certificate's expiry date, and asks a DNS resolver for your SPF and DMARC records. DNS lookups do not touch your server at all.</p>
+<p>The requests are <code>GET</code> only. Redirects are not followed. The response body is read up to a small ceiling, because the headers are what the check is for. Each request has a six-second budget and the whole check is capped at twelve, so it fails quickly rather than holding a connection open.</p>
+<div class="callout"><p>The public check is not a scan. It reads what your site already publishes to every visitor and every search engine crawler. Nothing is probed and no path is guessed, which is the reason it can run without anybody's permission.</p></div>
+</section>
+
+<section>
+<h2>What it never does</h2>
+<dl class="spec">
+<div><dt>No path discovery</dt><dd>It does not request anything you have not published. There is no wordlist, no admin-path guessing and no directory enumeration.</dd></div>
+<div><dt>No vulnerability probing</dt><dd>It does not try known exploit fingerprints against your site.</dd></div>
+<div><dt>No writes</dt><dd><code>GET</code> only. No forms are submitted and nothing is posted.</dd></div>
+<div><dt>No login attempts</dt><dd>No credentials are tried, ever, on any plan.</dd></div>
+<div><dt>No load</dt><dd>Three requests, once, when somebody presses a button.</dd></div>
+</dl>
+</section>
+
+<section>
+<h2>If it was not the public check</h2>
+<p>Glarion also runs a full vulnerability scan, and that one <em>does</em> request paths your site never advertised and does try known fingerprints against them. It is a different thing with a different gate in front of it.</p>
+<p>A full scan runs only after somebody has proved control of the domain — by publishing a DNS TXT record at <code>_glarion-verify.yourdomain</code> or a token file at <code>/.well-known/glarion-verify.txt</code> — and that proof expires after 30 days and is checked again at the moment the scan runs. If you did not create either of those and nobody with access to your DNS did, no full scan of your domain has happened.</p>
+<p>The full scan is performed by a separate scanner process which sends its own default User-Agent rather than <code>Glarion/1.0</code>, so a scan is not identifiable by that header. It runs at 20 requests per second with bounded concurrency, and with the fuzzing, brute-force, denial-of-service and intrusive template categories excluded. A domain is capped at six full scans per rolling 24 hours.</p>
+<p>A request for <code>/.well-known/glarion-verify.txt</code> carrying <code>Glarion/1.0</code> is somebody attempting to prove control of your domain. If that was not you or your agency, it failed — the file has to exist and contain a token we generated — but it is worth knowing about.</p>
+</section>
+
+<section>
+<h2>How to stop it</h2>
+<p>The check is an ordinary HTTPS client. Refuse it and it fails; there is no retry loop and no second address it comes from instead.</p>
+<ul>
+<li>Block or rate-limit the User-Agent <code>Glarion/1.0</code> at your web server, CDN or WAF.</li>
+<li>Or return anything that is not a success for those three paths. The check reports what it could not read rather than inventing a result.</li>
+</ul>
+<p>Adding a <code>Disallow</code> to <code>robots.txt</code> will not stop it, and we would rather say so than imply otherwise. The public check is a user-initiated request for three specific published files, not a crawl, and it does not consult <code>robots.txt</code> before reading the file it is checking for the existence of. If you want it refused, refuse it at the server.</p>
+</section>
+
+<section>
+<h2>If you think something went wrong</h2>
+<p>If a Glarion request caused a problem on your site, or you believe a scan ran against a domain nobody authorised, we want to hear about it directly rather than read about it later. The contact address is published at <a href="/.well-known/security.txt">/.well-known/security.txt</a> and the disclosure policy is in <a href="https://github.com/AurelioAvila/glarion/blob/master/SECURITY.md">SECURITY.md</a>.</p>
+<p>The service's source is public, so the behaviour described on this page can be <a href="https://github.com/AurelioAvila/glarion">checked rather than believed</a>: the public check is <code>crates/orchestrator/src/preview.rs</code> and the scan policy is <code>crates/orchestrator/src/policy.rs</code>.</p>
+<div class="cta">
+<a class="button" href="/free-website-security-check.html">See what the check reads</a>
+<a class="text-link" href="/">What Glarion is →</a>
+</div>
+</section>
+</article>
+</main>
+
+<footer><div class="wrap foot"><span>Glarion — it reads what your site already publishes.</span><nav><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/how-it-works.html">How it works</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></div></footer>
+</body>
+</html>
