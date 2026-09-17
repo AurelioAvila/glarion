@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#faf7fb">
+<title>SPF and DMARC Check for Client Domains | Glarion</title>
+<meta name="description" content="Most domains that “have DMARC” are on p=none, so forged invoices still get delivered. Check what SPF and DMARC actually instruct receivers to do, free.">
+<link rel="canonical" href="https://glarion.app/email-spoofing-spf-dmarc.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Glarion">
+<meta property="og:title" content="SPF and DMARC Check for Client Domains">
+<meta property="og:description" content="Published is not the same as enforcing. What -all, ~all, ?all and p=none actually do, and why a client's forged invoice is your problem.">
+<meta property="og:url" content="https://glarion.app/email-spoofing-spf-dmarc.html">
+<meta property="og:image" content="https://glarion.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Glarion — website security monitoring for agencies">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SPF and DMARC Check for Client Domains">
+<meta name="twitter:description" content="Published is not the same as enforcing. What -all, ~all, ?all and p=none actually do.">
+<meta name="twitter:image" content="https://glarion.app/og.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/glarion-mark-64.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"SPF and DMARC: published is not the same as enforcing","description":"What each SPF qualifier and each DMARC policy instructs a receiving mail server to do, and how to read a client domain's records.","author":{"@type":"Person","name":"Aurelio Avila"},"publisher":{"@type":"Organization","name":"Glarion","url":"https://glarion.app/","logo":"https://glarion.app/glarion-mark-512.png"},"mainEntityOfPage":"https://glarion.app/email-spoofing-spf-dmarc.html","image":"https://glarion.app/og.png"}</script>
+<link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/prism.css">
+<link rel="stylesheet" href="/seo.css">
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="/"><img src="/glarion-mark-64.png" alt="" width="32" height="32"><span>Glarion</span></a><nav class="nav"><a href="/how-it-works.html">How it works</a><a href="/pricing.html">Pricing</a><a href="/sample-report.html">Sample report</a><a href="/app/#/signin">Sign in</a></nav></div></header>
+
+<main class="wrap">
+<p class="eyebrow">Email spoofing</p>
+<h1>Published is not the same as enforcing</h1>
+<p class="lede">A domain can have both an SPF record and a DMARC record and still let anybody on the internet send invoices as the client. The records are not a yes-or-no; they are instructions, and most of them are set to "make a note of it and deliver the message anyway".</p>
+
+<div class="summary">
+<div><strong>SPF says who may send</strong><span>And what to do about everybody else.</span></div>
+<div><strong>DMARC says what to do</strong><span>Reject, quarantine, or merely count.</span></div>
+<div><strong>Both are public DNS</strong><span>So checking a client's domain needs no permission.</span></div>
+</div>
+
+<article>
+<section>
+<h2>Why this is on a website monitoring tool at all</h2>
+<p>Because the client whose invoices get forged does not care that it was not technically a website problem. An agency that looks after a client's domain is the agency that gets the call, and "the mail records are outside our scope" is a sentence nobody wants to say that week.</p>
+<p>It is also one of the cheapest things on the whole list to check and one of the cheapest to fix — a DNS record, not a code change — which makes it an unusually good item to find in a report.</p>
+</section>
+
+<section>
+<h2>SPF: the last two characters are the record</h2>
+<p>An SPF record lists the servers permitted to send mail for a domain. The part that decides anything is how it ends, because that is the instruction about everyone <em>not</em> on the list.</p>
+<dl class="spec">
+<div><dt><code>-all</code></dt><dd>Strict. Unlisted senders are refused. This is the setting that actually stops the forgery.</dd></div>
+<div><dt><code>~all</code></dt><dd>Soft fail. The receiver is asked to accept the message and mark it as suspicious. In practice it usually lands, sometimes in the inbox.</dd></div>
+<div><dt><code>?all</code></dt><dd>Neutral. The record states no opinion, which for a domain that sends invoices is close to publishing nothing at all.</dd></div>
+<div><dt>No ending at all</dt><dd>A record that lists senders and never says what to do about the others. Published, and inert.</dd></div>
+</dl>
+<p>Glarion reports which of these a domain is on, in those words, rather than telling you "SPF: present".</p>
+</section>
+
+<section>
+<h2>DMARC: the policy is the whole point</h2>
+<p>SPF tells a receiving server how to judge a message. DMARC is what tells it to act on that judgement, and the <code>p=</code> value is the instruction.</p>
+<dl class="spec">
+<div><dt><code>p=reject</code></dt><dd>Forgeries are refused at the door.</dd></div>
+<div><dt><code>p=quarantine</code></dt><dd>Forgeries are delivered to spam rather than the inbox.</dd></div>
+<div><dt><code>p=none</code></dt><dd>Monitoring only. Reports are generated and the forged message is still delivered to the customer exactly as it would have been with no DMARC record at all.</dd></div>
+<div><dt>Published without a policy</dt><dd>A DMARC record with no readable <code>p=</code>. It looks like protection in an audit checklist and behaves like nothing.</dd></div>
+</dl>
+<div class="callout"><p><code>p=none</code> is the setting almost every domain is left on after somebody "set up DMARC". It is the correct <em>first</em> step — you want the reports before you start rejecting real mail — but it is a step, and a great many domains have been standing on it for years.</p></div>
+</section>
+
+<section>
+<h2>How to check a client's domain</h2>
+<p>Both records are public DNS entries. Every mail server on the internet reads them before accepting a message, so looking them up is not contacting the client's site, is not a scan, and needs no authorisation from anybody. Glarion's public check reads both alongside the certificate and the security headers, with no account.</p>
+<p>What it will not do is tell you what to change them to. Tightening SPF on a domain that sends through a CRM, a helpdesk, an invoicing tool and a newsletter platform will bounce real mail if any of those is missing from the record, and that is a piece of work with a rollout rather than a setting to flip. The check tells you where the domain stands. Moving it is a job you scope.</p>
+<div class="cta">
+<a class="button" href="/#public-check">Check a domain's SPF and DMARC</a>
+<a class="text-link" href="/free-website-security-check.html">See everything the free check reads →</a>
+</div>
+</section>
+
+<section>
+<h2>Read next</h2>
+<ul class="more">
+<li><a href="/free-website-security-check.html">The free public check</a><span>Certificate, headers, cookies and public policy files too.</span></li>
+<li><a href="/ssl-certificate-expiry-monitoring.html">Certificate expiry monitoring</a><span>The other finding that arrives with a deadline attached.</span></li>
+<li><a href="/agency-security-reports.html">Turning findings into a client report</a><span>How to write this up so the client acts on it.</span></li>
+</ul>
+</section>
+</article>
+</main>
+
+<footer><div class="wrap foot"><span>Glarion — a record that states no opinion protects nobody.</span><nav><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/how-it-works.html">How it works</a><a href="/about-our-checks.html">About our checks</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></div></footer>
+</body>
+</html>
