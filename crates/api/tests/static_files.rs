@@ -303,3 +303,108 @@ async fn a_missing_web_directory_leaves_the_api_alone() {
     let (status, _) = body_of(router, "/").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn a_page_with_two_addresses_redirects_to_the_one_that_counts() {
+    // Both files are reachable under their own names through the static
+    // fallback, which made /landing.html a byte-for-byte copy of / and
+    // /index.html a copy of /app. Google reported the first of those as
+    // "alternate page with proper canonical" — correctly, because the
+    // canonical tag is there — but a canonical is a request a crawler may
+    // honour and a redirect is not, and an edit that drops the tag would
+    // publish the duplicate with nothing to notice.
+    let dir = web_dir();
+
+    for (path, target) in [("/landing.html", "/"), ("/index.html", "/app")] {
+        let router = with_static_files(Router::new(), &dir);
+        let response = router
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::PERMANENT_REDIRECT,
+            "{path} must redirect rather than serve a second copy"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok()),
+            Some(target),
+            "{path} should land on {target}"
+        );
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn the_address_in_our_own_user_agent_resolves() {
+    // The preview client announces itself as
+    // `Glarion/1.0 (+https://glarion.app/about-our-checks)`, which is a
+    // promise to every site owner who reads an access log. That address
+    // answered 404 from the day the header shipped. The page itself lives
+    // at the extension the rest of the site uses, so the advertised form
+    // has to reach it.
+    let dir = web_dir();
+    let router = with_static_files(Router::new(), &dir);
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/about-our-checks")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::LOCATION)
+            .and_then(|value| value.to_str().ok()),
+        Some("/about-our-checks.html")
+    );
+
+    // And the page the redirect points at is actually shipped.
+    assert!(
+        std::path::Path::new("web/about-our-checks.html").exists()
+            || std::path::Path::new("../../web/about-our-checks.html").exists(),
+        "the advertised page must exist in the web directory"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[tokio::test]
+async fn the_dashboard_says_noindex_in_a_header_as_well_as_the_document() {
+    // robots.txt no longer disallows /app, deliberately: a crawler told
+    // not to fetch a URL cannot read the noindex inside it, which is how a
+    // blocked page ends up listed under its bare address with no
+    // description. The instruction has to be readable, and a header is
+    // readable by a crawler that never parses the HTML.
+    let dir = web_dir();
+
+    for path in ["/app", "/app/", "/check"] {
+        let router = with_static_files(Router::new(), &dir);
+        let response = router
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response
+                .headers()
+                .get("x-robots-tag")
+                .and_then(|value| value.to_str().ok()),
+            Some("noindex"),
+            "{path} must be kept out of the index at the header"
+        );
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+}
