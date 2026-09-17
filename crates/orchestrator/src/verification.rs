@@ -190,6 +190,11 @@ pub async fn fetch_well_known_file(domain: &str) -> anyhow::Result<String> {
         .redirect(reqwest::redirect::Policy::none())
         // Connect to the address we just vetted rather than re-resolving.
         .resolve(domain, pinned)
+        // The same identity the preview sends. A site owner who finds an
+        // unexplained request for a file they were told to create should be
+        // able to see who asked for it, and the URL in the header is a page
+        // that says what we fetch and why.
+        .user_agent(crate::USER_AGENT)
         .build()?;
 
     let response = client.get(&url).send().await?;
