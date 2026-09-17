@@ -1,6 +1,14 @@
+# /app is deliberately not disallowed. It answers with X-Robots-Tag:
+# noindex and a <meta name="robots"> tag, and a crawler that is told not to
+# fetch a URL never reads either — which is how a blocked address still
+# turns up in results with no description under it. Letting the crawler in
+# to be refused is the only instruction that removes it.
+#
+# /api/ is disallowed because there is nothing there to read: every path
+# under it answers JSON to an authenticated caller or an error to everyone
+# else.
 User-agent: *
 Allow: /
-Disallow: /app
 Disallow: /api/
 
 Sitemap: https://glarion.app/sitemap.xml
