@@ -274,8 +274,14 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    if (response.status === 401) session.clear();
     const detail = payload as { error?: string; message?: string } | null;
+    if (response.status === 401) {
+      const hadSession = session.isSignedIn;
+      session.clear();
+      if (hadSession && detail?.error !== "invalid_credentials") {
+        window.location.hash = "#/signin";
+      }
+    }
     throw new ApiError(
       response.status,
       detail?.error ?? "error",
