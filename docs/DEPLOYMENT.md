@@ -11,6 +11,14 @@ establish that the live site is stale.
 
 For each new deployment:
 
+0. Reconcile the candidate with the last healthy production source and migration
+   history before building. A clean remote branch is not proof of parity with a
+   locally deployed release. On September 23, the September 17 migration-13 fix
+   existed only in a local commit; deploying remote master caused startup to fail.
+   Preserve applied migration bytes and run the migration-history regression with
+   a dedicated test database. Never edit production migration checksums to make a
+   candidate pass. Record the previous immutable digest and a verified signed
+   rollback manifest before replacing any machines.
 1. Record the exact source commit (`git rev-parse HEAD`). Run
    `bash scripts/ci-local.sh` and check the GitHub CI run for that commit.
    Build and push the candidate image with the approved operator process;
