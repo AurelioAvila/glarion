@@ -19,6 +19,15 @@ use tower_http::trace::TraceLayer;
 use crate::config::Config;
 use crate::state::AppState;
 
+pub async fn migrate_database(pool: &sqlx::PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    // Production retains orphaned version 11; version 13 is its idempotent
+    // replacement. Missing historical files are tolerated, but checksums of
+    // migrations still present must continue to match.
+    let mut migrator = sqlx::migrate!("../../migrations");
+    migrator.set_ignore_missing(true);
+    migrator.run(pool).await
+}
+
 pub async fn run() -> Result<()> {
     let config = Config::from_env().context("invalid configuration")?;
 
@@ -28,18 +37,7 @@ pub async fn run() -> Result<()> {
         .await
         .context("could not connect to the database")?;
 
-    // Production's migration table still records a version 11 whose checksum no
-    // file here reproduces: it was applied by a file that was later replaced,
-    // and the mismatch stopped the service from booting at all. The table that
-    // migration created is correct and 0013 now recreates it idempotently, so
-    // the orphaned row is tolerated rather than left able to take the site down.
-    // This ignores applied migrations missing from disk; it does NOT ignore a
-    // checksum change on one that is still present, so editing an applied
-    // migration is still caught.
-    let mut migrator = sqlx::migrate!("../../migrations");
-    migrator.set_ignore_missing(true);
-    migrator
-        .run(&pool)
+    migrate_database(&pool)
         .await
         .context("database migration failed")?;
 
