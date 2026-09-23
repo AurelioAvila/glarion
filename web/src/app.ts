@@ -660,6 +660,7 @@ function buildRows(targets: Target[], scans: ScanSummary[]): SiteRow[] {
 
 async function renderTargets(): Promise<void> {
   const container = root();
+  const routeId = currentRouteId;
   clear(container);
   container.append(skeleton());
 
@@ -668,11 +669,13 @@ async function renderTargets(): Promise<void> {
     const [targets, scans] = await Promise.all([api.targets(), api.scans()]);
     rows = buildRows(targets, scans);
   } catch (error) {
+    if (routeId !== currentRouteId) return;
     clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
 
+  if (routeId !== currentRouteId) return;
   clear(container);
 
   if (rows.length === 0) {
@@ -1032,6 +1035,7 @@ function addTargetForm(): HTMLElement {
 
 async function renderTarget(targetId: string): Promise<void> {
   const container = root();
+  const routeId = currentRouteId;
   clear(container);
   container.append(skeleton());
 
@@ -1051,6 +1055,7 @@ async function renderTarget(targetId: string): Promise<void> {
     target = targets.find((candidate) => candidate.id === targetId);
     scans = scanList;
     plan = subscription;
+    if (routeId !== currentRouteId) return;
 
     // The most recent finished scan carries everything the profile and the
     // summary need. Fetched separately because the list endpoint returns
@@ -1059,11 +1064,13 @@ async function renderTarget(targetId: string): Promise<void> {
     const newest = scanList.find((scan) => scan.status === "completed");
     if (newest) latestDetail = await api.scan(newest.id);
   } catch (error) {
+    if (routeId !== currentRouteId) return;
     clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
 
+  if (routeId !== currentRouteId) return;
   if (!target) {
     clear(container);
     container.append(notice("error", "That site could not be found."));
@@ -1811,6 +1818,7 @@ function scanEntry(scan: ScanSummary): HTMLElement {
 
 async function renderScan(scanId: string): Promise<void> {
   const container = root();
+  const routeId = currentRouteId;
   clear(container);
   container.append(skeleton());
 
@@ -1818,11 +1826,13 @@ async function renderScan(scanId: string): Promise<void> {
   try {
     detail = await api.scan(scanId);
   } catch (error) {
+    if (routeId !== currentRouteId) return;
     clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
 
+  if (routeId !== currentRouteId) return;
   clear(container);
 
   const download = el("button", { class: "primary", type: "button", text: "Download report" });
@@ -1937,6 +1947,7 @@ function worklist(findings: TriagedFinding[]): HTMLElement {
 
 async function renderSettings(): Promise<void> {
   const container = root();
+  const routeId = currentRouteId;
   clear(container);
   container.append(skeleton());
 
@@ -1944,11 +1955,13 @@ async function renderSettings(): Promise<void> {
   try {
     profile = await api.profile();
   } catch (error) {
+    if (routeId !== currentRouteId) return;
     clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
 
+  if (routeId !== currentRouteId) return;
   clear(container);
 
   const message = el("div");
@@ -2294,6 +2307,7 @@ function planIncludes(offer: PlanOffer): string {
 /// gear icon is how a product with a paid tier never sells one.
 async function renderPlan(): Promise<void> {
   const container = root();
+  const routeId = currentRouteId;
   clear(container);
   container.append(skeleton());
 
@@ -2301,11 +2315,13 @@ async function renderPlan(): Promise<void> {
   try {
     subscription = await api.subscription();
   } catch (error) {
+    if (routeId !== currentRouteId) return;
     clear(container);
     container.append(notice("error", describeError(error)));
     return;
   }
 
+  if (routeId !== currentRouteId) return;
   clear(container);
   const message = el("div");
 
@@ -2613,7 +2629,10 @@ function routeInner(): void {
   void renderTargets();
 }
 
+let currentRouteId = 0;
+
 function route(): void {
+  currentRouteId++;
   routeInner();
 }
 
