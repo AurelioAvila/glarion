@@ -19,6 +19,15 @@ use tower_http::trace::TraceLayer;
 use crate::config::Config;
 use crate::state::AppState;
 
+pub async fn migrate_database(pool: &sqlx::PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    // Production retains orphaned version 11; version 13 is its idempotent
+    // replacement. Missing historical files are tolerated, but checksums of
+    // migrations still present must continue to match.
+    let mut migrator = sqlx::migrate!("../../migrations");
+    migrator.set_ignore_missing(true);
+    migrator.run(pool).await
+}
+
 pub async fn run() -> Result<()> {
     let config = Config::from_env().context("invalid configuration")?;
 
@@ -28,8 +37,7 @@ pub async fn run() -> Result<()> {
         .await
         .context("could not connect to the database")?;
 
-    sqlx::migrate!("../../migrations")
-        .run(&pool)
+    migrate_database(&pool)
         .await
         .context("database migration failed")?;
 
