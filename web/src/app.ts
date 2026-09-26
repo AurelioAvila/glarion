@@ -665,9 +665,15 @@ async function renderTargets(): Promise<void> {
   container.append(skeleton());
 
   let rows: SiteRow[];
+  let subscription: Subscription | null = null;
   try {
-    const [targets, scans] = await Promise.all([api.targets(), api.scans()]);
+    const [targets, scans, plan] = await Promise.all([
+      api.targets(),
+      api.scans(),
+      api.subscription().catch(() => null),
+    ]);
     rows = buildRows(targets, scans);
+    subscription = plan;
   } catch (error) {
     if (routeId !== currentRouteId) return;
     clear(container);
@@ -700,7 +706,7 @@ async function renderTargets(): Promise<void> {
 
   container.append(
     el("div", { class: "workspace-heading" }, [el("h1", { text: "Your websites" }), el("p", { text: "Monitor client sites and review the changes that need your attention." })]),
-    standingStatement(rows),
+    standingStatement(rows, subscription),
     el("div", { class: "head-row" }, [el("div"), addButton]),
     addPanel,
     sectionRule("Sites", countOf(rows.length, "site")),
@@ -708,7 +714,7 @@ async function renderTargets(): Promise<void> {
 
   const ledger = el("ul", { class: "ledger" });
   for (const row of rows) {
-    ledger.append(siteEntry(row));
+    ledger.append(siteEntry(row, subscription));
   }
   container.append(ledger);
 
@@ -770,7 +776,7 @@ function standardCommands(): palette.Command[] {
 /// to. A sentence has already done that, and the coloured words keep it
 /// scannable — the shape of the line tells you the answer before you have
 /// read it.
-function standingStatement(rows: SiteRow[]): HTMLElement {
+function standingStatement(rows: SiteRow[], subscription: Subscription | null): HTMLElement {
   const alarm = rows.filter((row) => row.state === "alarm").length;
   const caution = rows.filter((row) => row.state === "caution").length;
   const idle = rows.filter((row) => row.state === "idle").length;
@@ -793,7 +799,13 @@ function standingStatement(rows: SiteRow[]): HTMLElement {
       ` still ${caution === 1 ? "needs" : "need"} setting up.`,
     );
   } else if (idle > 0 && idle === rows.length) {
-    line.append("Everything is set up. ", el("strong", { text: "Run your first scan." }));
+    if (subscription?.allows_full_scan) {
+      line.append("Everything is set up. Run your first scan.");
+    } else if (subscription) {
+      line.append("Domains confirmed. ", el("a", { class: "inline", href: "#/plan", text: "Choose a plan for full scans" }), ".");
+    } else {
+      line.append("Domains confirmed. Refresh to load your plan status.");
+    }
   } else {
     line.append(el("span", { class: "clear", text: "Everything is clear" }), " across your sites.");
   }
@@ -814,7 +826,7 @@ function standingStatement(rows: SiteRow[]): HTMLElement {
   ]);
 }
 
-function siteEntry(row: SiteRow): HTMLElement {
+function siteEntry(row: SiteRow, subscription: Subscription | null): HTMLElement {
   const { target, latest, state } = row;
 
   const detail = el("div", { class: "entry-state" });
@@ -822,7 +834,13 @@ function siteEntry(row: SiteRow): HTMLElement {
   if (!target.verified) {
     detail.append(el("span", { class: "headline", text: "Awaiting domain check" }));
   } else if (!latest) {
-    detail.append(el("span", { text: "Ready to scan" }));
+    detail.append(el("span", {
+      text: subscription?.allows_full_scan
+        ? "Ready to scan"
+        : subscription
+          ? "Domain confirmed · full scan needs a plan"
+          : "Domain confirmed",
+    }));
   } else if (latest.status === "queued" || latest.status === "running") {
     detail.append(el("span", { text: "Scan running" }));
   } else if (latest.status === "failed") {
@@ -933,50 +951,36 @@ function historyStrip(row: SiteRow): HTMLElement {
   return strip;
 }
 
-/// What a new customer sees first.
-///
-/// Written as a procedure rather than as three tiles, because that is what
-/// it is. It also says plainly that step two involves their DNS — the part
-/// nobody expects, and the reason setup gets abandoned halfway.
-///
-/// And it now says, before that step rather than after it, that step three
-/// needs a plan. The scanner stopped being free, and this screen went on
-/// describing a path that ends at a paywall the reader meets only once they
-/// have been to a client's registrar and edited a live DNS zone. Finding
-/// out then is not a pricing objection, it is a grievance: the work is
-/// already done and it was done on a false premise.
+/// What a new customer sees first: a useful free check, then the paid path.
 function firstRun(): HTMLElement {
   const step = (n: string, title: string, body: string): HTMLElement =>
     el("li", { "data-step": n }, [el("h3", { text: title }), el("p", { text: body })]);
 
   return el("div", {}, [
-    el("h1", { text: "Add your first site" }),
+    el("h1", { text: "Start with a real website" }),
     el("p", {
       class: "blurb",
       text:
-        "Glarion checks a website for security problems and turns the result into " +
-        "a short report you can hand straight to your client.",
+        "Add a client site to see its public security signals for free. " +
+        "See the sample report before deciding whether full monitoring fits your work.",
     }),
     el("ol", { class: "procedure" }, [
-      step("1", "Add the site", "Its domain, and which client it belongs to."),
+      step("1", "Add a site", "Enter its domain and, optionally, the client name. The public check runs without domain proof."),
       step(
         "2",
-        "Prove the domain is yours",
-        "Use a DNS record or a hosted verification file. Proof lasts 30 days and is checked again before a full scan.",
+        "Review the free check",
+        "See what the site already publishes. This is a first look, not a full security assessment.",
       ),
       step(
         "3",
-        "Scan, then send",
-        "Run the full scan and download the report under your own name. This is the " +
-          "step a plan pays for.",
+        "Unlock full monitoring",
+        "Choose a paid plan and prove domain control with a DNS record or hosted file. Then scan and send a branded report.",
       ),
     ]),
-    el("p", { class: "hint", style: "margin-top:-1rem" }, [
-      "The check that reads what a site already publishes is free, here and on the " +
-        "front page. The full scan in step three is the part a plan pays for — worth " +
-        "knowing before you go and edit a client's DNS: ",
-      el("a", { class: "inline", href: "#/plan", text: "what the plans cost" }),
-      ".",
+    el("p", { class: "hint", style: "margin-top:1rem" }, [
+      el("a", { class: "inline", href: "/sample-report.html", text: "Explore a sample client report" }),
+      " · ",
+      el("a", { class: "inline", href: "#/plan", text: "Compare plans" }),
     ]),
     el("div", { style: "margin-top:2.5rem" }, [addTargetForm()]),
   ]);
@@ -1105,9 +1109,13 @@ async function renderTarget(targetId: string): Promise<void> {
       latestDetail ? currentState(latestDetail) : null,
       postureSection(scans),
       latestDetail ? knownFacts(latestDetail) : null,
+      !latestDetail && !plan?.allows_full_scan ? previewSection(site.domain) : null,
       plan && !plan.allows_full_scan ? unlockSection(null) : null,
-      cadenceControl(site),
-      scansSection(site, scans),
+      !plan ? notice("info", "Your plan status is temporarily unavailable. Refresh before starting a scan.") : null,
+      plan?.allows_full_scan ? cadenceControl(site) : null,
+      plan?.allows_full_scan || scans.length > 0
+        ? scansSection(site, scans, plan?.allows_full_scan === true)
+        : null,
     );
   } else {
     // The preview goes first, above the request for a DNS record.
@@ -1340,6 +1348,9 @@ function unlockSection(start: HTMLButtonElement | null): HTMLElement {
           "visitor, and it stays free forever. The full scan goes looking instead of " +
           "reading, which is what the subscription pays for.",
     }),
+    el("p", { class: "hint" }, [
+      el("a", { class: "inline", href: "/sample-report.html", text: "Explore a sample client report →" }),
+    ]),
     list,
     foot,
   ]);
@@ -1650,7 +1661,7 @@ function toolName(id: string): string {
   return SCAN_TOOLS.find((tool) => tool.id === id)?.name ?? id;
 }
 
-function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
+function scansSection(target: Target, scans: ScanSummary[], canScan: boolean): HTMLElement {
   const message = el("div");
   const list = el("ul", { class: "ledger" });
   const start = el("button", { class: "primary", type: "button", text: "Run a scan" });
@@ -1681,10 +1692,10 @@ function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
   const section = el("div", {}, [
     el("div", { class: "head-row", style: "margin-bottom:1.25rem" }, [
       el("div", {}, [sectionRule("Scans")]),
-      start,
+      canScan ? start : null,
     ]),
-    tabs,
-    explain,
+    canScan ? tabs : null,
+    canScan ? explain : null,
     message,
     list,
   ]);
@@ -1727,7 +1738,7 @@ function scansSection(target: Target, scans: ScanSummary[]): HTMLElement {
 
   schedule(scans);
 
-  on(start, "click", () => {
+  if (canScan) on(start, "click", () => {
     clear(message);
     void withPending(start, "Starting…", async () => {
       try {
