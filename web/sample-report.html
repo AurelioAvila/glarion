@@ -89,7 +89,17 @@ footer { margin-top: 3rem; border-top: 1px solid var(--line); padding-top: 2rem;
 footer h2 { color: var(--ink); font-size: 1.15rem; }
 .caveat { max-width: 80ch; }
 .running { display: none; }
+.sample-next { max-width: 1080px; margin: 0 auto 4rem; padding: 2rem clamp(1.4rem, 5vw, 4rem); background: #f2edf8; border: 1px solid var(--line); border-radius: 18px; display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
+.sample-next h2 { margin: 0 0 .5rem; }
+.sample-next p { margin: 0; max-width: 56ch; color: var(--muted); font-size: .9rem; }
+.sample-next-actions { display: flex; flex-wrap: wrap; gap: .75rem; flex: none; }
+.sample-next-actions a { display: inline-flex; align-items: center; min-height: 44px; padding: .6rem 1rem; border: 1px solid var(--ink); border-radius: 8px; font-size: .85rem; font-weight: 650; text-decoration: none; }
+.sample-next-actions a:first-child { background: var(--ink); color: white; }
+.sample-next-actions a:hover { box-shadow: 0 0 0 2px var(--accent); }
 @media(max-width:700px) {
+  .sample-next { margin: 1rem 1rem 3rem; flex-direction: column; align-items: stretch; gap: 1.25rem; }
+  .sample-next-actions { flex-direction: column; }
+  .sample-next-actions a { justify-content: center; }
   .report { border-radius: 0; margin-bottom: 0; box-shadow: none; }
   .save, .sample-banner { padding-inline: 1.25rem; flex-wrap: wrap; }
   .save span { font-size: .72rem; }
@@ -110,7 +120,7 @@ footer h2 { color: var(--ink); font-size: 1.15rem; }
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { background: white; font-size: 10pt; }
-  .save { display: none; }
+  .save, .sample-next { display: none; }
   .sample-banner, .report-nav { display: none; }
   .report { padding: 0; max-width: none; margin: 0; border-radius: 0; box-shadow: none; }
   h1 { font-size: 29pt; }
@@ -210,6 +220,10 @@ footer h2 { color: var(--ink); font-size: 1.15rem; }
 <p class="caveat">An automated scan reports what it can observe from outside. Findings describe the scan date; they do not prove a website is secure today. This report is not a manual penetration test or a compliance certification.</p>
 </footer>
 </main>
+<aside class="sample-next" aria-label="Explore Glarion">
+  <div><h2>Make your next client update this clear.</h2><p>This is a fictional example. Paid plans create agency-branded reports for domains you verify and monitor, from €19 a month.</p></div>
+  <div class="sample-next-actions"><a href="/pricing.html">See plans</a><a href="/#public-check">Try the free public check</a></div>
+</aside>
 <script type="module" src="/dist/report-acquisition.js"></script>
 </body>
 </html>
