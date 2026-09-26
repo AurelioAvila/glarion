@@ -2012,7 +2012,7 @@ async function renderSettings(): Promise<void> {
 
   const support = el("p", { class: "muted" }, [
     "Something wrong, or a question about your account? ",
-    el("a", { class: "inline", href: "mailto:aurelio_11@outlook.it", text: "aurelio_11@outlook.it" }),
+    el("a", { class: "inline", href: "mailto:hello@glarion.app", text: "hello@glarion.app" }),
     ". Also see the ",
     el("a", { class: "inline", href: "/privacy.html", text: "Privacy Policy" }),
     " and ",
