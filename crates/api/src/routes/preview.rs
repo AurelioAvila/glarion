@@ -137,8 +137,7 @@ pub async fn email_preview(
         })
         .collect();
 
-    let link = state.mailer.app_link("/signup");
-    let message = preview_report_email(&domain, &lines, &link);
+    let message = preview_report_email(&domain, &lines, &state.mailer.public_url);
 
     if let Err(error) = state.mailer.send(&email, &message).await {
         // Logged rather than surfaced: the caller cannot act on our mail
