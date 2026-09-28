@@ -20,7 +20,7 @@ async fn counters_are_private_and_signup_retries_do_not_create_conversions() {
         pool.clone(),
         "test-secret-at-least-thirty-two-bytes".into(),
     ));
-    let signup = r#"{"first_name":"Test","last_name":"Agency","date_of_birth":"1990-01-01","email":"growth@example.test","password":"long-enough-password","password_confirmation":"long-enough-password"}"#;
+    let signup = r#"{"first_name":"Test","last_name":"Agency","date_of_birth":"1990-01-01","email":"growth@example.test","password":"Long-enough-password","password_confirmation":"Long-enough-password"}"#;
     for (path, body, expected) in [
         (
             "/api/growth/page",

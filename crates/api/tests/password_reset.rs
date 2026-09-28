@@ -28,8 +28,8 @@ use api::auth::issue_token;
 use api::state::AppState;
 
 const JWT_SECRET: &str = "integration-test-secret-long-enough-for-hs256";
-const OLD_PASSWORD: &str = "a-sufficiently-long-password";
-const NEW_PASSWORD: &str = "an-entirely-different-passphrase";
+const OLD_PASSWORD: &str = "A-sufficiently-long-password";
+const NEW_PASSWORD: &str = "An-entirely-different-passphrase";
 
 async fn test_pool() -> Option<PgPool> {
     let url = match std::env::var("TEST_DATABASE_URL") {
