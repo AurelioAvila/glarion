@@ -6,6 +6,6 @@ PR #33 passed CI and CodeQL and was deployed from merged source commit `6e9edc61
 - Signed artifact: `image-manifest.ps1`. Authenticode status `Valid`, publisher thumbprint `4F8341A74D16077AE1849DC8B8CAC99F22606754`, DigiCert timestamp present. The manifest is data and was never executed.
 - Validation: API unit tests 63 passed; orchestrator unit tests 140 passed; frontend TypeScript and build passed; 23 compiled frontend tests passed. CI ran the API integration suite with its dedicated test database. Desktop and mobile pricing, signup and in-app plans were reviewed.
 - Production smoke: all three Fly machines ran the signed digest; `/health`, `/`, `/pricing.html` and `/app/` returned HTTP 200. A public check for `example.com` returned a partial result.
-- A warm browser still reused previously cached CSS and JavaScript despite the new HTML. PR #34 adds versioned asset URLs; that follow-up requires its own signed release.
+- A warm browser initially reused previously cached CSS and JavaScript despite the new HTML. PR #34 resolved this with versioned asset URLs and was separately signed and deployed; see `../asset-cache-2026-09-28/RELEASE.md`.
 
 Previous image: `registry.fly.io/glarion-api@sha256:6ba004d795f236ee0b6da7498ee23d371f2f504f6b19128a14c3fbe21375ab19`.
