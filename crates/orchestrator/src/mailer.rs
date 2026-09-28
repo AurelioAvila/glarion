@@ -597,7 +597,9 @@ pub struct ReportLine {
 /// naming what it did *not* look at rather than by hedging what it did —
 /// a report that qualifies every line reads as though it is unsure, while
 /// one that states its scope reads as though it knows where its edges are.
-pub fn preview_report_email(domain: &str, lines: &[ReportLine], upgrade_link: &str) -> Message {
+pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) -> Message {
+    let pricing_link = format!("{site_url}/pricing.html");
+    let sample_link = format!("{site_url}/sample-report.html");
     let findings = lines.iter().filter(|line| line.is_finding).count();
     let headline = match findings {
         0 => "Nothing obvious from the outside".to_string(),
@@ -628,27 +630,25 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], upgrade_link: &s
     );
     let preview = format!("{headline} on {domain}");
     let body = format!(
-        r#"<p style="margin:0 0 20px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p><table style="border-collapse:collapse;width:100%;margin-bottom:24px">{rows}</table><p style="margin:0 0 6px;color:{INK};font-size:15px;font-weight:700">What this did not look at</p>{}"#,
+        r#"<p style="margin:0 0 12px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>{}<table style="border-collapse:collapse;width:100%;margin-bottom:24px">{rows}</table><p style="margin:0 0 6px;color:{INK};font-size:15px;font-weight:700">What this did not look at</p>{}<p style="margin:18px 0 0;color:{INK_3};font-size:14px">Want to see the format before choosing a plan? <a href="{sample_link}" style="color:{INK};font-weight:600">View a sample full report</a>. The sample uses fictional findings.</p>"#,
         escape(domain),
+        para("This is your requested partial public check. It is useful on its own, but it is not a full security scan."),
         para(&scope),
     );
 
     Message {
-        subject: format!("Security check: {domain}"),
+        subject: format!("Your partial website check: {domain}"),
         html: chrome(Chrome {
             preview: &preview,
-            eyebrow: "Free external check",
+            eyebrow: "Your partial public check",
             heading: &headline,
             body: &body,
-            // Named for what it opens, not for what it does. "Run the full
-            // check" reads as one more free click on a mail that has just
-            // handed the reader twelve free findings, and the next thing
-            // they meet is a price.
-            cta: Some(("See what the full scan finds", upgrade_link)),
+            // The button opens pricing, where the paid full scan is explained.
+            cta: Some(("Compare paid plans for the full scan", &pricing_link)),
             footer: "You received this because this report was requested from your address. We do not add you to anything by sending it.",
         }),
         text: format!(
-            "{headline}\n{domain}\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nSee what the full scan finds: {upgrade_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
+            "{headline}\n{domain}\n\nThis is your requested partial public check. It is useful on its own, but it is not a full security scan.\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nCompare paid plans for the full scan: {pricing_link}\nView a sample full report (fictional findings): {sample_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
         ),
     }
 }
@@ -894,11 +894,18 @@ mod tests {
 
     #[test]
     fn the_report_names_its_own_limits() {
-        let body = preview_report_email("example.com", &[], "https://glarion.app").html;
+        let message = preview_report_email("example.com", &[], "https://glarion.app");
+        let body = message.html;
 
         // Stating the scope, rather than hedging every line.
         assert!(flat(&body).contains("did not examine the application itself"));
         assert!(flat(&body).to_lowercase().contains("confirm the request"));
+        assert!(body.contains("https://glarion.app/pricing.html"));
+        assert!(body.contains("https://glarion.app/sample-report.html"));
+        assert!(message.text.contains("https://glarion.app/pricing.html"));
+        assert!(message
+            .text
+            .contains("https://glarion.app/sample-report.html"));
     }
 
     #[test]
@@ -1011,7 +1018,7 @@ mod tests {
                 "detail",
                 "https://glarion.app/app",
             ),
-            preview_report_email("example.com", &lines, "https://glarion.app/app"),
+            preview_report_email("example.com", &lines, "https://glarion.app"),
         ];
 
         for message in messages {
