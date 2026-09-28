@@ -138,6 +138,9 @@ function render(payload) {
     : '/app/#/signup';
   signup.style.display = 'inline-block';
   cta.append(signup);
+  const plans = el('a', 'secondary', 'Compare paid plans');
+  plans.href = '/pricing.html';
+  cta.append(plans);
   // Both gates named, and the price with them.
   //
   // This line used to say proof of ownership was the only thing in the way,
@@ -168,7 +171,7 @@ function emailCapture(domain) {
   const row = el('div', 'check-row');
   const field = el('div', 'check-field');
 
-  const label = el('label', 'check-label', 'Email me this report');
+  const label = el('label', 'check-label', 'Email me this partial check');
   label.htmlFor = 'preview-email';
 
   const email = document.createElement('input');
@@ -182,7 +185,7 @@ function emailCapture(domain) {
   send.type = 'submit';
 
   const note = el('p', 'check-note foot-note',
-    'One message with what you just saw. No account, and nothing follows it.');
+    'One email with these public findings, paid-plan options and a sample full report. No account or marketing follow-up.');
 
   field.append(label, email);
   row.append(field, send);
