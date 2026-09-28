@@ -18,10 +18,7 @@ use orchestrator::mailer::{
     verification_email, welcome_email,
 };
 
-/// Minimum password length. Deliberately a length floor rather than a
-/// composition rule (no "must contain a symbol") — length is what actually
-/// resists offline cracking.
-const MIN_PASSWORD_LEN: usize = 12;
+const MIN_PASSWORD_LEN: usize = 8;
 
 /// Maximum accepted password length.
 ///
@@ -30,6 +27,28 @@ const MIN_PASSWORD_LEN: usize = 12;
 /// and make each request cost far more to reject than to send. 256 is far
 /// above any real passphrase.
 const MAX_PASSWORD_LEN: usize = 256;
+
+fn validate_password(password: &str) -> ApiResult<()> {
+    let length = password.chars().count();
+    if length < MIN_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at least {MIN_PASSWORD_LEN} characters"
+        )));
+    }
+    if length > MAX_PASSWORD_LEN {
+        return Err(ApiError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_LEN} characters"
+        )));
+    }
+    if !password.chars().any(char::is_uppercase)
+        || !password.chars().any(|ch| ch.is_ascii_punctuation())
+    {
+        return Err(ApiError::BadRequest(
+            "password must contain an uppercase letter and a special character".into(),
+        ));
+    }
+    Ok(())
+}
 
 const MAX_NAME_LEN: usize = 80;
 
@@ -189,17 +208,7 @@ pub async fn signup(
         return Err(ApiError::BadRequest("the passwords do not match".into()));
     }
 
-    let password_len = body.password.chars().count();
-    if password_len < MIN_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at least {MIN_PASSWORD_LEN} characters"
-        )));
-    }
-    if password_len > MAX_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at most {MAX_PASSWORD_LEN} characters"
-        )));
-    }
+    validate_password(&body.password)?;
 
     let password_hash = hash_password(&body.password)?;
     let (token, token_hash) = new_verification_token();
@@ -606,17 +615,7 @@ pub async fn reset_password(
         return Err(ApiError::BadRequest("the passwords do not match".into()));
     }
 
-    let password_len = body.password.chars().count();
-    if password_len < MIN_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at least {MIN_PASSWORD_LEN} characters"
-        )));
-    }
-    if password_len > MAX_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at most {MAX_PASSWORD_LEN} characters"
-        )));
-    }
+    validate_password(&body.password)?;
 
     let token_hash = hash_token(body.token.trim());
     let cutoff = Utc::now() - Duration::minutes(RESET_VALID_MINUTES);
@@ -703,17 +702,7 @@ pub async fn change_password(
         ));
     }
 
-    let length = body.new_password.chars().count();
-    if length < MIN_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at least {MIN_PASSWORD_LEN} characters"
-        )));
-    }
-    if length > MAX_PASSWORD_LEN {
-        return Err(ApiError::BadRequest(format!(
-            "password must be at most {MAX_PASSWORD_LEN} characters"
-        )));
-    }
+    validate_password(&body.new_password)?;
 
     let row: Option<(String, String, Option<String>)> =
         sqlx::query_as("select email, password_hash, first_name from users where id = $1")
@@ -1139,6 +1128,15 @@ fn age_on(birth: NaiveDate, today: NaiveDate) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn password_policy_covers_every_password_entry_point() {
+        assert!(validate_password("Abcdefg!").is_ok());
+        assert!(validate_password("abcdefg!").is_err());
+        assert!(validate_password("Abcdefgh").is_err());
+        assert!(validate_password("Abcdef!").is_err());
+        assert!(validate_password(&format!("A{}!", "a".repeat(255))).is_err());
+    }
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 8, 28).unwrap()

@@ -280,7 +280,8 @@ function renderSignUp(carried: string | null): void {
     type: "password",
     required: true,
     autocomplete: "new-password",
-    minlength: 12,
+    minlength: 8,
+    maxlength: 256,
   });
   const confirmation = el("input", { type: "password", required: true, autocomplete: "new-password" });
   const reveal = el("input", { type: "checkbox" });
@@ -306,6 +307,10 @@ function renderSignUp(carried: string | null): void {
 
   const form = el("form", { class: "auth" }, [
     el("h1", { text: "Create your account" }),
+    el("p", {
+      class: "blurb",
+      text: "Create your account, then open the confirmation link we email you. Your account becomes active only after you confirm your address; the link lasts 24 hours.",
+    }),
     ...(carried
       ? [
           el("p", {
@@ -330,7 +335,7 @@ function renderSignUp(carried: string | null): void {
       }),
     ),
     field("Email", email),
-    field("Password", password, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("Password", password, el("span", { class: "hint", text: "At least 8 characters, including one uppercase letter and one special character (for example ! or ?)." })),
     field("Repeat password", confirmation, mismatch),
     el("label", { class: "checkbox checkbox-compact" }, [reveal, "Show passwords"]),
     el("label", { class: "checkbox terms-check" }, [
@@ -560,7 +565,8 @@ function renderResetPassword(token: string): void {
     type: "password",
     required: true,
     autocomplete: "new-password",
-    minlength: 12,
+    minlength: 8,
+    maxlength: 256,
   });
   const confirmation = el("input", { type: "password", required: true, autocomplete: "new-password" });
   const button = submitButton("Set the new password");
@@ -577,7 +583,7 @@ function renderResetPassword(token: string): void {
   const form = el("form", { class: "auth" }, [
     el("h1", { text: "Choose a new password" }),
     message,
-    field("New password", password, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("New password", password, el("span", { class: "hint", text: "At least 8 characters, including one uppercase letter and one special character (for example ! or ?)." })),
     field("Repeat password", confirmation, mismatch),
     el("p", {
       class: "hint",
@@ -1985,11 +1991,12 @@ async function renderSettings(): Promise<void> {
   const button = submitButton("Save");
 
   const form = el("form", { style: "max-width:30rem" }, [
-    el("h1", { text: "Your details" }),
+    el("h1", { text: "Settings" }),
     el("p", {
       class: "blurb",
-      text: "These appear on the reports you send to clients. Ours never do.",
+      text: "Manage your account and the branding on reports you send to clients.",
     }),
+    sectionRule("Report branding"),
     message,
     field("Business name", name),
     field("Logo URL", logo, el("span", { class: "hint", text: "Must be an https address." })),
@@ -2014,6 +2021,20 @@ async function renderSettings(): Promise<void> {
 
   container.append(form);
 
+  container.append(
+    el("div", { style: "margin-top:3rem" }, [
+      sectionRule("Email address"),
+      changeEmailSection(profile.email ?? null),
+    ]),
+  );
+
+  container.append(
+    el("div", { style: "margin-top:3rem" }, [
+      sectionRule("Password"),
+      changePasswordSection(profile.email ?? null),
+    ]),
+  );
+
   const plan = el("p", { class: "muted" }, [
     "Your plan, what it includes, and every other plan: ",
     el("a", { class: "inline", href: "#/plan", text: "Pricing" }),
@@ -2031,20 +2052,6 @@ async function renderSettings(): Promise<void> {
     ".",
   ]);
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Support"), support]));
-
-  container.append(
-    el("div", { style: "margin-top:3rem" }, [
-      sectionRule("Password"),
-      changePasswordSection(profile.email ?? null),
-    ]),
-  );
-
-  container.append(
-    el("div", { style: "margin-top:3rem" }, [
-      sectionRule("Email address"),
-      changeEmailSection(profile.email ?? null),
-    ]),
-  );
 
   container.append(el("div", { style: "margin-top:3rem" }, [sectionRule("Delete account"), deleteAccountSection()]));
 }
@@ -2067,7 +2074,7 @@ function changePasswordSection(email: string | null): HTMLElement {
     required: true,
     autocomplete: "current-password",
   });
-  const next = el("input", { type: "password", required: true, autocomplete: "new-password", minlength: 12 });
+  const next = el("input", { type: "password", required: true, autocomplete: "new-password", minlength: 8, maxlength: 256 });
   const confirmation = el("input", {
     type: "password",
     required: true,
@@ -2118,7 +2125,7 @@ function changePasswordSection(email: string | null): HTMLElement {
     }),
     message,
     field("Current password", current),
-    field("New password", next, el("span", { class: "hint", text: "At least 12 characters." })),
+    field("New password", next, el("span", { class: "hint", text: "At least 8 characters, including one uppercase letter and one special character (for example ! or ?)." })),
     field("Repeat the new password", confirmation),
     el("div", { class: "unlock-foot", style: "margin-top:0" }, [button, byEmail]),
   ]);
@@ -2304,10 +2311,9 @@ type PlanOffer = (typeof PLANS)[number];
 
 /// What a plan includes, in the order somebody comparing them cares about.
 function planIncludes(offer: PlanOffer): string {
-  const sites = `${offer.sites} ${offer.sites === 1 ? "site" : "sites"}`;
   return offer.scheduling
-    ? `${sites} · full scans · weekly checks · reports under your name`
-    : `${sites} · the free check only, no full scan`;
+    ? "Full scans · weekly or monthly checks · branded reports"
+    : "Public check only · no full scan or scheduling";
 }
 
 /// The plan page.
@@ -2360,6 +2366,7 @@ async function renderPlan(): Promise<void> {
   append(
     container,
     el("h1", { text: "Pricing" }),
+    el("p", { class: "blurb", text: "Free includes the public check. Every paid plan adds full scans, scheduled checks and branded reports; choose by the number of sites you manage." }),
     el("div", { style: "margin-top:1.25rem" }, [usage]),
     meta.length > 0 ? el("p", { class: "standing-meta", text: meta.join(" · ") }) : null,
     message,
@@ -2405,7 +2412,7 @@ async function renderPlan(): Promise<void> {
   const yearlyTab = el("button", { class: "tab", type: "button", text: "Yearly" });
   toggleRow.append(monthlyTab, yearlyTab);
 
-  const list = el("ul", { class: "ledger" });
+  const list = el("ul", { class: "ledger plan-list" });
 
   function paintList(): void {
     clear(list);
@@ -2451,7 +2458,8 @@ function planRow(
   const current = offer.plan === subscription.plan;
   const saving = offer.monthly * 12 - offer.yearly;
 
-  const state = el("div", { class: "entry-state" }, [
+  const state = el("div", { class: "entry-state plan-features" }, [
+    el("strong", { class: "plan-site-count", text: `${offer.sites} ${offer.sites === 1 ? "site" : "sites"}` }),
     el("span", { text: planIncludes(offer) }),
   ]);
 
@@ -2477,7 +2485,6 @@ function planRow(
         el("span", { class: "plan-row-unit", text: "/yr" }),
       );
       state.append(
-        el("span", { class: "sep", text: "·" }),
         el("span", { class: "watching", text: `saves €${saving} a year` }),
       );
     } else {
@@ -2503,8 +2510,8 @@ function planRow(
     right.append(price, subscribe);
   }
 
-  return el("li", {}, [
-    el("div", { class: "entry entry-idle" }, [
+  return el("li", { class: `plan-item plan-${offer.plan}` }, [
+    el("div", { class: "entry entry-idle plan-offer" }, [
       el("div", {}, [el("div", { class: "entry-name", text: offer.name }), state]),
       right,
     ]),

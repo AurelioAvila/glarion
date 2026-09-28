@@ -99,7 +99,7 @@ fn get(path: &str, token: Option<&str>) -> Request<Body> {
     builder.body(Body::empty()).unwrap()
 }
 
-const TEST_PASSWORD: &str = "a-sufficiently-long-password";
+const TEST_PASSWORD: &str = "A-sufficiently-long-password";
 
 /// Registers a user, confirms the address, and signs in.
 ///
