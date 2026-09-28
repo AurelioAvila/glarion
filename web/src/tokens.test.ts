@@ -40,7 +40,7 @@ function tokensOf(page: string, includeLinked = true): Map<string, string> {
     .map((match) => match[1] ?? "")
     .join("\n");
   const linked = [
-    ...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"?#]+\.css)"/g),
+    ...html.matchAll(/<link\s+rel="stylesheet"\s+href="\/([^"?#]+\.css)(?:\?[^"#]*)?"/g),
   ]
     .map((match) => readFileSync(join(WEB, match[1]!), "utf8"))
     .join("\n");
