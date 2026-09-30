@@ -44,6 +44,7 @@ import {
   takeRememberedDomain,
 } from "./carry.js";
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
+import { accountDestination, cleanPlanChoice, readPlanChoice, rememberPlanChoice } from "./plan-choice.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
@@ -174,6 +175,7 @@ function renderSignIn(): void {
 
   const form = el("form", { class: "auth" }, [
     el("h1", { text: "Sign in" }),
+    chosenPlanNotice(),
     message,
     field("Email", email),
     field("Password", password),
@@ -198,7 +200,7 @@ function renderSignIn(): void {
         await api.login(email.value, password.value);
         rememberedEmail.set(remember.checked ? email.value.trim() : null);
         session.set();
-        window.location.hash = "#/targets";
+        window.location.hash = accountDestination(pendingPlan);
       } catch (error) {
         // An unconfirmed address is not a dead end: offer the way out
         // rather than only naming the problem.
@@ -258,6 +260,18 @@ function unconfirmedNotice(email: string): HTMLElement {
 /// showed an empty box, which is precisely the bug this whole change was
 /// meant to fix.
 let pendingDomain: string | null = takeRememberedDomain();
+let pendingPlan = readPlanChoice();
+
+function chosenPlanNotice(review = false): HTMLElement | null {
+  if (!pendingPlan) return null;
+  const offer = PLANS.find((offer) => offer.plan === pendingPlan?.plan)!;
+  const yearly = pendingPlan.interval === "yearly";
+  return el("div", { class: "chosen-plan" }, [
+    el("strong", { text: `${offer.name} · up to ${offer.sites} websites` }),
+    el("p", { text: review ? "Your selection is highlighted below. Review the billing frequency and price, then continue to Stripe. No payment is taken on this page." : `€${yearly ? offer.yearly : offer.monthly} / ${yearly ? "year" : "month"}, excluding VAT. Confirm your email, then review your plan before paying securely through Stripe.` }),
+    el("a", { class: "inline", href: "/pricing.html", text: "Compare or change your choice" }),
+  ]);
+}
 
 /// `carried` is the domain the visitor checked on the front page, if they
 /// arrived from that result rather than from a bare link. Saying it back to
@@ -307,6 +321,7 @@ function renderSignUp(carried: string | null): void {
 
   const form = el("form", { class: "auth" }, [
     el("h1", { text: "Create your account" }),
+    chosenPlanNotice(),
     el("p", {
       class: "blurb",
       text: "Create your account, then open the confirmation link we email you. Your account becomes active only after you confirm your address; the link lasts 24 hours.",
@@ -342,9 +357,9 @@ function renderSignUp(carried: string | null): void {
       acceptedTerms,
       el("span", {}, [
         "I agree to the ",
-        el("a", { class: "inline", href: "/terms.html", text: "Terms" }),
+        el("a", { class: "inline", href: "/terms.html", target: "_blank", rel: "noopener", text: "Terms" }),
         " and acknowledge the ",
-        el("a", { class: "inline", href: "/privacy.html", text: "Privacy Notice" }),
+        el("a", { class: "inline", href: "/privacy.html", target: "_blank", rel: "noopener", text: "Privacy Notice" }),
         ".",
       ]),
     ]),
@@ -413,6 +428,7 @@ function renderCheckYourEmail(email: string, delivered: boolean): void {
   container.append(
     el("div", { class: "auth" }, [
       el("h1", { text: "Confirm your email" }),
+      chosenPlanNotice(),
       ...(delivered
         ? [
             el("p", {
@@ -466,7 +482,7 @@ async function renderVerify(token: string): Promise<void> {
     // Signed in straight away: they have just proved they control the
     // address, so asking for the password again adds nothing.
     session.set();
-    window.location.hash = "#/targets";
+    window.location.hash = accountDestination(pendingPlan);
   } catch (error) {
     clear(container);
     container.append(
@@ -2372,6 +2388,12 @@ async function renderPlan(): Promise<void> {
     message,
   );
 
+  if (pendingPlan) {
+    container.append(chosenPlanNotice(true)!);
+    // The choice has reached billing review. Do not keep routing future logins here.
+    rememberPlanChoice(null);
+  }
+
   // Being out of room is the one thing on this page somebody needs told
   // rather than left to work out from two numbers.
   if (subscription.targets_used >= subscription.max_targets) {
@@ -2406,10 +2428,10 @@ async function renderPlan(): Promise<void> {
   // every row. Monthly and yearly are the same plan, not two different
   // things to compare — a reader picks a plan first and a billing rhythm
   // second, and the old layout made them do both at once for each row.
-  let interval: "monthly" | "yearly" = "monthly";
+  let interval: "monthly" | "yearly" = pendingPlan?.interval ?? "monthly";
   const toggleRow = el("div", { class: "tabs", style: "margin-bottom:0" });
-  const monthlyTab = el("button", { class: "tab tab-active", type: "button", text: "Monthly" });
-  const yearlyTab = el("button", { class: "tab", type: "button", text: "Yearly" });
+  const monthlyTab = el("button", { class: interval === "monthly" ? "tab tab-active" : "tab", type: "button", "aria-pressed": String(interval === "monthly"), text: "Monthly" });
+  const yearlyTab = el("button", { class: interval === "yearly" ? "tab tab-active" : "tab", type: "button", "aria-pressed": String(interval === "yearly"), text: "Yearly" });
   toggleRow.append(monthlyTab, yearlyTab);
 
   const list = el("ul", { class: "ledger plan-list" });
@@ -2424,6 +2446,9 @@ async function renderPlan(): Promise<void> {
     interval = value;
     monthlyTab.className = value === "monthly" ? "tab tab-active" : "tab";
     yearlyTab.className = value === "yearly" ? "tab tab-active" : "tab";
+    monthlyTab.setAttribute("aria-pressed", String(value === "monthly"));
+    yearlyTab.setAttribute("aria-pressed", String(value === "yearly"));
+    if (pendingPlan) pendingPlan = { ...pendingPlan, interval: value };
     paintList();
   }
 
@@ -2456,6 +2481,7 @@ function planRow(
   message: HTMLElement,
 ): HTMLElement {
   const current = offer.plan === subscription.plan;
+  const selected = offer.plan === pendingPlan?.plan;
   const saving = offer.monthly * 12 - offer.yearly;
 
   const state = el("div", { class: "entry-state plan-features" }, [
@@ -2494,12 +2520,16 @@ function planRow(
       );
     }
 
-    const subscribe = el("button", { class: "primary", type: "button", text: "Subscribe" });
+    const subscribe = el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` });
     on(subscribe, "click", () => {
       clear(message);
       void withPending(subscribe, "Opening…", async () => {
         try {
-          const result = await api.checkout(offer.plan, interval);
+          const result = subscription.manageable
+            ? await api.billingPortal()
+            : await api.checkout(offer.plan, interval);
+          pendingPlan = null;
+          rememberPlanChoice(null);
           window.location.href = result.url;
         } catch (error) {
           message.replaceChildren(notice("error", describeError(error)));
@@ -2510,9 +2540,9 @@ function planRow(
     right.append(price, subscribe);
   }
 
-  return el("li", { class: `plan-item plan-${offer.plan}` }, [
+  return el("li", { class: `plan-item plan-${offer.plan}${selected ? " plan-selected" : ""}` }, [
     el("div", { class: "entry entry-idle plan-offer" }, [
-      el("div", {}, [el("div", { class: "entry-name", text: offer.name }), state]),
+      el("div", {}, [el("div", { class: "entry-name", text: `${offer.name}${selected ? " · Selected" : ""}` }), state]),
       right,
     ]),
   ]);
@@ -2548,6 +2578,8 @@ function renderNav(): void {
   on(signOut, "click", () => {
     void api.logout().finally(() => {
       session.clear();
+      pendingPlan = null;
+      rememberPlanChoice(null);
       window.location.hash = "#/signin";
     });
   });
@@ -2567,6 +2599,10 @@ function routeInner(): void {
   const path = separator === -1 ? hash : hash.slice(0, separator);
   const query = new URLSearchParams(separator === -1 ? "" : hash.slice(separator + 1));
   const parts = path.split("/").filter(Boolean);
+  if (["signup", "signin", "plan"].includes(parts[0] ?? "") && query.has("plan")) {
+    pendingPlan = cleanPlanChoice(query.get("plan"), query.get("interval") ?? "monthly");
+    rememberPlanChoice(pendingPlan);
+  }
   const accountEntry = ["signin", "signup", "forgot", "reset", "verify", "confirm-email"].includes(parts[0] ?? "");
   document.body.dataset.shell = !session.isSignedIn || accountEntry ? "auth" : "workspace";
 
@@ -2613,13 +2649,13 @@ function routeInner(): void {
   }
 
   if (!session.isSignedIn) {
-    if (parts[0] === "signup") renderSignUp(carried);
+    if (parts[0] === "signup" || (parts[0] === "plan" && pendingPlan)) renderSignUp(carried);
     else renderSignIn();
     return;
   }
 
   if (parts[0] === "signin" || parts[0] === "signup" || parts.length === 0) {
-    window.location.hash = "#/targets";
+    window.location.hash = accountDestination(pendingPlan);
     return;
   }
 
