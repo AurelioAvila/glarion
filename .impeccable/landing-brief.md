@@ -1,13 +1,11 @@
-# Glarion landing — Prism built surface brief
+# Glarion landing — simplified Prism surface
 
-Status: built locally on 2026-09-06 from user-selected direction 6 (Prism), “la 6 mi piace.” Appearance is approved; deployment is not authorized. Surface: `web/landing.html` and `web/landing.css`. Mode: persuade. Agencies and freelancers managing client websites remain the repository-supported audience assumption.
+Refined on 30 September 2026 at the user's request: preserve the approved beginning and simplify the confusing content from Overview onward. Surface: `web/landing.html` and `web/landing.css`. Mode: persuade. Audience: agencies and freelancers managing client websites.
 
-The first viewport combines a large plum/coral promise with an optical glass ring and an overlapping fictional portfolio overview. The visible sample label distinguishes illustration from actual dashboard capability. Primary action leads to the working public checker; the secondary action and overview link lead to the existing sample report. The checker sits in a lilac panel, followed by report value, workflow, comparison, limitations, current plans and FAQs.
+Keep the plum/coral hero, optical ring, local Manrope and original hero actions. The acquisition path is now public check → useful report → three setup steps → Free/Solo/Studio/Agency → short FAQs → free-check action. The report excerpt uses the existing fictional certificate example, clearly labeled, with consequence, action and evidence. The former portfolio mockup, tool-category comparison, hypothetical revenue example and security-control grid are removed from the landing. Product guides remain in a native footer disclosure.
 
-Mobile stacks copy, ring, sample overview and checker. The sample table scrolls inside a focusable region; the real checker retains its label, loading, error and result behavior. Full scans remain distinguished from public checks by current domain-control proof. English copy, prices, authentication and report destinations remain. No testimonials or growth results are invented.
+Section introductions use 18px; benefits, workflow and FAQ copy use 17px; supporting notes and form labels use 15px. Mobile checker controls stack below 38rem. Pricing compares the same current prices and 1/5/10/40-site allowances without repeating the paid feature list in every card. The account CTA names free account creation and explains email confirmation before choosing a paid plan.
 
-Presentation: pearl ground, plum Manrope, coral headline emphasis, deep rose action buttons and lilac surfaces. Manrope and the decorative ring are local assets, with no external runtime asset requests. Dashboard and other routes are outside this landing change.
+Validation: reviewed at the default desktop viewport and 390px/320px phone widths. No page overflow; empty-domain recovery, native FAQ disclosure and the account destination verified in the browser. TypeScript check/build and 23 existing compiled frontend tests passed. All local link destinations exist. The preview server does not supply a backend, so no new account or paid transaction was created during this visual review.
 
-Reference: `.preview/design-alternatives/option-6.png`; implementation direction: `.impeccable/prism-direction.md`. Independent reviewer disposition: ship for the scoped desktop/mobile first viewport, with no material fixes. This is a scoped visual review, not a whole-site audit or deployment claim.
-
-Success to measure later: public-check starts/completions, sample-report visits and qualified account creation. No baseline or improvement percentage is established.
+Measure public-check completions, signup completion and paid checkout separately through the existing acquisition instrumentation. This refinement does not establish a conversion uplift or prove that typography caused the previous lack of purchases.
