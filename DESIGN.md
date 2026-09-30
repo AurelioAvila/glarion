@@ -108,6 +108,8 @@ Controls have softly rounded corners, larger panels use the panel radius, and sa
 
 ## Components
 
+Pricing offers share `web/plans.css` on the landing and full pricing page: complete clickable offers, explicit site allowances, four factual feature lines and visible selection actions. Native monthly/yearly buttons update the real billed total, saving and selected interval in the account link. White paid offers and a lilac free offer retain the Prism palette; Studio's action uses coral without an unsupported popularity claim. Responsive offers use four, two or one column. The signup and confirmation views retain a validated plan preference, and billing review highlights it before an explicit checkout action. Existing subscriptions change through Stripe's portal.
+
 Operational actions have a 44px minimum height; inputs have a 46px minimum, white fill, lilac border and violet focus treatment. Workspace focus is violet, error notices announce as alerts, and the skip link moves focus without changing the hash route. Reading callouts use thin violet or neutral dividers. Legal print removes navigation; generated reports keep A4 layout, severity labels and findings together and hide save controls. Shared styles honor reduced motion.
 
 Primary actions use rose fill and deepen on hover. Secondary actions and account navigation use plum text with a muted lilac border, gaining a lilac background on hover. Main actions and checker controls have a 48px minimum height.

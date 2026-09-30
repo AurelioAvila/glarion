@@ -809,6 +809,10 @@ h1.mono { font-family: Manrope, sans-serif; font-size: clamp(1.5rem, 2.8vw, 2.2r
 .plan-solo { --tier: #7345b2; }
 .plan-studio { --tier: #bc294a; }
 .plan-agency { --tier: #2d103a; }
+.plan-selected { border-color: var(--violet); background: #f6f0fc; }
+.chosen-plan { background: var(--sink); border-radius: 12px; padding: 1.25rem; margin: 1.5rem 0; color: var(--ink); }
+.chosen-plan strong { display: block; font-size: 1.125rem; }
+.chosen-plan p { font-size: 1rem; line-height: 1.65; color: var(--ink-2); margin: .65rem 0; }
 .plan-offer { display: flex; flex-direction: column; align-items: stretch; height: 100%; padding: 1.4rem; border: 0; }
 .plan-offer::before { display: none; }
 .plan-offer:hover { background: transparent; }
