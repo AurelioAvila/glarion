@@ -78,7 +78,7 @@ In shared styles, `--bg`, `--sink`, `--rule`, `--ink`, `--ink-2` and `--ink-3` m
 
 ## Typography
 
-Manrope is self-hosted at `/fonts/manrope.ttf`, with the bundled OFL license. It supplies display, body and controls; inherited technical result annotations may retain the system monospace stack. Headlines use compact spacing and balanced wraps. Hero emphasis is upright coral type. Body copy stays readable, with section introductions limited to 65 characters per line where possible.
+Manrope is self-hosted at `/fonts/manrope.ttf`, with the bundled OFL license. It supplies display, body and controls. Headlines use compact spacing and balanced wraps. Hero emphasis is upright coral type. The simplified landing keeps the approved hero typography and uses 18px section introductions, 17px benefit/workflow copy and 15px supporting notes. Public-check labels use sentence case and Manrope; technical observations still wrap safely.
 
 Workspace copy uses 15px/1.65 Manrope and compact headings (`clamp(1.85rem, 3vw, 2.55rem)`). Guides and legal pages use 16px/1.7 Manrope. Report body uses 16px/1.65 with the stack `Manrope, Segoe UI, sans-serif`: the public sample loads local Manrope through `prism.css`, while standalone reports make no new font requests and use the available fallback. Report titles use `clamp(2.3rem, 4.7vw, 3.8rem)` at 650 weight; visible evidence uses wrapping system monospace. Print body is 10pt, with explanations at 9.5pt.
 
@@ -86,7 +86,9 @@ Workspace copy uses 15px/1.65 Manrope and compact headings (`clamp(1.85rem, 3vw,
 
 The landing desktop container is capped at 88rem with 5rem total horizontal clearance. At 1100px and below, clearance becomes 3rem; below 38rem it becomes 2rem. The sticky header measures 90px on desktop and 74px below 52rem.
 
-Below 52rem, content and checker stack and the illustrative portfolio sidebar disappears. Navigation keeps sign-in and the account action. Below 38rem, the ring enters document flow between the hero copy and sample overview; the overview table keeps a 630px minimum width inside its own keyboard-focusable horizontal scroll region. The checker input and button remain side by side. Comparison content scrolls locally with a visible mobile hint. Mobile display type uses `clamp(2.8rem, 12vw, 4.3rem)`.
+The landing now moves directly from the approved hero to the public checker, a report excerpt, three setup steps, pricing, short FAQs and a final free-check action. The fictional portfolio table, category comparison, revenue illustration and security-control grid were removed from this acquisition page; detailed guides remain accessible in the footer. The report excerpt retains a visible fictional label, evidence, consequence and suggested action from the existing sample report.
+
+Below 52rem, the checker, report and FAQ layouts stack. Navigation keeps sign-in and the account action. Below 38rem, the ring enters document flow between the hero copy and checker, and the checker input and button stack. Plans use four columns on desktop, two below 1100px and one below 38rem. Mobile display type uses `clamp(2.8rem, 12vw, 4.3rem)`.
 
 Workspace navigation uses a fixed 224px white sidebar and lilac active links with `aria-current`; at 900px it becomes a sticky wrapping header retaining navigation links. Main content caps at 78rem. Account entry pairs the reused ring with a half-width form, hiding the artwork and expanding the form at 900px. At 46rem, forms and facts stack and tabs wrap. Guides cap their shell at 66rem and article at 48rem; legal reading content caps at 52rem. These reading surfaces use an 80px header.
 
@@ -98,7 +100,7 @@ Print uses A4 with 15mm top/side and 22mm bottom margins. The cover, action plan
 
 Workspace content is flat: white ledgers and sidebar on pearl, with lilac form groups and selection. The command palette uses modal lift (`0 24px 60px #2d103a33`). Reports use a restrained document shadow (`0 20px 65px #3921470d`) on pearl; mobile and print remove it.
 
-The illustrative portfolio floats on a restrained violet shadow (`0 18px 54px #52337316`). The checker and final action panel are flat lilac surfaces. Local decorative artwork at `web/prism-ring.png` provides optical depth through masking and multiply blending. Its one-time settling animation lasts 1.1s; reduced-motion preference disables animation, transitions and smooth scrolling.
+The landing report excerpt uses a restrained document shadow (`0 20px 60px #39214712`). The checker and final action panel are flat lilac surfaces. Local decorative artwork at `web/prism-ring.webp` provides optical depth through masking and multiply blending. Its one-time settling animation lasts 1.1s; reduced-motion preference disables animation, transitions and smooth scrolling.
 
 ## Shapes
 
@@ -112,7 +114,7 @@ Primary actions use rose fill and deepen on hover. Secondary actions and account
 
 The checker uses a labeled light input, dark text, violet caret and an explicit red error message; loading, results and live announcements remain functional. Native FAQ disclosure semantics remain intact. Focus remains visible: generic focus is violet while the more specific inherited link, button and input rules retain the green outline.
 
-The portfolio overview is a fictional illustration, with a visible sample label and an actual link to the sample report. Its sidebar and tags do not imply implemented dashboard functionality. The ring is decorative and hidden from assistive technology. All new artwork and font requests resolve locally.
+The landing report excerpt is a fictional example, with a visible sample label and a link to the full sample report. Native FAQ and footer-guide disclosures keep secondary detail available without competing with the free-check and account actions. The ring is decorative and hidden from assistive technology. Artwork and font requests resolve locally.
 
 The report summary leads with a conclusion and three truthful counts: need attention, worth a decision and for reference. Up to three actionable priorities link to their full findings, with an all-actions link when needed. Each finding pairs a readable priority label with “Why it matters,” a lilac “What to do” panel and visible “Observed evidence”; missing guidance is explicit. Reference observations are not passed security tests. Scope and limits remain part of the document. The save button is a 44px plum control; report links use violet hover and visible violet focus. Report smooth scrolling respects reduced motion.
 
