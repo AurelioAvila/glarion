@@ -16,21 +16,6 @@ article { max-width: 48rem; }
 .foot nav { flex-wrap: wrap; }
 .nav { flex-wrap: wrap; }
 
-.plans { list-style: none; margin: 2rem 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.plan { --tier: #d0bfdc; display: flex; flex-direction: column; gap: .25rem; min-width: 0; padding: 1.5rem; background: var(--raise); border: 1px solid var(--rule); border-top: 4px solid var(--tier); border-radius: 14px; }
-.plan:first-child { background: var(--sink); }
-.plan-solo { --tier: #7345b2; }
-.plan-studio { --tier: #bc294a; }
-.plan-agency { --tier: #2d103a; }
-.plan-kind { font-size: .72rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-.plan-name { font-size: 1.2rem; font-weight: 650; color: var(--ink); }
-.plan-sites { font-size: 2.5rem; font-weight: 700; line-height: 1.1; letter-spacing: -.06em; margin: .6rem 0; color: var(--ink); }
-.plan-sites span { font-size: .95rem; font-weight: 550; letter-spacing: 0; color: var(--muted); }
-.plan-price { font-size: 1.55rem; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; }
-.plan-price small { display: block; font-size: .82rem; font-weight: 400; line-height: 1.5; color: var(--muted); }
-.plan-detail { color: var(--muted); font-size: .9rem; line-height: 1.55; margin-top: .75rem; }
-.plan-next { color: var(--ink); background: var(--sink); border-left: 3px solid var(--violet); padding: 1rem 1.25rem; border-radius: 0 8px 8px 0; }
-
 /* Questions, answered in place. <details> rather than a script: the
    browser already does this, and a closed answer is still in the
    document for anything that reads it without running JavaScript. */
@@ -63,7 +48,6 @@ code { font: .88em var(--mono); background: var(--sink); padding: .1em .35em; bo
      when the nav held two. It now holds four, and hiding one of them
      hides a page. Wrapping keeps all of them reachable. */
   .nav a:first-child { display: block; }
-  .plans { grid-template-columns: 1fr; }
   .spec div { flex-direction: column; gap: .2rem; }
   .spec dt { width: auto; }
 }

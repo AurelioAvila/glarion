@@ -89,8 +89,10 @@
       type="font/woff2"
       crossorigin
     />
-    <link rel="stylesheet" href="/landing.css?v=20260930" />
-  </head>
+    <link rel="stylesheet" href="/landing.css?v=20260930c" />
+  <link rel="stylesheet" href="/plans.css?v=20260930c">
+<script src="/plans.js?v=20260930c" defer></script>
+</head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <header class="top">
@@ -223,13 +225,14 @@
         <div class="wrap">
           <h2>Start free. Choose your portfolio size.</h2>
           <p class="section-lede">Every paid plan includes full scans, weekly or monthly monitoring and agency-branded reports.</p>
-          <ul class="plans">
-            <li class="plan plan-free"><h3>Free</h3><p class="plan-price">€0 <span>forever</span></p><p class="plan-sites">1 site · public check only</p><p class="plan-annual">No card or account needed to try it.</p><a class="text-link" href="#public-check">Try the free check <span aria-hidden="true">→</span></a></li>
-            <li class="plan"><h3>Solo</h3><p class="plan-price">€19 <span>/ month</span></p><p class="plan-sites">Up to 5 websites</p><p class="plan-annual">Or €170 / year</p></li>
-            <li class="plan"><h3>Studio</h3><p class="plan-price">€39 <span>/ month</span></p><p class="plan-sites">Up to 10 websites</p><p class="plan-annual">Or €350 / year</p></li>
-            <li class="plan"><h3>Agency</h3><p class="plan-price">€99 <span>/ month</span></p><p class="plan-sites">Up to 40 websites</p><p class="plan-annual">Or €750 / year</p></li>
-          </ul>
-          <div class="pricing-next"><div class="actions"><a class="primary" href="/app/#/signup">Create your free account</a><a class="text-link" href="/pricing.html">Compare plan details <span aria-hidden="true">→</span></a></div><p class="plan-next">Confirm your email, then choose a paid plan in your workspace. Prices exclude VAT.</p></div>
+<div class="purchase-options">
+<div class="purchase-switch"><div role="group" aria-label="Billing frequency"><button type="button" data-billing="monthly" aria-pressed="true">Monthly</button><button type="button" data-billing="yearly" aria-pressed="false">Yearly</button></div><p>Pay yearly and save up to €438.</p></div>
+<ul class="purchase-grid">
+<li><a class="purchase-card purchase-free" aria-labelledby="purchase-free-action purchase-free-cost purchase-free-allowance" href="#public-check"><h3>Free</h3><p class="purchase-audience">A first look at a website’s public security configuration.</p><p class="purchase-cost" id="purchase-free-cost"><strong>€0</strong><span>forever</span></p><p class="purchase-saving">No account. No card. No expiry.</p><p class="purchase-allowance" id="purchase-free-allowance">Public check only</p><ul class="purchase-features"><li>TLS certificate and headers</li><li>Public email configuration</li><li>Partial results preview</li><li>Full scans not included</li></ul><span class="purchase-action" id="purchase-free-action">Try the free check <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></span></a></li>
+<li><a class="purchase-card purchase-solo" aria-labelledby="purchase-solo-action purchase-solo-cost purchase-solo-allowance" data-plan="solo" data-monthly="19" data-yearly="170" href="/app/#/signup?plan=solo&amp;interval=monthly"><h3>Solo</h3><p class="purchase-audience">For freelancers looking after a handful of client websites.</p><p class="purchase-cost" id="purchase-solo-cost"><strong data-price>€19</strong><span data-unit>/ month</span></p><p class="purchase-saving" data-saving>Or €170 / year</p><p class="purchase-allowance" id="purchase-solo-allowance">Up to 5 websites</p><ul class="purchase-features"><li>Full scans of verified domains</li><li>Weekly or monthly monitoring</li><li>Email alerts when results change</li><li>Reports with your name and logo</li></ul><span class="purchase-action" id="purchase-solo-action">Choose Solo <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></span></a></li>
+<li><a class="purchase-card purchase-studio" aria-labelledby="purchase-studio-action purchase-studio-cost purchase-studio-allowance" data-plan="studio" data-monthly="39" data-yearly="350" href="/app/#/signup?plan=studio&amp;interval=monthly"><h3>Studio</h3><p class="purchase-audience">For a growing portfolio that needs consistent monitoring.</p><p class="purchase-cost" id="purchase-studio-cost"><strong data-price>€39</strong><span data-unit>/ month</span></p><p class="purchase-saving" data-saving>Or €350 / year</p><p class="purchase-allowance" id="purchase-studio-allowance">Up to 10 websites</p><ul class="purchase-features"><li>Full scans of verified domains</li><li>Weekly or monthly monitoring</li><li>Email alerts when results change</li><li>Reports with your name and logo</li></ul><span class="purchase-action" id="purchase-studio-action">Choose Studio <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></span></a></li>
+<li><a class="purchase-card purchase-agency" aria-labelledby="purchase-agency-action purchase-agency-cost purchase-agency-allowance" data-plan="agency" data-monthly="99" data-yearly="750" href="/app/#/signup?plan=agency&amp;interval=monthly"><h3>Agency</h3><p class="purchase-audience">For agencies managing security checks across more client sites.</p><p class="purchase-cost" id="purchase-agency-cost"><strong data-price>€99</strong><span data-unit>/ month</span></p><p class="purchase-saving" data-saving>Or €750 / year</p><p class="purchase-allowance" id="purchase-agency-allowance">Up to 40 websites</p><ul class="purchase-features"><li>Full scans of verified domains</li><li>Weekly or monthly monitoring</li><li>Email alerts when results change</li><li>Reports with your name and logo</li></ul><span class="purchase-action" id="purchase-agency-action">Choose Agency <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></span></a></li>
+</ul></div><p class="purchase-note">Prices exclude VAT. Choose a plan, create your account and confirm your email. Review your selection before paying through Stripe. No payment is taken during registration.</p><div class="purchase-next"><a class="text-link" href="/pricing.html">Compare features and billing details →</a><a class="text-link" href="/sample-report.html">See a sample report →</a></div>
         </div>
       </section>
       <section class="faq">
