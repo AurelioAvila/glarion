@@ -89,7 +89,7 @@
       type="font/woff2"
       crossorigin
     />
-    <link rel="stylesheet" href="/landing.css?v=20260928b" />
+    <link rel="stylesheet" href="/landing.css?v=20260930" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -137,30 +137,17 @@
             </p>
           </div>
           <div class="prism-art" aria-hidden="true"><img src="/prism-ring.webp" width="1254" height="1254" alt="" fetchpriority="high"></div>
-          <div class="portfolio-preview" aria-label="Illustrative portfolio overview, fictional data">
-            <div class="preview-sidebar"><strong>Glarion</strong><span class="preview-selected">Overview</span><span>Websites</span><span>Checks</span><span>Reports</span></div>
-            <div class="preview-content">
-              <div class="preview-heading"><div><h2>Overview</h2><p>Client websites. Important changes. One clear view.</p></div><span class="demo-label">Fictional sample</span></div>
-              <div class="portfolio-scroll" tabindex="0" role="region" aria-label="Sample website observations, scroll horizontally on small screens">
-                <table class="portfolio-table"><thead><tr><th>Website</th><th>Latest observations</th><th>Schedule</th><th>Ownership</th></tr></thead><tbody>
-                <tr><th scope="row"><span class="site-letter">E</span>example.com</th><td><span class="tag tag-coral">TLS certificate</span> <span class="tag">Content security policy</span></td><td>Weekly</td><td><span class="tag tag-green">Verified</span></td></tr>
-                <tr><th scope="row"><span class="site-letter">C</span>client.example</th><td><span class="tag tag-green">Public security contact found</span></td><td>Monthly</td><td><span class="tag tag-green">Verified</span></td></tr>
-                </tbody></table>
-              </div>
-              <a class="preview-link" href="/sample-report.html">Explore the sample report <span aria-hidden="true">→</span></a>
-            </div>
-          </div>
           <aside
             class="check-panel"
             id="public-check"
             aria-labelledby="check-title"
           >
             <h2 class="check-title" id="check-title">
-              Run a public website check
+              Check a website for free
             </h2>
             <p class="check-intro">
-              See the TLS, homepage headers and public policy files a visitor
-              can already read.
+              Get a first look at the certificate, security headers and public
+              configuration. See your results here.
             </p>
             <form class="check" id="check-form" novalidate>
               <div class="check-row">
@@ -190,348 +177,75 @@
             </form>
             <p class="check-note">
               <a class="text-link" href="/free-website-security-check.html"
-                >What this check reads, request by request →</a
+                >What does the free check include?</a
               >
             </p>
           </aside>
           <div id="result" hidden role="status" aria-live="polite"></div>
         </div>
       </div>
-      <section>
-        <div class="wrap">
-          <h2>A report built for the client conversation.</h2>
-          <p class="section-lede">
-            The summary leads with decisions, then preserves the technical
-            evidence. This example is fictional and clearly marked; its
-            structure reflects Glarion’s generated reports.
-          </p>
-          <div class="report-layout">
-            <ul class="evidence">
-              <li>
-                <strong>Prioritized, not dumped</strong
-                ><span
-                  >Findings are normalized, deduplicated and grouped by the
-                  decision they need.</span
-                >
-              </li>
-              <li>
-                <strong>Ready to hand over</strong
-                ><span
-                  >Paid reports use your agency name and logo and print cleanly
-                  to PDF.</span
-                >
-              </li>
-              <li>
-                <strong>Evidence stays attached</strong
-                ><span
-                  >Each finding keeps its observation, plain-English reason and
-                  suggested next step.</span
-                >
-              </li>
-              <li>
-                <a class="text-link" href="/sample-report.html"
-                  >Open the full sample report →</a
-                >
-              </li>
-            </ul>
+      <section class="report-section" aria-labelledby="report-title">
+        <div class="wrap report-layout">
+          <div class="report-copy">
+            <h2 id="report-title">A security report your clients can understand.</h2>
+            <p class="section-lede">Show what needs attention, why it matters and what to do next. Under your agency’s name.</p>
+            <dl class="benefits">
+              <div><dt>Know what to fix first</dt><dd>Prioritized findings, with the evidence behind each one.</dd></div>
+              <div><dt>Keep up with changes</dt><dd>Weekly or monthly checks. Email notifications when results change.</dd></div>
+              <div><dt>Send a clear client update</dt><dd>Your name and logo. Download the report or save it as a PDF.</dd></div>
+            </dl>
+            <a class="text-link" href="/sample-report.html">See the full sample report <span aria-hidden="true">→</span></a>
           </div>
+          <article class="report-sample" aria-label="Excerpt from the fictional sample report">
+            <div class="sample-top"><strong>Northstar Studio</strong><span>Fictional sample</span></div>
+            <p class="sample-domain">Website security review · example.com</p>
+            <div class="sample-finding"><span class="sample-priority">High priority</span><h3>Renew the TLS certificate</h3></div>
+            <dl class="sample-explanation">
+              <div><dt>Why it matters</dt><dd>If the certificate expires, browsers may warn visitors or block access.</dd></div>
+              <div><dt>What to do</dt><dd>Ask the hosting provider to confirm automatic renewal, then check the replacement certificate.</dd></div>
+            </dl>
+            <p class="sample-evidence"><strong>Observed evidence</strong>Fictional observation: the certificate expires in 18 days.</p>
+          </article>
         </div>
       </section>
       <section id="how">
         <div class="wrap">
-          <h2>From domain proof to a useful client update.</h2>
-          <p class="section-lede">
-            Active scanning begins only after authorization. Monitoring then
-            turns repeat observations into a change-focused workflow.
-          </p>
+          <h2>From your first site to your first report.</h2>
           <ol class="steps">
-            <li class="step">
-              <h3><span class="step-num">1.</span> Prove control</h3>
-              <p>
-                Add a DNS TXT record or a file under <code>/.well-known/</code>.
-                Proof expires after 30 days and is checked again when a scan
-                runs.
-              </p>
-            </li>
-            <li class="step">
-              <h3><span class="step-num">2.</span> Run controlled checks</h3>
-              <p>
-                Choose weekly or monthly monitoring. Glarion uses a
-                detection-only allowlist, caps scan intensity and refuses
-                non-public network targets.
-              </p>
-            </li>
-            <li class="step">
-              <h3><span class="step-num">3.</span> Review what changed</h3>
-              <p>
-                Results are triaged into actions, decisions and inventory.
-                Notifications are sent when a result differs from the previous
-                one.
-              </p>
-            </li>
+            <li class="step"><h3><span class="step-num">1</span> Create your account</h3><p>Sign up for free and open the confirmation link in your email.</p></li>
+            <li class="step"><h3><span class="step-num">2</span> Add your websites</h3><p>Choose a paid plan and verify each domain with a DNS record or a hosted file.</p></li>
+            <li class="step"><h3><span class="step-num">3</span> Check. Review. Share.</h3><p>Run a full scan, set a weekly or monthly schedule and send your branded report.</p></li>
           </ol>
-          <p class="section-lede">
-            <a class="text-link" href="/how-it-works.html"
-              >The full walkthrough, including what each step refuses to do →</a
-            >
-          </p>
-        </div>
-      </section>
-      <section>
-        <div class="wrap">
-          <h2>Different tools answer different questions.</h2>
-          <p class="section-lede">
-            Glarion complements the maintenance and analytics tools agencies
-            already use. This describes categories, not named competitors.
-          </p>
-          <p class="comparison-hint">Scroll sideways to compare all three tools.</p>
-          <div
-            class="compare-wrap"
-            role="region"
-            aria-label="Scrollable capability comparison"
-            tabindex="0"
-          >
-            <table class="compare">
-              <thead>
-                <tr>
-                  <th>Capability</th>
-                  <th>Glarion</th>
-                  <th>Maintenance dashboard</th>
-                  <th>Raw scanner</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Updates, backups and uptime</td>
-                  <td class="limited">Not provided</td>
-                  <td class="yes">Core purpose</td>
-                  <td class="limited">Not provided</td>
-                </tr>
-                <tr>
-                  <td>Outside-in security checks</td>
-                  <td class="yes">Controlled and scheduled</td>
-                  <td class="limited">Varies</td>
-                  <td class="yes">Core purpose</td>
-                </tr>
-                <tr>
-                  <td>Ownership gate before scanning</td>
-                  <td class="yes">Required and rechecked</td>
-                  <td class="limited">Varies</td>
-                  <td class="limited">Operator-managed</td>
-                </tr>
-                <tr>
-                  <td>Triage and deduplication</td>
-                  <td class="yes">Built in</td>
-                  <td class="limited">Varies</td>
-                  <td class="limited">Usually manual</td>
-                </tr>
-                <tr>
-                  <td>Agency-branded report</td>
-                  <td class="yes">Paid plans</td>
-                  <td class="limited">Varies</td>
-                  <td class="limited">Not usually included</td>
-                </tr>
-                <tr>
-                  <td>Notify only on change</td>
-                  <td class="yes">Built in</td>
-                  <td class="limited">Varies</td>
-                  <td class="limited">Needs workflow setup</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="illustration">
-            <span class="illustration-label"
-              >Revenue illustration — example, not a promise</span
-            >
-            <p class="illustration-math">10 clients × €40/month = €400/month</p>
-            <p>
-              If an agency chose to package monitoring at €40 per client per
-              month, ten participating clients would produce €400 in monthly
-              revenue before costs, tax and service time. Your price, adoption
-              and margin will differ; Glarion does not guarantee revenue or
-              return on investment.
-            </p>
-          </div>
-        </div>
-      </section>
-      <section>
-        <div class="wrap">
-          <h2>The scanner does not get unlimited freedom.</h2>
-          <p class="section-lede">
-            These controls are product behavior, enforced in code and covered by
-            tests—not a claim that an automated scan is a penetration test.
-          </p>
-          <dl class="security-grid">
-            <div class="security-item">
-              <dt>Current authorization</dt>
-              <dd>
-                Full scans require a plan and current DNS or hosted-file proof
-                at queue time and execution time.
-              </dd>
-            </div>
-            <div class="security-item">
-              <dt>Public destinations only</dt>
-              <dd>
-                IP literals, local names, private addresses, loopback ranges and
-                cloud-metadata destinations are rejected.
-              </dd>
-            </div>
-            <div class="security-item">
-              <dt>Detection-only policy</dt>
-              <dd>
-                Tools and templates are allowlisted. Fuzzing, brute force and
-                denial-of-service categories are excluded.
-              </dd>
-            </div>
-            <div class="security-item">
-              <dt>Bounded frequency</dt>
-              <dd>
-                Full scans are capped per target, and scheduled scans stop when
-                domain verification expires.
-              </dd>
-            </div>
-            <div class="security-item">
-              <dt>Authorization trail</dt>
-              <dd>
-                Each queued scan stores who authorized it and when, in the same
-                transaction as the job.
-              </dd>
-            </div>
-            <div class="security-item">
-              <dt>Self-contained reports</dt>
-              <dd>
-                Generated report values are escaped and the HTML document makes
-                no external requests when opened.
-              </dd>
-            </div>
-          </dl>
+          <a class="text-link" href="/how-it-works.html">See the setup guide <span aria-hidden="true">→</span></a>
         </div>
       </section>
       <section id="pricing">
-        <div class="wrap narrow">
-          <h2>One account. A clear site allowance.</h2>
-          <p class="section-lede">
-            The public check is free. Paid plans add full scans, weekly or
-            monthly scheduling and agency-branded reports. Prices exclude VAT.
-          </p>
+        <div class="wrap">
+          <h2>Start free. Choose your portfolio size.</h2>
+          <p class="section-lede">Every paid plan includes full scans, weekly or monthly monitoring and agency-branded reports.</p>
           <ul class="plans">
-            <li class="plan plan-free">
-              <span class="plan-kind">Free public check</span>
-              <div class="plan-name">Free</div>
-              <div class="plan-sites">1 <span>site</span></div>
-              <div class="plan-price">€0 <small>forever · no card</small></div>
-              <div class="plan-detail">Public check only. No full scan, scheduling or branded reports.</div>
-            </li>
-            <li class="plan plan-solo">
-              <span class="plan-kind">Paid · independent work</span>
-              <div class="plan-name">Solo</div>
-              <div class="plan-sites">5 <span>sites</span></div>
-              <div class="plan-price">€19 <small>/ month · or €170 / year</small></div>
-              <div class="plan-detail">Full scans, weekly or monthly checks and agency-branded reports.</div>
-            </li>
-            <li class="plan plan-studio">
-              <span class="plan-kind">Paid · growing portfolio</span>
-              <div class="plan-name">Studio</div>
-              <div class="plan-sites">10 <span>sites</span></div>
-              <div class="plan-price">€39 <small>/ month · or €350 / year</small></div>
-              <div class="plan-detail">Full scans, weekly or monthly checks and agency-branded reports.</div>
-            </li>
-            <li class="plan plan-agency">
-              <span class="plan-kind">Paid · larger portfolio</span>
-              <div class="plan-name">Agency</div>
-              <div class="plan-sites">40 <span>sites</span></div>
-              <div class="plan-price">€99 <small>/ month · or €750 / year</small></div>
-              <div class="plan-detail">Full scans, weekly or monthly checks and agency-branded reports.</div>
-            </li>
+            <li class="plan plan-free"><h3>Free</h3><p class="plan-price">€0 <span>forever</span></p><p class="plan-sites">1 site · public check only</p><p class="plan-annual">No card or account needed to try it.</p><a class="text-link" href="#public-check">Try the free check <span aria-hidden="true">→</span></a></li>
+            <li class="plan"><h3>Solo</h3><p class="plan-price">€19 <span>/ month</span></p><p class="plan-sites">Up to 5 websites</p><p class="plan-annual">Or €170 / year</p></li>
+            <li class="plan"><h3>Studio</h3><p class="plan-price">€39 <span>/ month</span></p><p class="plan-sites">Up to 10 websites</p><p class="plan-annual">Or €350 / year</p></li>
+            <li class="plan"><h3>Agency</h3><p class="plan-price">€99 <span>/ month</span></p><p class="plan-sites">Up to 40 websites</p><p class="plan-annual">Or €750 / year</p></li>
           </ul>
-          <p class="plan-next">To use a paid plan: create an account, confirm your email, then choose Solo, Studio or Agency in your workspace.</p>
-          <div class="cta-row">
-            <a class="primary" href="/app/#/signup">Create account to choose a plan</a
-            ><a class="secondary" href="/pricing.html"
-              >Full pricing and FAQ</a
-            ><span class="foot-note"
-              >No card for Free. VAT is added at checkout where
-              applicable.</span
-            >
-          </div>
+          <div class="pricing-next"><div class="actions"><a class="primary" href="/app/#/signup">Create your free account</a><a class="text-link" href="/pricing.html">Compare plan details <span aria-hidden="true">→</span></a></div><p class="plan-next">Confirm your email, then choose a paid plan in your workspace. Prices exclude VAT.</p></div>
         </div>
       </section>
       <section class="faq">
-        <div class="wrap narrow">
-          <h2>What agencies usually ask.</h2>
-          <details>
-            <summary>What does the public check do?</summary>
-            <p>
-              It resolves the domain, reads its TLS certificate, requests the
-              homepage and looks for public robots.txt and security.txt files.
-              It uses GET requests, does not follow redirects and does not guess
-              undisclosed paths.
-              <a class="text-link" href="/free-website-security-check.html"
-                >See every observation it produces →</a
-              >
-            </p>
-          </details>
-          <details>
-            <summary>Is Glarion a penetration test?</summary>
-            <p>
-              No. It is recurring security monitoring with controlled automated
-              checks and triage. It does not replace a scoped manual penetration
-              test.
-            </p>
-          </details>
-          <details>
-            <summary>Why verify a domain?</summary>
-            <p>
-              A full scan actively probes for known vulnerability fingerprints.
-              Glarion requires proof that you control the target and checks it
-              again when a queued or scheduled scan runs.
-              <a class="text-link" href="/how-it-works.html"
-                >How proof of control works →</a
-              >
-            </p>
-          </details>
-          <details>
-            <summary>Can reports carry my agency’s brand?</summary>
-            <p>
-              Yes. Paid reports use your agency name and optional logo. They are
-              self-contained HTML documents designed to print or save as PDF.
-            </p>
-          </details>
-          <details>
-            <summary>When are notifications sent?</summary>
-            <p>
-              Sites can run weekly or monthly. Glarion notifies you when a
-              result differs from the previous one, so unchanged inventory does
-              not create a repeated alert.
-            </p>
-          </details>
-          <details>
-            <summary>Does Glarion update plugins or take backups?</summary>
-            <p>
-              No. Keep your maintenance platform for updates, backups and
-              uptime. Glarion focuses on outside-in security monitoring, triage
-              and client-ready reporting.
-            </p>
-          </details>
-        </div>
-      </section>
-      <section>
-        <div class="wrap">
-          <div class="final">
-            <h2>Know what changed before your client does.</h2>
-            <p class="section-lede">
-              Check a public website now, or create a free account and add your
-              first client site.
-            </p>
-            <div class="actions">
-              <a class="primary" href="#public-check">Check a website</a
-              ><a class="secondary" href="/sample-report.html"
-                >View sample report</a
-              ><a class="secondary" href="/app/#/signup">Create an account</a>
-            </div>
+        <div class="wrap faq-layout">
+          <h2>A few things to know.</h2>
+          <div>
+            <details><summary>What is free, and what needs a paid plan?</summary><p>The public check gives you a partial view of a website’s public configuration, with no account or card. Paid plans add full scans, scheduled monitoring and agency-branded reports. <a class="text-link" href="/free-website-security-check.html">What the free check covers</a>.</p></details>
+            <details><summary>Why do I need to verify my website?</summary><p>Full scans actively check for known vulnerabilities, so you must prove control of the domain first. Add a DNS TXT record or a hosted file. Verification lasts 30 days and is checked again before scans run.</p></details>
+            <details><summary>Can I use my own name and logo?</summary><p>Yes. Paid reports carry your agency’s name and optional logo. Download them as HTML or use your browser to save a PDF. <a class="text-link" href="/sample-report.html">See a fictional sample</a>.</p></details>
+            <details><summary>Does Glarion fix issues for me?</summary><p>Glarion shows findings and suggested next steps. Your team handles the fixes. Keep your existing tools for updates, backups and uptime.</p></details>
+            <details><summary>Does a scan prove my website is secure?</summary><p>No. It is an automated check of what can be observed from outside, not a manual penetration test or a security guarantee. <a class="text-link" href="/about-our-checks.html">Read the scope and limits</a>.</p></details>
           </div>
         </div>
+      </section>
+      <section class="final-section">
+        <div class="wrap final"><div><h2>See what your website reveals.</h2><p>Start with a free check. No account, no card.</p></div><a class="primary" href="#public-check">Check a website for free</a></div>
       </section>
     </main>
     <p class="print-source wrap">
@@ -550,24 +264,13 @@
           />Glarion — website security monitoring for digital agencies.</span
         >
         <nav class="foot-links" aria-label="Footer">
-          <a href="/pricing.html">Pricing</a
-          ><a href="/how-it-works.html">How it works</a
-          ><a href="/free-website-security-check.html">Free check</a
-          ><a href="/ssl-certificate-expiry-monitoring.html"
-            >Certificate monitoring</a
-          ><a href="/email-spoofing-spf-dmarc.html">SPF &amp; DMARC</a
-          ><a href="/website-security-monitoring.html">Monitoring guide</a
-          ><a href="/agency-security-reports.html">Client reports</a
-          ><a href="/website-vulnerability-scanner.html">Scanner guide</a
-          ><a href="/nuclei-monitoring.html">Safe scanning</a
-          ><a href="/sample-report.html">Sample report</a
-          ><a href="/about-our-checks.html">About our checks</a
-          ><a class="sign-in" href="/app/#/signin">Sign in</a
-          ><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a
-          ><a href="mailto:hello@glarion.app">Contact</a>
+          <a href="/pricing.html">Pricing</a><a href="/sample-report.html">Sample report</a><a href="/app/#/signin">Sign in</a><a href="mailto:hello@glarion.app">Contact</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a>
         </nav>
+        <details class="footer-guides"><summary>Guides &amp; technical details</summary><nav aria-label="Product guides">
+          <a href="/how-it-works.html">Setup guide</a><a href="/free-website-security-check.html">Free check</a><a href="/ssl-certificate-expiry-monitoring.html">Certificate monitoring</a><a href="/email-spoofing-spf-dmarc.html">SPF &amp; DMARC</a><a href="/website-security-monitoring.html">Monitoring guide</a><a href="/agency-security-reports.html">Client reports</a><a href="/website-vulnerability-scanner.html">Scanner guide</a><a href="/nuclei-monitoring.html">Safe scanning</a><a href="/about-our-checks.html">Scope &amp; limits</a>
+        </nav></details>
       </div>
     </footer>
-    <script type="module" src="/landing.js?v=20260928b"></script>
+    <script type="module" src="/landing.js?v=20260930"></script>
   </body>
 </html>
