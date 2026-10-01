@@ -2542,7 +2542,10 @@ function planRow(
 
   return el("li", { class: `plan-item plan-${offer.plan}${selected ? " plan-selected" : ""}` }, [
     el("div", { class: "entry entry-idle plan-offer" }, [
-      el("div", {}, [el("div", { class: "entry-name", text: `${offer.name}${selected ? " · Selected" : ""}` }), state]),
+      el("div", {}, [el("div", { class: "plan-heading" }, [
+        el("div", { class: "entry-name", text: `${offer.name}${selected ? " · Selected" : ""}` }),
+        ...(offer.plan === "studio" ? [el("span", { class: "plan-recommendation", text: "Recommended" })] : []),
+      ]), state]),
       right,
     ]),
   ]);
