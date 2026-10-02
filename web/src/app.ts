@@ -1,4 +1,5 @@
 import { recordPage } from "./acquisition.js";
+import { annualOffer } from "./annual-offer.js";
 let growthSignupSeen = false;
 function countSignupView(): void {
   if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
@@ -2460,8 +2461,8 @@ async function renderPlan(): Promise<void> {
 
   container.append(
     el("p", { class: "muted", style: "margin-top:1.5rem" }, [
-      "Prices exclude VAT, which is added at checkout. Cancel whenever you like from Manage billing — ",
-      "the sites stay, the automatic checks stop.",
+      "Prices exclude VAT. Any applicable tax and the final total are shown in Stripe before you pay. ",
+      "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
     ]),
   );
 }
@@ -2482,7 +2483,7 @@ function planRow(
 ): HTMLElement {
   const current = offer.plan === subscription.plan;
   const selected = offer.plan === pendingPlan?.plan;
-  const saving = offer.monthly * 12 - offer.yearly;
+  const annual = offer.monthly > 0 ? annualOffer(offer.monthly, offer.yearly) : null;
 
   const state = el("div", { class: "entry-state plan-features" }, [
     el("strong", { class: "plan-site-count", text: `${offer.sites} ${offer.sites === 1 ? "site" : "sites"}` }),
@@ -2508,16 +2509,19 @@ function planRow(
     if (interval === "yearly") {
       price.append(
         el("span", { class: "plan-row-amount", text: `€${offer.yearly}` }),
-        el("span", { class: "plan-row-unit", text: "/yr" }),
+        el("span", { class: "plan-row-unit", text: "/year" }),
       );
       state.append(
-        el("span", { class: "watching", text: `saves €${saving} a year` }),
+        el("span", { class: "plan-comparison" }, ["Cost of 12 monthly payments: ", el("s", { text: `€${annual!.standardYear}` })]),
+        el("span", { class: "plan-discount", text: `Save ${annual!.discount}% · €${annual!.saving}/year` }),
+        el("span", { text: `Equivalent to €${annual!.monthlyEquivalent}/month. Billed €${offer.yearly} yearly.` }),
       );
     } else {
       price.append(
         el("span", { class: "plan-row-amount", text: `€${offer.monthly}` }),
-        el("span", { class: "plan-row-unit", text: "/mo" }),
+        el("span", { class: "plan-row-unit", text: "/month" }),
       );
+      state.append(el("span", { class: "plan-discount", text: `Save ${annual!.discount}% with yearly billing` }));
     }
 
     const subscribe = el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` });
@@ -2541,10 +2545,10 @@ function planRow(
   }
 
   return el("li", { class: `plan-item plan-${offer.plan}${selected ? " plan-selected" : ""}` }, [
+    ...(offer.plan === "studio" ? [el("span", { class: "plan-recommendation" }, [el("span", { "aria-hidden": "true", text: "⭐" }), "Recommended"])] : []),
     el("div", { class: "entry entry-idle plan-offer" }, [
       el("div", {}, [el("div", { class: "plan-heading" }, [
         el("div", { class: "entry-name", text: `${offer.name}${selected ? " · Selected" : ""}` }),
-        ...(offer.plan === "studio" ? [el("span", { class: "plan-recommendation", text: "Recommended" })] : []),
       ]), state]),
       right,
     ]),
