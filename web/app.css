@@ -805,13 +805,13 @@ h1.mono { font-family: Manrope, sans-serif; font-size: clamp(1.5rem, 2.8vw, 2.2r
 .workspace-heading { margin-bottom: 1.8rem; }
 .workspace-heading p { margin: .6rem 0 0; color: var(--ink-2); }
 .ledger { background: var(--raise); border-radius: 14px; padding: 0 1.35rem; }
-.plan-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 0; background: transparent; }
-.plan-item { --tier: #d0bfdc; min-width: 0; background: var(--raise); border: 1px solid var(--rule); border-top: 4px solid var(--tier); border-radius: 14px; }
+.plan-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem 1rem; padding: 0; margin-top: 2rem; background: transparent; }
+.plan-item { position: relative; --tier: #d0bfdc; min-width: 0; background: var(--raise); border: 1px solid var(--rule); border-top: 4px solid var(--tier); border-radius: 14px; }
 .plan-free { background: var(--sink); }
 .plan-solo { --tier: #7345b2; }
 .plan-studio { --tier: #bc294a; background: #fff7f9; border-color: #bc294a; }
 .plan-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: .5rem; margin-bottom: .8rem; }
-.plan-recommendation { padding: .35rem .6rem; border: 1px solid #e0a6b5; border-radius: 8px; color: #9c2340; background: #fce5ec; font-size: .75rem; font-weight: 750; line-height: 1.4; }
+.plan-recommendation { position: absolute; top: -1.15rem; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; padding: .35rem .6rem; border: 1px solid #e0a6b5; border-radius: 999px; color: white; background: #bc294a; font-size: .75rem; font-weight: 750; line-height: 1.4; }
 .plan-agency { --tier: #2d103a; }
 .plan-selected { border-color: var(--violet); background: #f6f0fc; }
 .chosen-plan { background: var(--sink); border-radius: 12px; padding: 1.25rem; margin: 1.5rem 0; color: var(--ink); }
@@ -909,3 +909,6 @@ body[data-shell='workspace'] main { margin-left: 224px; }
   body[data-shell='workspace'] #nav-links .kbd-hint { display: none; }
   body[data-shell='workspace'] #nav-links a, body[data-shell='workspace'] #nav-links button { font-size: .78rem; padding: .6rem .75rem; }
 }
+
+.plan-comparison { font-variant-numeric: tabular-nums; }
+.plan-discount { font-weight: 750; color: #6520a0; }
