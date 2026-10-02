@@ -31,7 +31,8 @@ pub async fn record(state: &AppState, headers: &HeaderMap, event: &str) {
     };
     // A metrics outage must not turn a successful business operation into an error.
     let result = tokio::time::timeout(
-        Duration::from_millis(200),
+        // A cold remote connection may need several protocol round trips.
+        Duration::from_secs(1),
         sqlx::query(
             "insert into growth_counts (source, event) values ($1, $2)
             on conflict (day, source, event) do update set total = growth_counts.total + 1",
