@@ -41,8 +41,9 @@ code { font: .88em var(--mono); background: var(--sink); padding: .1em .35em; bo
 
 @media(max-width:42rem) {
   .wrap { width: calc(100% - 2.5rem); }
-  .nav { gap: 1rem; }
-  .nav a { font-size: .76rem; }
+  .top .wrap { height: auto; min-height: 80px; padding-block: 1rem; flex-wrap: wrap; gap: .5rem 1rem; }
+  .nav { width: 100%; margin: 0; gap: .2rem 1rem; }
+  .nav a { font-size: .875rem; }
   .summary { gap: 1.4rem; }
   /* The base sheet hides the first nav link at this width, which was fine
      when the nav held two. It now holds four, and hiding one of them
