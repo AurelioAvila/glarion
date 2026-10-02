@@ -46,9 +46,9 @@ pub const CLIENT_IP_HEADER: &str = "fly-client-ip";
 /// `None` when the header is absent or unparseable, which leaves the caller
 /// on the TCP peer address — the safe direction, since an unparseable header
 /// must not be allowed to become a bucket of its own.
-pub fn forwarded_client_ip(headers: &HeaderMap) -> Option<IpAddr> {
+pub fn forwarded_client_ip(headers: &HeaderMap, trusted_header: &str) -> Option<IpAddr> {
     headers
-        .get(CLIENT_IP_HEADER)
+        .get(trusted_header)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.trim().parse::<IpAddr>().ok())
 }
@@ -254,7 +254,7 @@ mod tests {
         headers.insert(CLIENT_IP_HEADER, "203.0.113.7".parse().unwrap());
 
         assert_eq!(
-            forwarded_client_ip(&headers),
+            forwarded_client_ip(&headers, CLIENT_IP_HEADER),
             Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)))
         );
     }
@@ -263,12 +263,19 @@ mod tests {
     fn forwarded_address_falls_back_when_unusable() {
         // Absent, junk and a host:port pair all have to leave the caller on
         // the peer address. Anything else lets a bad header become a bucket.
-        assert_eq!(forwarded_client_ip(&HeaderMap::new()), None);
+        assert_eq!(
+            forwarded_client_ip(&HeaderMap::new(), CLIENT_IP_HEADER),
+            None
+        );
 
         for value in ["not-an-address", "203.0.113.7:51234", ""] {
             let mut headers = HeaderMap::new();
             headers.insert(CLIENT_IP_HEADER, value.parse().unwrap());
-            assert_eq!(forwarded_client_ip(&headers), None, "accepted {value:?}");
+            assert_eq!(
+                forwarded_client_ip(&headers, CLIENT_IP_HEADER),
+                None,
+                "accepted {value:?}"
+            );
         }
     }
 
@@ -279,7 +286,25 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(CLIENT_IP_HEADER, "2a09:8280:1::3:abcd".parse().unwrap());
 
-        assert!(matches!(forwarded_client_ip(&headers), Some(IpAddr::V6(_))));
+        assert!(matches!(
+            forwarded_client_ip(&headers, CLIENT_IP_HEADER),
+            Some(IpAddr::V6(_))
+        ));
+    }
+
+    #[test]
+    fn cloudflare_ignores_spoofed_fly_and_forwarded_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_IP_HEADER, "192.0.2.99".parse().unwrap());
+        headers.insert("x-forwarded-for", "192.0.2.100".parse().unwrap());
+        assert_eq!(forwarded_client_ip(&headers, "cf-connecting-ip"), None);
+        headers.insert("cf-connecting-ip", "203.0.113.7".parse().unwrap());
+        assert_eq!(
+            forwarded_client_ip(&headers, "cf-connecting-ip"),
+            Some("203.0.113.7".parse().unwrap())
+        );
+        headers.insert("cf-connecting-ip", "invalid".parse().unwrap());
+        assert_eq!(forwarded_client_ip(&headers, "cf-connecting-ip"), None);
     }
 
     #[test]
