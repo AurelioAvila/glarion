@@ -25,13 +25,12 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"About the Glarion crawler","description":"What Glarion/1.0 requests, what it never does, how to tell a public check from an authorised scan, and how to block it.","author":{"@type":"Person","name":"Aurelio Avila"},"publisher":{"@type":"Organization","name":"Glarion","url":"https://glarion.app/","logo":"https://glarion.app/glarion-mark-512.png"},"mainEntityOfPage":"https://glarion.app/about-our-checks.html","image":"https://glarion.app/og.png"}</script>
 <link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/prism.css">
-<link rel="stylesheet" href="/seo.css">
+<link rel="stylesheet" href="/seo.css?v=20261002annual">
 </head>
 <body>
 <header class="top"><div class="wrap"><a class="brand" href="/"><img src="/glarion-mark-64.png" alt="" width="32" height="32"><span>Glarion</span></a><nav class="nav"><a href="/how-it-works.html">How it works</a><a href="/pricing.html">Pricing</a><a href="/sample-report.html">Sample report</a><a href="/app/#/signin">Sign in</a></nav></div></header>
 
 <main class="wrap">
-<p class="eyebrow">For site owners</p>
 <h1>You found Glarion in your access log</h1>
 <p class="lede">This page is the address in our User-Agent header, so you are probably here because something identifying itself as <code>Glarion/1.0</code> requested a page on your site. Here is exactly what it asked for, why, and how to stop it.</p>
 
@@ -62,14 +61,14 @@
 <div><dt>No vulnerability probing</dt><dd>It does not try known exploit fingerprints against your site.</dd></div>
 <div><dt>No writes</dt><dd><code>GET</code> only. No forms are submitted and nothing is posted.</dd></div>
 <div><dt>No login attempts</dt><dd>No credentials are tried, ever, on any plan.</dd></div>
-<div><dt>No load</dt><dd>Three requests, once, when somebody presses a button.</dd></div>
+<div><dt>Limited requests</dt><dd>Three requests, once, when somebody presses a button.</dd></div>
 </dl>
 </section>
 
 <section>
 <h2>If it was not the public check</h2>
 <p>Glarion also runs a full vulnerability scan, and that one <em>does</em> request paths your site never advertised and does try known fingerprints against them. It is a different thing with a different gate in front of it.</p>
-<p>A full scan runs only after somebody has proved control of the domain — by publishing a DNS TXT record at <code>_glarion-verify.yourdomain</code> or a token file at <code>/.well-known/glarion-verify.txt</code> — and that proof expires after 30 days and is checked again at the moment the scan runs. If you did not create either of those and nobody with access to your DNS did, no full scan of your domain has happened.</p>
+<p>A full scan runs only after somebody has proved control of the domain — by publishing a DNS TXT record at <code>_glarion-verify.yourdomain</code> or a token file at <code>/.well-known/glarion-verify.txt</code> — and that proof expires after 30 days and is checked again at the moment the scan runs. If you believe a scan was not authorised by you or your agency, contact us using the disclosure details below.</p>
 <p>The full scan is performed by a separate scanner process which sends its own default User-Agent rather than <code>Glarion/1.0</code>, so a scan is not identifiable by that header. It runs at 20 requests per second with bounded concurrency, and with the fuzzing, brute-force, denial-of-service and intrusive template categories excluded. A domain is capped at six full scans per rolling 24 hours.</p>
 <p>A request for <code>/.well-known/glarion-verify.txt</code> carrying <code>Glarion/1.0</code> is somebody attempting to prove control of your domain. If that was not you or your agency, it failed — the file has to exist and contain a token we generated — but it is worth knowing about.</p>
 </section>
