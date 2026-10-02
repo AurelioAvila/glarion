@@ -29,6 +29,7 @@ credentials.json
 .DS_Store
 Thumbs.db
 .preview/
+.runtime/
 /.impeccable/review/
 
 # Frontend build output and dependencies
