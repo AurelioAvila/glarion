@@ -1,10 +1,11 @@
 # Production deployment (manual, signed)
 
-The Fly application was deleted. Its DNS and webhook destinations are historical
-and must not be treated as a working production service. The zero-cost local
-recovery is described in [LOCAL-RECOVERY.md](LOCAL-RECOVERY.md); it remains pending
-until the final signed package, supervised startup, email delivery and public
-smoke checks succeed. Do not recreate paid hosting to work around that gate.
+The Fly application was deleted. Its former deployment instructions below are
+historical. The signed local API and worker now run behind the existing free
+Cloudflare Tunnel; public HTTPS health and page checks pass. Transactional email
+restoration remains pending access to the correct Resend account. See
+[LOCAL-RECOVERY.md](LOCAL-RECOVERY.md) for the current architecture and limitations.
+Do not recreate paid hosting to work around that remaining credential access.
 
 The Fly Actions deploy job is disabled with `if: ${{ false }}`. The unsigned
 source helper exits without deploying. The active path is
