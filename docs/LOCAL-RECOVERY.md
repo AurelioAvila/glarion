@@ -1,8 +1,9 @@
 # Local recovery — 2 October 2026
 
 Status: the signed local backend is deployed; public HTTPS health returns **200**.
-Transactional email remains incomplete, so new-account activation and password
-recovery are not yet verified. The existing database and its nine users are preserved.
+Transactional email is configured; the provider confirms delivery of the
+password-recovery email and partial website report. The existing database and
+its nine users are preserved.
 
 ## Runtime
 
@@ -51,9 +52,12 @@ logon trigger and a one-minute restart interval, under the limited operator user
    are signed, timestamped and verified; a modified static file is rejected.
    The operator check is `pwsh -File scripts/check-local-release.ps1`. Run its
    tamper check on a staging package before exposing it publicly.
-2. Create the authorized Resend `glarion-local-mail` key with Sending access for
-   `glarion.app` only, and store it in DPAPI. The browser account currently
-   open does not contain this domain, although the connector sees it verified.
+2. The authorized Resend `glarion-local-mail` key has Sending access for
+   `glarion.app` only and is stored in DPAPI. Both components were restarted.
+   Resend confirms delivery of the recovery email and partial report, including
+   HTML/plain text, the official recovery destination and pricing/sample links.
+   The runtime can update only `last_sent_at` and `send_count` in
+   `preview_email_sends`; recipient hashes cannot be updated.
 3. The rotated live Glarion Stripe key and existing webhook secret are encrypted
    locally. Six active EUR prices have been verified: Solo 19/month or 170/year,
    Studio 39/month or 350/year, Agency 99/month or 750/year. The existing
@@ -67,8 +71,9 @@ logon trigger and a one-minute restart interval, under the limited operator user
 5. Public health, nine public pages/endpoints, anonymous access rejection and
    unsigned webhook rejection pass. The public check of `glarion.app` returned
    twelve observations and its scope caveat. Sign-in and registration pages
-   render; real account activation/recovery, preview delivery and purchase
-   completion remain pending email configuration. No real purchase was made.
+   render. Preview delivery and the recovery email are verified. Activating a
+   new account, submitting a password change and completing a real purchase
+   were not performed; no real purchase was made.
 
 Local verification completed: backend tests including the migration-history
 regression and Cloudflare address parsing, frontend tests and build, Clippy,

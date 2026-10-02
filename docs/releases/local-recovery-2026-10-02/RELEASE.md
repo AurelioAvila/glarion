@@ -1,7 +1,8 @@
 # Signed local backend recovery — 2 October 2026
 
-Backend restored; transactional email remains incomplete. This is not a claim
-that registration, account recovery or the complete purchase flow has passed.
+Backend and transactional email restored. Public pages, the free website check,
+partial-report delivery and the password-recovery email are verified. This does
+not claim a completed new-account activation, password change or real purchase.
 
 - Runtime source commit: `256694c`.
 - API and worker run in local Windows scheduled tasks, through the signed native
@@ -15,6 +16,10 @@ that registration, account recovery or the complete purchase flow has passed.
 - The rotated live Stripe key and existing webhook signing secret are stored
   under CurrentUser DPAPI. The existing webhook now targets the Glarion domain;
   all four event subscriptions are unchanged. Six live EUR prices verified.
+- A dedicated, domain-restricted Resend sending key is encrypted locally.
+  Provider receipts confirm delivery of the recovery email and partial report,
+  with HTML/plain text and the official recovery, pricing and sample links.
+  Email anti-spam counters have column-scoped update privileges only.
 - Publisher: Aurelio Avila, certificate thumbprint
   `4F8341A74D16077AE1849DC8B8CAC99F22606754`; DigiCert timestamp present. Native
   launcher, API, worker, Nuclei and signed package manifest verified. Package
@@ -31,8 +36,6 @@ that registration, account recovery or the complete purchase flow has passed.
   frontend tests/build, formatting, Clippy, dependency audit, optimized build,
   native signature/hash verification and tamper rejection passed.
 
-Outstanding: create the approved domain-restricted Resend sending key from the
-account containing `glarion.app`, import it encrypted, restart both components,
-then verify confirmation/recovery and preview delivery. No real payment was
-made. This local hosting requires the PC, operator session and connection to
+No real payment, new-account activation or password change was performed.
+This local hosting requires the PC, operator session and connection to
 remain available; it is not an independent always-on cloud server.
