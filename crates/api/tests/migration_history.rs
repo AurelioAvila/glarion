@@ -34,6 +34,7 @@ async fn orphaned_history_is_tolerated_but_present_checksums_are_enforced() {
         .await
         .unwrap();
     api::migrate_database(&pool).await.unwrap();
+    api::verify_database(&pool).await.unwrap();
     sqlx::query("insert into _sqlx_migrations (version, description, success, checksum, execution_time) values (11, 'historical growth counts', true, decode('00','hex'), 0)")
         .execute(&pool).await.unwrap();
     api::migrate_database(&pool).await.unwrap();
@@ -44,11 +45,22 @@ async fn orphaned_history_is_tolerated_but_present_checksums_are_enforced() {
     .await
     .unwrap();
     assert!(version_13);
+    api::verify_database(&pool).await.unwrap();
+    sqlx::query("update _sqlx_migrations set success = false where version = 13")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(api::verify_database(&pool).await.is_err());
+    sqlx::query("update _sqlx_migrations set success = true where version = 13")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("update _sqlx_migrations set checksum = decode('00','hex') where version = 13")
         .execute(&pool)
         .await
         .unwrap();
     let result = api::migrate_database(&pool).await;
+    assert!(api::verify_database(&pool).await.is_err());
     pool.close().await;
     sqlx::query(&format!("drop schema {schema} cascade"))
         .execute(&admin)
