@@ -28,8 +28,38 @@ pub async fn migrate_database(pool: &sqlx::PgPool) -> Result<(), sqlx::migrate::
     migrator.run(pool).await
 }
 
+/// A runtime role can validate an operator-migrated schema without DDL grants.
+pub async fn verify_database(pool: &sqlx::PgPool) -> Result<()> {
+    let applied: Vec<(i64, bool, Vec<u8>)> =
+        sqlx::query_as("SELECT version, success, checksum FROM _sqlx_migrations")
+            .fetch_all(pool)
+            .await?;
+    anyhow::ensure!(
+        applied.iter().all(|(_, success, _)| *success),
+        "incomplete database migration"
+    );
+    for migration in sqlx::migrate!("../../migrations").iter() {
+        let entry = applied
+            .iter()
+            .find(|(version, _, _)| *version == migration.version)
+            .with_context(|| {
+                format!(
+                    "database migration {} must be applied by an operator",
+                    migration.version
+                )
+            })?;
+        anyhow::ensure!(
+            entry.2 == migration.checksum.as_ref(),
+            "database migration {} checksum mismatch",
+            migration.version
+        );
+    }
+    Ok(())
+}
+
 pub async fn run() -> Result<()> {
     let config = Config::from_env().context("invalid configuration")?;
+    let proxy_header = trusted_proxy_header();
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -37,9 +67,15 @@ pub async fn run() -> Result<()> {
         .await
         .context("could not connect to the database")?;
 
-    migrate_database(&pool)
-        .await
-        .context("database migration failed")?;
+    if std::env::var("DATABASE_MIGRATIONS").as_deref() == Ok("verify") {
+        verify_database(&pool)
+            .await
+            .context("database schema verification failed")?;
+    } else {
+        migrate_database(&pool)
+            .await
+            .context("database migration failed")?;
+    }
 
     let state = AppState::new(pool, config.jwt_secret.clone());
 
@@ -92,17 +128,23 @@ pub async fn run() -> Result<()> {
     // Outermost on purpose: everything downstream, the rate limiters and the
     // scan audit trail included, reads the connection address, and behind a
     // proxy that address is the proxy's for every caller alive.
-    let app = if trusts_proxy_client_ip() {
-        tracing::info!(
-            "trusting {} for the client address",
-            rate_limit::CLIENT_IP_HEADER
-        );
-        app.layer(axum::middleware::from_fn(use_forwarded_client_ip))
+    let app = if let Some(header) = proxy_header {
+        tracing::info!("trusting {header} for the client address");
+        app.layer(axum::middleware::from_fn(move |request, next| {
+            use_forwarded_client_ip(request, next, header)
+        }))
     } else {
         app
     };
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    // The Cloudflare connector is local. No LAN listener may bypass it and
+    // forge the trusted header or reach customer endpoints directly.
+    let bind_ip = if proxy_header == Some("cf-connecting-ip") {
+        [127, 0, 0, 1]
+    } else {
+        [0, 0, 0, 0]
+    };
+    let addr = SocketAddr::from((bind_ip, config.port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, "glarion api listening");
 
@@ -119,12 +161,17 @@ pub async fn run() -> Result<()> {
 
 /// Whether a proxy in front of this process overwrites the client-IP header.
 ///
-/// Set in fly.toml and nowhere else. Off by default because believing the
+/// Select Fly or the local Cloudflare connector. Off by default: believing a
 /// header without a proxy that rewrites it hands every caller a private
 /// rate-limit bucket, which is worse than sharing one.
-fn trusts_proxy_client_ip() -> bool {
-    std::env::var("TRUST_PROXY_CLIENT_IP")
-        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+fn trusted_proxy_header() -> Option<&'static str> {
+    match std::env::var("TRUST_PROXY_CLIENT_IP").ok().as_deref() {
+        Some(value) if value == "1" || value.eq_ignore_ascii_case("true") => {
+            Some(rate_limit::CLIENT_IP_HEADER)
+        }
+        Some("cloudflare") => Some("cf-connecting-ip"),
+        _ => None,
+    }
 }
 
 /// Replaces the connection address with the one the trusted proxy reported.
@@ -135,8 +182,9 @@ fn trusts_proxy_client_ip() -> bool {
 async fn use_forwarded_client_ip(
     mut request: axum::extract::Request,
     next: axum::middleware::Next,
+    header: &'static str,
 ) -> axum::response::Response {
-    if let Some(client) = rate_limit::forwarded_client_ip(request.headers()) {
+    if let Some(client) = rate_limit::forwarded_client_ip(request.headers(), header) {
         // Port zero rather than the proxy's: the address is the client's, the
         // port belonged to a different connection, and nothing reads it.
         request
