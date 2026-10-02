@@ -257,13 +257,8 @@ async fn collect(client: &reqwest::Client, domain: &str) -> Result<Preview, Prev
     Ok(preview)
 }
 
-/// What an SPF record says about mail claiming to come from this domain.
-///
-/// Pure, so the parsing is tested without a resolver. SPF is one TXT record
-/// beginning `v=spf1`; the part that matters is how it ends. `-all` refuses
-/// everything not listed, `~all` asks the receiver to accept it and mark it
-/// as suspicious, and `?all` states no opinion at all — which for a domain
-/// that sends invoices is close to publishing nothing.
+/// Summary of the published SPF policy, not a message-level authentication
+/// or delivery test. Receivers decide how to handle the authentication result.
 pub fn spf_summary(records: &[String]) -> Observation {
     let record = records
         .iter()
@@ -280,16 +275,19 @@ pub fn spf_summary(records: &[String]) -> Observation {
 
     let lowered = record.to_ascii_lowercase();
     let (value, is_finding) = if lowered.contains("-all") {
-        ("Strict — unlisted senders refused", false)
+        (
+            "Unlisted senders fail SPF; receiver decides handling",
+            false,
+        )
     } else if lowered.contains("~all") {
-        ("Soft fail — unlisted senders only marked", true)
+        (
+            "Soft fail for unlisted senders; receiver decides handling",
+            true,
+        )
     } else if lowered.contains("?all") {
         ("Neutral — states no opinion", true)
     } else {
-        (
-            "Published, but does not say what to do with unlisted senders",
-            true,
-        )
+        ("Published; no explicit all policy found", true)
     };
 
     Observation {
@@ -299,12 +297,8 @@ pub fn spf_summary(records: &[String]) -> Observation {
     }
 }
 
-/// What a DMARC record instructs receivers to do.
-///
-/// SPF alone tells a receiver how to judge a message; DMARC is what tells
-/// it to act. `p=none` is the setting almost every domain is left on after
-/// somebody "set up DMARC" — it monitors and nothing else, so a forged
-/// invoice still lands in the customer's inbox.
+/// Requested policy for messages failing DMARC. Actual delivery also depends
+/// on authentication, alignment and the receiver's local policy.
 pub fn dmarc_summary(records: &[String]) -> Observation {
     let record = records
         .iter()
@@ -326,10 +320,16 @@ pub fn dmarc_summary(records: &[String]) -> Observation {
         .find_map(|part| part.strip_prefix("p=").map(|p| p.trim().to_string()));
 
     let (value, is_finding) = match policy.as_deref() {
-        Some("reject") => ("Forgeries rejected".to_string(), false),
-        Some("quarantine") => ("Forgeries sent to spam".to_string(), false),
+        Some("reject") => (
+            "Rejection requested for mail that fails DMARC".to_string(),
+            false,
+        ),
+        Some("quarantine") => (
+            "Quarantine requested for mail that fails DMARC".to_string(),
+            false,
+        ),
         Some("none") => (
-            "Monitoring only — forgeries still delivered".to_string(),
+            "Monitoring policy; no DMARC rejection requested".to_string(),
             true,
         ),
         _ => ("Published without a policy".to_string(), true),
@@ -548,10 +548,10 @@ mod tests {
     }
 
     #[test]
-    fn spf_reads_the_ending_that_decides_what_receivers_do() {
+    fn spf_summarises_the_published_qualifier() {
         assert!(!spf_summary(&["v=spf1 include:_spf.google.com -all".into()]).is_finding);
 
-        // The two settings that look like protection and are not.
+        // Less strict published policies are surfaced for review.
         assert!(spf_summary(&["v=spf1 include:example.com ~all".into()]).is_finding);
         assert!(spf_summary(&["v=spf1 ?all".into()]).is_finding);
 
@@ -566,11 +566,10 @@ mod tests {
         assert!(!dmarc_summary(&["v=DMARC1; p=reject; rua=mailto:a@b.c".into()]).is_finding);
         assert!(!dmarc_summary(&["v=DMARC1; p=quarantine".into()]).is_finding);
 
-        // The setting nearly every domain is left on: it reports and does
-        // nothing, so a forgery still reaches the customer.
+        // Monitoring requests no DMARC delivery action; it does not prove delivery.
         let monitoring = dmarc_summary(&["v=DMARC1; p=none; rua=mailto:a@b.c".into()]);
         assert!(monitoring.is_finding);
-        assert!(monitoring.value.contains("still delivered"));
+        assert!(monitoring.value.contains("no DMARC rejection requested"));
 
         assert!(dmarc_summary(&[]).is_finding);
     }
