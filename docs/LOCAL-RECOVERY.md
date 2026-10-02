@@ -1,11 +1,12 @@
 # Local recovery — 2 October 2026
 
-Status: prepared and tested locally; **not deployed**. Public health still returns
-HTTP 525. The existing database and its nine users are preserved.
+Status: the signed local backend is deployed; public HTTPS health returns **200**.
+Transactional email remains incomplete, so new-account activation and password
+recovery are not yet verified. The existing database and its nine users are preserved.
 
 ## Runtime
 
-The intended path is the existing Cloudflare Tunnel → `127.0.0.1:8187` → the
+The active path is the existing Cloudflare Tunnel → `127.0.0.1:8187` → the
 Windows API, with a separate Windows scan worker and the existing Supabase Free
 database. Preserve the tunnel's other application routes and all email DNS.
 No inbound firewall port is needed. Availability depends on this PC being on,
@@ -41,30 +42,37 @@ restore its exact original bytes. Any later change requires re-signing.
 Only after these checks, configure `GlarionLocalAPI` and `GlarionLocalWorker` to
 run the signed launcher directly with `api` and `runner`, respectively, using
 the existing interactive limited user and restart settings. Do not weaken
-PowerShell policy. The tasks remain disabled while the package is incomplete.
+PowerShell policy. Both tasks now run the verified launcher directly, with a
+logon trigger and a one-minute restart interval, under the limited operator user.
 
 ## Completion checks
 
-1. Reconnect SimplySign Desktop: the provider currently reports its device not
-   ready. Do not publish an unsigned launcher or incomplete manifest.
+1. SimplySign was reconnected. The final native launcher and package manifest
+   are signed, timestamped and verified; a modified static file is rejected.
+   The operator check is `pwsh -File scripts/check-local-release.ps1`. Run its
+   tamper check on a staging package before exposing it publicly.
 2. Create the authorized Resend `glarion-local-mail` key with Sending access for
    `glarion.app` only, and store it in DPAPI. The browser account currently
    open does not contain this domain, although the connector sees it verified.
 3. The rotated live Glarion Stripe key and existing webhook secret are encrypted
    locally. Six active EUR prices have been verified: Solo 19/month or 170/year,
-   Studio 39/month or 350/year, Agency 99/month or 750/year. Update the existing
-   Glarion webhook URL from the deleted Fly hostname to
-   `https://glarion.app/api/billing/webhook` when the new service is ready;
-   preserve its four event subscriptions and avoid duplicate endpoints.
-4. Confirm supervised API/worker startup, local health, configured email and
-   Stripe; then add Glarion to the existing tunnel and replace only its old
-   Fly A/AAAA records with proxied tunnel CNAME records.
-5. Verify public HTTPS health, landing, app authentication, email confirmation
-   and recovery, preview email, plan selection and signed webhook processing.
-   Do not make real purchases to test. Record receipts before declaring success.
+   Studio 39/month or 350/year, Agency 99/month or 750/year. The existing
+   Glarion webhook URL is now `https://glarion.app/api/billing/webhook`;
+   its four event subscriptions and signing secret are preserved. No duplicate
+   endpoint or payment was created.
+4. Supervised API/worker startup and loopback binding are verified. The existing
+   tunnel has two added Glarion hostnames; its Second Take route is unchanged.
+   Only four obsolete Fly A/AAAA records were replaced with two proxied CNAME
+   records. Email records were preserved.
+5. Public health, nine public pages/endpoints, anonymous access rejection and
+   unsigned webhook rejection pass. The public check of `glarion.app` returned
+   twelve observations and its scope caveat. Sign-in and registration pages
+   render; real account activation/recovery, preview delivery and purchase
+   completion remain pending email configuration. No real purchase was made.
 
 Local verification completed: backend tests including the migration-history
 regression and Cloudflare address parsing, frontend tests and build, Clippy,
 formatting, dependency audit and optimized API/worker build. Final native package
-verification correctly stops on the unsigned launcher; its success and tamper
-checks remain pending the signing session.
+verification, publisher/timestamp checks and tamper rejection now pass. The
+signed package and public-check receipts are recorded under
+`docs/releases/local-recovery-2026-10-02/`.
