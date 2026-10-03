@@ -192,6 +192,17 @@ pub fn status_grants_access(status: &str) -> bool {
     matches!(status, "active" | "trialing" | "past_due")
 }
 
+/// Free trial length for a checkout, if one applies.
+///
+/// Only Solo, and only for an account that has never been a Stripe
+/// customer: an agency cannot judge a full scan from the public check, so
+/// the entry plan lets them run real ones before paying. A card is still
+/// collected up front, which keeps the trial from becoming a way to scan
+/// for free indefinitely with fresh accounts.
+pub fn trial_days(plan: Plan, has_billing_history: bool) -> Option<u32> {
+    (plan == Plan::Solo && !has_billing_history).then_some(14)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SignatureError {
     #[error("the signature header is missing or malformed")]
@@ -462,6 +473,14 @@ mod tests {
         assert!(status_grants_access("past_due"));
         assert!(status_grants_access("active"));
         assert!(status_grants_access("trialing"));
+    }
+
+    #[test]
+    fn only_a_first_solo_subscription_starts_with_a_trial() {
+        assert_eq!(trial_days(Plan::Solo, false), Some(14));
+        assert_eq!(trial_days(Plan::Solo, true), None);
+        assert_eq!(trial_days(Plan::Studio, false), None);
+        assert_eq!(trial_days(Plan::Agency, false), None);
     }
 
     #[test]

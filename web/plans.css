@@ -27,6 +27,7 @@
 .purchase-cost strong { font-size:2.5rem; line-height:1.2; letter-spacing:-.03em; font-weight:650; }
 .purchase-cost span { font-size:1rem; color:var(--offer-muted); }
 .purchase-saving { color:var(--offer-muted); font-size:.9375rem; line-height:1.55; padding-top:.6rem; min-height:3.7em; }
+.purchase-trial { align-self:flex-start; color:#6520a0; background:#ede2fa; border:1px solid #d6bcec; padding:.2rem .5rem; border-radius:6px; font-size:.875rem; font-weight:750; margin:0 0 .75rem; }
 .purchase-allowance { border-top:1px solid var(--offer-rule); font-size:1.125rem; font-weight:750; padding:1rem 0 .75rem; }
 .purchase-features { margin:0 0 1.75rem; padding-left:1.1rem; color:var(--offer-muted); font-size:.9375rem; line-height:1.65; }
 .purchase-features li { padding:.3rem 0; color:inherit; }
