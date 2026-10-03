@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/api", "crates/orchestrator", "crates/report"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.4.6"
 edition = "2021"
 license = "UNLICENSED"
 publish = false
