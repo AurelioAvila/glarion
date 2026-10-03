@@ -38,3 +38,11 @@ web/dist/
 
 # Local editor/tool settings
 .claude/
+
+# Internal planning, design and review notes (kept out of the public repository)
+/.impeccable/
+/PIANO-CRESCITA.md
+/VERIFICA-*.md
+/PRODUCT.md
+/DESIGN.md
+/docs/growth/
