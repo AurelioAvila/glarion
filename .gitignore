@@ -35,3 +35,6 @@ Thumbs.db
 # Frontend build output and dependencies
 web/node_modules/
 web/dist/
+
+# Local editor/tool settings
+.claude/
