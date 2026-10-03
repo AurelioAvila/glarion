@@ -410,7 +410,7 @@ pub fn with_static_files(router: Router, web_root: &std::path::Path) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
-                "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-WLJsZgWYV6G+rcHqpPVxt4ubAAbZ46TYUXUFnDlN0W4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests",
+                "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-WLJsZgWYV6G+rcHqpPVxt4ubAAbZ46TYUXUFnDlN0W4=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; upgrade-insecure-requests",
             ),
         ))
         .layer(SetResponseHeaderLayer::overriding(
