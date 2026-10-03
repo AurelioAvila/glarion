@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::billing::{
-    plan_for_price, price_env_var, status_grants_access, verify_signature, Interval, Plan,
+    plan_for_price, price_env_var, status_grants_access, trial_days, verify_signature, Interval,
+    Plan,
 };
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
@@ -153,6 +154,20 @@ pub async fn start_checkout(
         // rate right per country is not something to hand-roll.
         ("automatic_tax[enabled]".into(), "true".into()),
     ];
+
+    if let Some(days) = trial_days(plan, customer_id.is_some()) {
+        form.push((
+            "subscription_data[trial_period_days]".into(),
+            days.to_string(),
+        ));
+        form.push(("payment_method_collection".into(), "always".into()));
+        // Belt and braces: with the card collected above this cannot
+        // trigger, but a trial must never roll into an unpaid subscription.
+        form.push((
+            "subscription_data[trial_settings][end_behavior][missing_payment_method]".into(),
+            "cancel".into(),
+        ));
+    }
 
     // Reuse the customer when there is one, so a second subscription does
     // not create a duplicate record with the same person in it.

@@ -2462,6 +2462,7 @@ async function renderPlan(): Promise<void> {
   container.append(
     el("p", { class: "muted", style: "margin-top:1.5rem" }, [
       "Prices exclude VAT. Any applicable tax and the final total are shown in Stripe before you pay. ",
+      subscription.manageable ? "" : "Solo starts with a 14-day free trial for new subscribers: you add a card at checkout and are charged only if you keep Solo after day 14. ",
       "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
     ]),
   );
@@ -2524,7 +2525,11 @@ function planRow(
       state.append(el("span", { class: "plan-discount", text: `Save ${annual!.discount}% with yearly billing` }));
     }
 
-    const subscribe = el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` });
+    // Mirrors trial_days() in the API: Solo, for an account with no billing
+    // history yet. The server decides; this only says so before checkout.
+    const trial = offer.plan === "solo" && !subscription.manageable;
+    if (trial) state.append(el("span", { class: "plan-discount", text: "14-day free trial" }));
+    const subscribe = el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : trial ? "Start 14-day free trial" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` });
     on(subscribe, "click", () => {
       clear(message);
       void withPending(subscribe, "Opening…", async () => {
