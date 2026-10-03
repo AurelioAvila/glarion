@@ -36,7 +36,7 @@ For each new deployment:
    [`image-manifest.ps1`](releases/growth-2026-09-08/image-manifest.ps1):
    comment lines for `image=`, `config-sha256=` and `source-commit=`. Compute
    the configuration hash with `Get-FileHash fly.toml -Algorithm SHA256`. Sign
-   the finished manifest with the user's publisher certificate and a trusted
+   the finished manifest with the Glarion publisher certificate and a trusted
    timestamp using the approved local signing session. Keep private keys,
    passwords and authentication codes out of the repository. The manifest is
    signed data; never execute it.

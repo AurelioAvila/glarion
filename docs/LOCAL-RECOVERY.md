@@ -27,7 +27,7 @@ the operator being signed in, and the internet connection staying available.
 ## Release gate
 
 Build `scripts/Local-Service.cs` with the installed .NET Framework compiler.
-Sign the final API, worker, Nuclei and native launcher with the user's publisher
+Sign the final API, worker, Nuclei and native launcher with the Glarion publisher
 certificate and a trusted timestamp. Package the built frontend and Supabase CA
 with them. Create `manifest.ps1` containing one `# files=` JSON dictionary of
 relative paths to SHA-256 hashes, then sign that manifest after packaging.
