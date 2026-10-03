@@ -304,8 +304,6 @@ avoids both the shell dependency and duplicating what Nuclei's own
 - The IPv6 destination policy deliberately excludes special-purpose and
   transition ranges, including some legitimate non-website protocol services.
 - Passing tests and dependency audits does not establish complete security.
-  See [the local review](VERIFICA-SICUREZZA.md) for implemented changes,
-  evidence and outstanding infrastructure checks.
 
 - Nuclei resolves the hostname independently after Glarion's address check,
   so a DNS change can occur between that check and a scanner connection.
