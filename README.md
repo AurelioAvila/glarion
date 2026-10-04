@@ -184,7 +184,7 @@ Check the run for the commit you are evaluating rather than relying on a
 previously successful build. One advisory is deliberately ignored by the
 local audit — see [`.cargo/audit.toml`](.cargo/audit.toml).
 
-Production deployment currently uses the [signed manual procedure](docs/DEPLOYMENT.md). The automatic Fly deploy job and unsigned source deploy helper remain disabled.
+Production deployment uses a signed manual procedure. The automatic Fly deploy job and unsigned source deploy helper remain disabled.
 
 ### The development database
 
