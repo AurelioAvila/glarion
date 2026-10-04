@@ -16,6 +16,7 @@ pub mod mailer;
 pub mod net_guard;
 pub mod policy;
 pub mod preview;
+pub mod renewal;
 pub mod runner;
 pub mod schedule;
 pub mod scheduler;

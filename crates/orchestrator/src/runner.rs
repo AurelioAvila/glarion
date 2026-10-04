@@ -29,9 +29,40 @@ struct ClaimedJob {
     tool: String,
 }
 
+/// A job still marked running after this long was interrupted (a restart or
+/// a power cut mid-scan): the longest scan is capped well below it.
+const STALE_RUNNING_MINUTES: i32 = 60;
+
+/// Puts interrupted jobs back in the queue. Without this a restart during a
+/// scan left the job marked running for good and the scan never happened.
+async fn requeue_interrupted(pool: &PgPool) {
+    match sqlx::query(
+        "update scan_jobs set status = 'queued', started_at = null
+         where status = 'running' and started_at < now() - make_interval(mins => $1)",
+    )
+    .bind(STALE_RUNNING_MINUTES)
+    .execute(pool)
+    .await
+    {
+        Ok(done) if done.rows_affected() > 0 => {
+            tracing::warn!(
+                jobs = done.rows_affected(),
+                "requeued interrupted scan jobs"
+            );
+        }
+        Ok(_) => {}
+        Err(err) => tracing::error!(error = ?err, "could not requeue interrupted jobs"),
+    }
+}
+
 /// Runs until cancelled. Intended to be spawned as its own task or process.
 pub async fn run_forever(pool: PgPool, mailer: Mailer) {
+    let mut last_sweep = std::time::Instant::now() - std::time::Duration::from_secs(3600);
     loop {
+        if last_sweep.elapsed() >= std::time::Duration::from_secs(600) {
+            requeue_interrupted(&pool).await;
+            last_sweep = std::time::Instant::now();
+        }
         match claim_next_job(&pool).await {
             Ok(Some(job)) => {
                 let job_id = job.id;

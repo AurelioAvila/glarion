@@ -127,6 +127,24 @@ pub async fn start_checkout(
             ApiError::Internal(anyhow::anyhow!("billing is not configured"))
         })?;
 
+    // A second checkout would start a second subscription, and cancelling
+    // the old one later would then drop the account to free while the new
+    // one is still being paid. Plan changes go through the billing portal.
+    let current: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "select stripe_subscription_id, subscription_status from entitlements
+         where user_id = $1 and product = 'glarion'",
+    )
+    .bind(user.id)
+    .fetch_optional(&state.pool)
+    .await?;
+    if let Some((Some(_), Some(status))) = current {
+        if status_grants_access(&status) {
+            return Err(ApiError::Conflict(
+                "you already have a subscription; change plan from Manage billing".into(),
+            ));
+        }
+    }
+
     let secret = stripe_secret()?;
     let email = account_email(&state, user.id).await?;
     let customer_id = existing_customer(&state, user.id).await?;
@@ -278,10 +296,15 @@ pub async fn webhook(
     // Claim before working. Stripe retries on any non-2xx and redelivers
     // after a timeout even when the work did happen, so a second copy has
     // to find the door already shut rather than rely on each handler
-    // happening to be idempotent.
+    // happening to be idempotent. A claim that never completed — the work
+    // failed and Stripe is retrying — is taken over once it is two minutes
+    // old, long enough that it cannot still be in progress; otherwise a
+    // single failed attempt would drop the event for good.
     let claimed: Option<(String,)> = sqlx::query_as(
         "insert into stripe_events (id, event_type) values ($1, $2)
-         on conflict (id) do nothing
+         on conflict (id) do update set received_at = now()
+           where stripe_events.completed_at is null
+             and stripe_events.received_at < now() - interval '2 minutes'
          returning id",
     )
     .bind(event_id)
@@ -290,9 +313,19 @@ pub async fn webhook(
     .await?;
 
     if claimed.is_none() {
-        // Already seen. Answering 200 stops Stripe retrying something that
-        // is done.
-        return Ok("duplicate");
+        let done: Option<(bool,)> =
+            sqlx::query_as("select completed_at is not null from stripe_events where id = $1")
+                .bind(event_id)
+                .fetch_optional(&state.pool)
+                .await?;
+        if matches!(done, Some((true,))) {
+            // Already applied. Answering 200 stops Stripe retrying it.
+            return Ok("duplicate");
+        }
+        // Claimed moments ago and not finished: in progress, or just failed.
+        // A non-2xx keeps Stripe retrying until a later delivery can take
+        // the claim over.
+        return Err(ApiError::Conflict("event is still being processed".into()));
     }
 
     if let Err(error) = apply(&state, event_type, &event).await {
@@ -416,6 +449,31 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         .and_then(|seconds| Utc.timestamp_opt(seconds, 0).single());
 
     let subscription_id = subscription.get("id").and_then(|value| value.as_str());
+
+    // An event about an older subscription must not overwrite a newer one
+    // that is still paid for: cancelling a replaced subscription would
+    // otherwise drop the account to free.
+    let current: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "select stripe_subscription_id, subscription_status from entitlements
+         where product = 'glarion' and (stripe_customer_id = $1 or user_id = $2)",
+    )
+    .bind(customer)
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    if let Some((Some(current_id), Some(current_status))) = &current {
+        if Some(current_id.as_str()) != subscription_id
+            && status_grants_access(current_status)
+            && !status_grants_access(status)
+        {
+            tracing::info!(
+                current_id,
+                ?subscription_id,
+                "ignored an event for a replaced subscription"
+            );
+            return Ok(());
+        }
+    }
 
     // Read the plan this account is on before the update overwrites it, so a
     // first paid subscription can be told apart from a renewal. Stripe sends
