@@ -89,6 +89,11 @@ COPY web web
 RUN rm -rf web/src web/package.json web/package-lock.json web/tsconfig.json
 COPY --from=web /web/dist web/dist
 
+# Supabase's public root CA. DATABASE_URL pins it with
+# sslrootcert=/app/supabase-ca.crt and sslmode=verify-full, so the database
+# connection is checked against this certificate, not the system store.
+COPY deploy/supabase-ca.crt supabase-ca.crt
+
 RUN chown -R glarion:glarion /app
 USER glarion
 ENV HOME=/home/glarion
