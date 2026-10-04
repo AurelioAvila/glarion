@@ -114,6 +114,9 @@ pub enum Change {
     Resolved { from: i64 },
     /// Was clear, now is not.
     Appeared { to: i64 },
+    /// New issues appeared while others were fixed, so the total did not
+    /// rise. Counting alone would have stayed silent about them.
+    Replaced { new: i64, to: i64 },
 }
 
 impl Change {
@@ -147,6 +150,20 @@ pub fn compare(previous: Option<i64>, current: i64) -> Change {
     }
 }
 
+/// Compares by identity as well as by count: any issue absent from the last
+/// scan is news even when fixes elsewhere kept the total flat or lower.
+pub fn compare_identities(previous: Option<&[String]>, current: &[String]) -> Change {
+    let Some(previous) = previous else {
+        return Change::None;
+    };
+    let new = current.iter().filter(|key| !previous.contains(key)).count() as i64;
+    let (from, to) = (previous.len() as i64, current.len() as i64);
+    if new > 0 && to <= from && from > 0 {
+        return Change::Replaced { new, to };
+    }
+    compare(Some(from), to)
+}
+
 /// The one-line summary used as an email subject.
 pub fn headline(domain: &str, change: &Change) -> String {
     match change {
@@ -161,6 +178,9 @@ pub fn headline(domain: &str, change: &Change) -> String {
             format!("{domain}: {} to fix, down from {from}", to)
         }
         Change::Resolved { .. } => format!("{domain} is clear"),
+        Change::Replaced { new, .. } => {
+            format!("{new} new {} on {domain}", plural(*new, "issue", "issues"))
+        }
     }
 }
 
@@ -316,6 +336,42 @@ mod tests {
         assert_eq!(
             headline("acme.com", &Change::Worse { from: 2, to: 5 }),
             "acme.com: 5 to fix, up from 2"
+        );
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    fn keys(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn a_new_issue_is_reported_even_when_the_total_does_not_rise() {
+        let before = keys(&["missing-hsts|HSTS", "old-tls|TLS 1.0"]);
+        let after = keys(&["missing-hsts|HSTS", "exposed-git|.git exposed"]);
+        assert_eq!(
+            compare_identities(Some(&before), &after),
+            Change::Replaced { new: 1, to: 2 }
+        );
+        assert_eq!(
+            headline("client.example", &Change::Replaced { new: 1, to: 2 }),
+            "1 new issue on client.example"
+        );
+        let fixed = keys(&["exposed-git|.git exposed"]);
+        assert_eq!(
+            compare_identities(Some(&before), &fixed),
+            Change::Replaced { new: 1, to: 1 }
+        );
+        // Same issues, same count: nothing to say. First scan: nothing to compare.
+        assert_eq!(compare_identities(Some(&before), &before), Change::None);
+        assert_eq!(compare_identities(None, &after), Change::None);
+        // Only fixes: the existing count-based outcome.
+        assert_eq!(
+            compare_identities(Some(&before), &keys(&["missing-hsts|HSTS"])),
+            Change::Better { from: 2, to: 1 }
         );
     }
 }

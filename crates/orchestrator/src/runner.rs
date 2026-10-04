@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::finding::Finding;
 use crate::mailer::{change_email, Mailer};
-use crate::schedule::{compare, headline};
+use crate::schedule::headline;
 use crate::tools::{nuclei, tls};
 use crate::verification::{is_currently_verified, VerificationStatus};
 
@@ -148,7 +148,7 @@ async fn execute(pool: &PgPool, mailer: &Mailer, job: ClaimedJob) -> anyhow::Res
 
     // The count that was compared against last time, captured before this
     // job is marked complete so it cannot find itself.
-    let previous = previous_actionable_count(pool, job.target_id, &job.tool, job.id).await?;
+    let previous = previous_actionable_keys(pool, job.target_id, &job.tool, job.id).await?;
 
     store_findings(pool, job.id, &findings).await?;
 
@@ -159,8 +159,17 @@ async fn execute(pool: &PgPool, mailer: &Mailer, job: ClaimedJob) -> anyhow::Res
 
     tracing::info!(job_id = %job.id, findings = findings.len(), "scan completed");
 
-    let current = crate::triage::triage_scan(&findings).actionable.len() as i64;
-    report_change(pool, mailer, &job, previous, current).await;
+    let current = actionable_keys(&findings);
+    let change = crate::schedule::compare_identities(previous.as_deref(), &current);
+    report_change(
+        pool,
+        mailer,
+        &job,
+        change,
+        previous.map(|keys| keys.len() as i64),
+        current.len() as i64,
+    )
+    .await;
 
     Ok(())
 }
@@ -178,10 +187,10 @@ async fn report_change(
     pool: &PgPool,
     mailer: &Mailer,
     job: &ClaimedJob,
+    change: crate::schedule::Change,
     previous: Option<i64>,
     current: i64,
 ) {
-    let change = compare(previous, current);
     if !change.worth_reporting() {
         return;
     }
@@ -229,12 +238,22 @@ async fn report_change(
 /// What the previous completed scan of this target found.
 ///
 /// Excludes the job being finished so a scan cannot compare against itself.
-async fn previous_actionable_count(
+/// What makes an actionable finding the same one from scan to scan: the rule
+/// and the matcher that fired, never the address it was seen at.
+fn actionable_keys(findings: &[Finding]) -> Vec<String> {
+    crate::triage::triage_scan(findings)
+        .actionable
+        .iter()
+        .map(|f| format!("{}|{}", f.template_id, f.title))
+        .collect()
+}
+
+async fn previous_actionable_keys(
     pool: &PgPool,
     target_id: Uuid,
     tool: &str,
     current_job: Uuid,
-) -> anyhow::Result<Option<i64>> {
+) -> anyhow::Result<Option<Vec<String>>> {
     // Same tool, deliberately. A target is scanned by more than one tool
     // per run, and they report on different things: comparing a TLS job
     // against the Nuclei job before it comes out as a change every single
@@ -257,9 +276,7 @@ async fn previous_actionable_count(
     };
 
     let findings = load_findings(pool, previous_job).await?;
-    Ok(Some(
-        crate::triage::triage_scan(&findings).actionable.len() as i64
-    ))
+    Ok(Some(actionable_keys(&findings)))
 }
 
 /// Rebuilds the findings of a stored scan.
