@@ -375,6 +375,41 @@ pub fn welcome_email(first_name: &str, link: &str) -> Message {
     }
 }
 
+/// Sent when a scheduled site's ownership proof is about to lapse and the
+/// record or file that proves it can no longer be found.
+///
+/// Scheduled scans need current proof. Without this message a site simply
+/// stopped being checked a month after it was verified, and the customer
+/// learned about it from the absence of a report.
+pub fn ownership_lapsing_email(
+    first_name: &str,
+    domain: &str,
+    expires_at: chrono::DateTime<chrono::Utc>,
+    link: &str,
+) -> Message {
+    let hello = greeting(first_name);
+    let when = expires_at.format("%-d %B %Y, %H:%M UTC").to_string();
+    Message {
+        subject: format!("Scheduled scans of {domain} stop on {}", expires_at.format("%-d %B")),
+        html: chrome(Chrome {
+            preview: "The ownership record or file is missing, so the next scheduled scan cannot run",
+            eyebrow: "Action needed",
+            heading: "Ownership proof is about to lapse.",
+            body: &format!(
+                "{}{}{}",
+                para(&hello),
+                para(&format!("We checked {domain} again and could not find the DNS record or file that proves you may scan it. Proof lapses on {when}; after that, its scheduled scans stop.")),
+                para("If the record or file was removed by mistake, put it back and nothing else is needed: we check again every hour. If the site has moved, verify it again from Glarion."),
+            ),
+            cta: Some(("Open your sites", link)),
+            footer: "You are receiving this because this site is on a scan schedule in your Glarion account.",
+        }),
+        text: format!(
+            "{hello}\n\nWe checked {domain} again and could not find the DNS record or file that proves you may scan it. Proof lapses on {when}; after that, its scheduled scans stop.\n\nIf it was removed by mistake, put it back: we check again every hour. If the site has moved, verify it again from Glarion.\n\n{link}"
+        ),
+    }
+}
+
 /// The message sent when an account first becomes a paying one.
 ///
 /// Nothing was sent before: someone paid and heard from Stripe's receipt and

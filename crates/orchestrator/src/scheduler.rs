@@ -29,7 +29,14 @@ struct Candidate {
 }
 
 pub async fn run_forever(pool: PgPool) {
+    let mailer = crate::mailer::Mailer::from_env();
     loop {
+        // Renewal first, so a proof extended in this tick lets the scan below run.
+        let now = Utc::now();
+        let tick_length = chrono::Duration::seconds(TICK_SECS as i64);
+        if let Err(error) = crate::renewal::renew_due(&pool, &mailer, now, tick_length).await {
+            tracing::error!(error = ?error, "ownership renewal failed");
+        }
         if let Err(error) = tick(&pool).await {
             tracing::error!(error = ?error, "scheduler tick failed");
         }
