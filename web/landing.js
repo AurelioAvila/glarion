@@ -128,14 +128,15 @@ function render(payload) {
   if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
 
   const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Set up full monitoring');
+  const signup = el('a', 'primary', 'Monitor it free for 14 days');
   // Carries the domain across. The account form asks for seven fields and
   // an email round-trip, and until it knew this it ended by asking for the
   // domain the reader had typed here a minute earlier — the one part of the
   // setup they had already done.
+  // The Solo trial is the offer at this moment, so the signup starts with it.
   signup.href = payload.domain
-    ? `/app/#/signup?d=${encodeURIComponent(payload.domain)}`
-    : '/app/#/signup';
+    ? `/app/#/signup?d=${encodeURIComponent(payload.domain)}&plan=solo&interval=monthly`
+    : '/app/#/signup?plan=solo&interval=monthly';
   signup.style.display = 'inline-block';
   cta.append(signup);
   const plans = el('a', 'secondary', 'Compare paid plans');
@@ -149,7 +150,7 @@ function render(payload) {
   // edit a client's DNS: finding out about the price after that work is done
   // is not a pricing objection, it is a grievance.
   cta.append(el('span', 'foot-note',
-    'A full scan checks far more. It needs a plan, from €19 a month, and proof the domain is yours.'));
+    'A full scan checks far more. Solo is free for 14 days, then €19 a month excl. VAT; you add a card at checkout and can cancel before day 14. Full scans also need proof the domain is yours.'));
   result.append(cta);
 
   if (payload.domain) result.append(shareRow(payload.domain));
