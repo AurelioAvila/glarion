@@ -30,7 +30,7 @@
 <header><div class="top-inner"><a class="wordmark" href="/"><img class="brand-mark" src="/glarion-mark-64.png" alt="" width="26" height="26"><span>Glarion</span></a></div></header>
 <main id="main">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated 2 October 2026</p>
+  <p class="updated">Last updated 5 October 2026</p>
 
   <p class="notice">
     This is a small, single-operator service. Where this policy names "we"
@@ -97,6 +97,7 @@
       <tr><td>Supabase (Postgres, EU region)</td><td>Stores the account and scan data described above.</td></tr>
       <tr><td>Fly.io</td><td>Runs the application.</td></tr>
       <tr><td>Stripe</td><td>Processes payment and stores payment details — we never see a card number.</td></tr>
+      <tr><td>Cloudflare</td><td>Provides DNS for glarion.app and cookieless Web Analytics (aggregate page views and load performance).</td></tr>
       <tr><td>Resend</td><td>Delivers transactional email (confirmation links, scan notifications).</td></tr>
       <tr><td>ProjectDiscovery Nuclei (open-source, run on our own servers)</td><td>Performs the scan itself; nothing is sent to a third party by the scanner.</td></tr>
     </tbody>
@@ -162,6 +163,12 @@
     it for this tab, open <a href="/?growth=off">Glarion with measurement off</a>.
     No channel label is sent to an advertising provider.
   </p>
+  <p>
+    We also use Cloudflare Web Analytics, which sets no cookies and does not
+    fingerprint visitors, to see aggregate page views, referrers and page-load
+    performance. Its script is not loaded when Do Not Track or Global Privacy
+    Control is enabled.
+  </p>
 
   <h2>Changes to this policy</h2>
   <p>
@@ -175,5 +182,5 @@
     <a href="mailto:hello@glarion.app">hello@glarion.app</a>
   </p>
 </main>
-</body>
+<script src="/cf-beacon.js" defer></script></body>
 </html>
