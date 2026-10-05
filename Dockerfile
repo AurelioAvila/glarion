@@ -87,6 +87,9 @@ COPY --from=build /app/target/release/growth_report /usr/local/bin/growth_report
 # in inboxes hotlink it, so the image keeps serving it.
 COPY web web
 RUN rm -rf web/src web/package.json web/package-lock.json web/tsconfig.json
+# Source comments explain design decisions to us; visitors and crawlers
+# don't need them, so the served pages drop them (perl-base ships in slim).
+RUN perl -0pi -e 's/[ \t]*<!--.*?-->[ \t]*\n?//gs' web/*.html
 COPY --from=web /web/dist web/dist
 
 # Supabase's public root CA. DATABASE_URL pins it with
