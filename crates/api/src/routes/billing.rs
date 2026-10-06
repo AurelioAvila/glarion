@@ -530,7 +530,17 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
 
     if plan.allows_scheduling() && !was_paid {
         if let Some((_, _, Some(email))) = previous.as_ref() {
-            send_subscription_welcome(state, email, plan).await;
+            // A trial has charged nothing yet, so it gets the version of the
+            // welcome that names the first payment date instead of a receipt.
+            let trial_ends = (status == "trialing")
+                .then(|| {
+                    subscription
+                        .get("trial_end")
+                        .and_then(|value| value.as_i64())
+                })
+                .flatten()
+                .and_then(|seconds| Utc.timestamp_opt(seconds, 0).single());
+            send_subscription_welcome(state, email, plan, trial_ends).await;
         }
     }
 
@@ -620,7 +630,12 @@ async fn send_subscription_ended(state: &AppState, email: &str, plan: Plan, paym
 /// Never returns an error: the plan is already granted by the time this runs,
 /// and failing the webhook over an email would have Stripe retry the whole
 /// delivery and re-apply work that already succeeded.
-async fn send_subscription_welcome(state: &AppState, email: &str, plan: Plan) {
+async fn send_subscription_welcome(
+    state: &AppState,
+    email: &str,
+    plan: Plan,
+    trial_ends: Option<chrono::DateTime<Utc>>,
+) {
     let first_name: Option<String> =
         sqlx::query_scalar("select first_name from users where email = $1")
             .bind(email)
@@ -634,6 +649,7 @@ async fn send_subscription_welcome(state: &AppState, email: &str, plan: Plan) {
         plan.max_targets(),
         plan.allows_scheduling(),
         &state.mailer.app_link(""),
+        trial_ends,
     );
     if let Err(error) = state.mailer.send(email, &message).await {
         tracing::warn!(%error, "could not send the subscription welcome");
