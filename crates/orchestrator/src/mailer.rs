@@ -319,7 +319,7 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
         r#"<p style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p style="margin:12px 0 0;color:{INK_3};font-size:13px">The link is valid for 24 hours. If you did not create an account, you can ignore this message.</p>"#
     );
     Message {
-        subject: "Confirm your email address".to_string(),
+        subject: "Confirm your email for Glarion".to_string(),
         html: chrome(Chrome {
             preview: "Confirm this address to finish setting up your Glarion account",
             eyebrow: "Confirm your email",
@@ -419,12 +419,18 @@ pub fn ownership_lapsing_email(
 ///
 /// Deliberately states the two limits that change with the plan, because
 /// those are what someone compares against what they thought they bought.
+///
+/// `trial_ends` is set while the subscription is still in its free trial:
+/// nothing has been charged yet, so "your plan is active" and "Stripe sends
+/// the receipt" would both be untrue. The trial version names the day the
+/// first payment is taken instead.
 pub fn subscription_email(
     first_name: &str,
     plan_name: &str,
     max_targets: i32,
     scheduling: bool,
     link: &str,
+    trial_ends: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Message {
     let hello = greeting(first_name);
     let cadence = if scheduling {
@@ -437,6 +443,39 @@ pub fn subscription_email(
     let limits = format!(
         r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td style="padding:17px;color:{INK_2};font-size:14px;line-height:1.8">Up to <strong style="color:{INK}">{max_targets}</strong> sites monitored<br>{safe_cadence}</td></tr></table>"#
     );
+    if let Some(ends) = trial_ends {
+        let when = ends.format("%-d %B %Y").to_string();
+        let heading = format!("Your {plan_name} trial has started.");
+        let preview = format!("Everything on the {plan_name} plan is yours until {when}");
+        let charge = format!("Everything on the {safe_plan} plan is unlocked until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.");
+        return Message {
+            subject: "Your Glarion trial has started".to_string(),
+            html: chrome(Chrome {
+                preview: &preview,
+                eyebrow: "Trial started",
+                heading: &heading,
+                body: &format!(
+                    "{}{}{limits}{}",
+                    para(&hello),
+                    para(&charge),
+                    para("Nothing else needs setting up."),
+                ),
+                cta: Some(("Open Glarion", link)),
+                footer: "This confirms a free trial of a Glarion plan. Nothing has been charged yet; Stripe sends a receipt when the first payment is taken.",
+            }),
+            text: format!(
+                "{hello}
+
+Your Glarion {safe_plan} trial has started. Everything on the plan is unlocked until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.
+
+Up to {max_targets} sites monitored. {cadence}
+
+Open Glarion: {link}
+
+Nothing has been charged yet; Stripe sends a receipt when the first payment is taken."
+            ),
+        };
+    }
     let heading = format!("Your {plan_name} plan is active.");
     let preview = format!("Your Glarion {plan_name} plan is active");
     Message {
@@ -1004,7 +1043,8 @@ mod tests {
         // The two numbers someone checks against what they thought they were
         // buying. A welcome that does not mention them is a welcome that
         // gets a support ticket in reply.
-        let message = subscription_email("Marco", "Agency", 40, true, "https://glarion.app/app");
+        let message =
+            subscription_email("Marco", "Agency", 40, true, "https://glarion.app/app", None);
         assert!(message.html.contains("Agency"));
         assert!(message.html.contains("re-checked on a schedule"));
         assert!(message.html.contains("Hello Marco,"));
@@ -1015,8 +1055,30 @@ mod tests {
     }
 
     #[test]
+    fn a_trial_does_not_claim_a_payment_was_taken() {
+        use chrono::TimeZone;
+        let ends = chrono::Utc.with_ymd_and_hms(2026, 10, 20, 9, 0, 0).unwrap();
+        let message = subscription_email(
+            "Ada",
+            "Solo",
+            5,
+            true,
+            "https://glarion.app/app",
+            Some(ends),
+        );
+        assert!(message.subject.contains("trial"));
+        assert!(message.text.contains("20 October 2026"));
+        assert!(message.html.contains("20 October 2026"));
+        assert!(!message.text.contains("plan is active"));
+        assert!(!message
+            .text
+            .contains("Stripe sends the payment receipt separately"));
+    }
+
+    #[test]
     fn a_plan_without_scheduling_does_not_claim_it() {
-        let html = subscription_email("", "Studio", 10, false, "https://glarion.app/app").html;
+        let html =
+            subscription_email("", "Studio", 10, false, "https://glarion.app/app", None).html;
         assert!(html.contains("Scans stay manual"));
         assert!(!html.contains("re-checked on a schedule"));
         // No name is not an error; it just loses the name.
@@ -1032,6 +1094,7 @@ mod tests {
             10,
             false,
             "https://glarion.app",
+            None,
         )
         .html;
         assert!(!html.contains("<script>"));
@@ -1046,7 +1109,15 @@ mod tests {
         let messages = [
             verification_email("Ada", "https://glarion.app/app#/verify/x"),
             welcome_email("Ada", "https://glarion.app/app#/targets"),
-            subscription_email("Ada", "Agency", 40, true, "https://glarion.app/app"),
+            subscription_email("Ada", "Agency", 40, true, "https://glarion.app/app", None),
+            subscription_email(
+                "Ada",
+                "Solo",
+                5,
+                true,
+                "https://glarion.app/app",
+                Some(chrono::Utc::now()),
+            ),
             change_email(
                 "example.com",
                 "1 new finding",
