@@ -1,6 +1,6 @@
 # Reporting a vulnerability
 
-Email **aurelio_11@outlook.it**. That address is monitored; there is no
+Email **support@pctweaker.app** with "Security" in the subject. That address is monitored; there is no
 `security@` alias, because glarion.app publishes no MX records and mail to one
 would bounce.
 
