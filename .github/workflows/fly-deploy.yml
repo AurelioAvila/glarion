@@ -25,7 +25,7 @@ jobs:
   deploy:
     name: Deploy app
     # A failed, cancelled or skipped CI run must not reach production.
-    # Publisher signing is local; never bypass it with an unsigned CI rebuild.
+    # Disabled: Fly deploys are manual (flyctl deploy --remote-only); deploy-signed.ps1 is the signed local rollback.
     if: ${{ false }}
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time
