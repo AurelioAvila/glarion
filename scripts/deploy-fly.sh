@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo "Unsigned source deployment is disabled. Build the candidate, sign its immutable image digest with the publisher certificate, then use scripts/deploy-signed.ps1." >&2
+echo "Source deployment from CI is disabled. Deploy by hand: flyctl deploy --app glarion-api --remote-only --ha=false. scripts/deploy-signed.ps1 is the signed local rollback package." >&2
 exit 1
