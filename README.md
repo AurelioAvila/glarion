@@ -186,7 +186,11 @@ Check the run for the commit you are evaluating rather than relying on a
 previously successful build. One advisory is deliberately ignored by the
 local audit — see [`.cargo/audit.toml`](.cargo/audit.toml).
 
-Production deployment uses a signed manual procedure. The automatic Fly deploy job and unsigned source deploy helper remain disabled.
+Production runs on Fly.io (app `glarion-api`, see `fly.toml`). Since 2026-10-05
+it is deployed by hand from `master` with
+`flyctl deploy --app glarion-api --remote-only --ha=false`. The GitHub Actions
+Fly deploy job and `scripts/deploy-fly.sh` remain disabled, so a CI run does
+not deploy by itself.
 
 ### The development database
 
