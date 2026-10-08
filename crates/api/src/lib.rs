@@ -340,7 +340,7 @@ async fn security_txt() -> impl IntoResponse {
             "text/plain; charset=utf-8",
         )],
         format!(
-            "Contact: mailto:aurelio_11@outlook.it\n\
+            "Contact: mailto:support@pctweaker.app\n\
              Expires: {expires}\n\
              Preferred-Languages: en\n\
              Canonical: {site}/.well-known/security.txt\n\
