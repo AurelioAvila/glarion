@@ -35,6 +35,8 @@ Glarion helps digital agencies monitor verified client websites, identify meanin
 
 The source is public for technical review and transparency, not for reuse. Glarion is proprietary software; see [LICENSE](LICENSE).
 
+<p align="center"><img src="docs/screenshots/glarion-landing.png" width="85%" alt="Glarion landing page at glarion.app: a free public website check, with the Check a website form and the sample report link"></p>
+
 ## The constraint everything else is arranged around
 
 A service that scans arbitrary domains on request is an attack tool unless
