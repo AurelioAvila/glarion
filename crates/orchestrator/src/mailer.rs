@@ -13,7 +13,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Mailer {
     api_key: Option<String>,
-    from: String,
+    /// No default. A fallback to Resend's shared onboarding@resend.dev
+    /// address used to hide a missing MAIL_FROM: Resend only lets that sender
+    /// reach the account owner, so every customer email was refused while the
+    /// process looked configured. Missing now means "not configured", loudly.
+    from: Option<String>,
     /// Where confirmation links should point. Kept here rather than derived
     /// from the request, because a link built from an attacker-supplied
     /// Host header is how confirmation emails get turned into phishing.
@@ -65,26 +69,16 @@ pub struct Message {
 
 impl Mailer {
     pub fn from_env() -> Self {
-        Self {
+        let mailer = Self {
             api_key: std::env::var("RESEND_API_KEY")
                 .ok()
                 .filter(|k| !k.is_empty()),
-            // Moving this to an @glarion.app address means changing DNS in
-            // the same breath, not after.
-            //
-            // glarion.app publishes `v=spf1 -all` — no host may send as this
-            // domain — because nothing does, and because our own free check
-            // reports a missing SPF record as a finding. A hard fail on a
-            // domain with no senders costs nothing and spoofs nobody.
-            //
-            // The day mail moves here, that record starts rejecting our own
-            // confirmation emails, and the failure is silent from this side:
-            // Resend accepts the send, the receiver drops it, and the account
-            // that never arrives looks like somebody who changed their mind.
-            // Verify the domain in Resend and publish the SPF and DKIM it
-            // gives you *before* setting this to an @glarion.app address.
+            // Must be an address on a domain verified in Resend, with its
+            // SPF and DKIM published (glarion.app sends via send.glarion.app).
             from: std::env::var("MAIL_FROM")
-                .unwrap_or_else(|_| "Glarion <onboarding@resend.dev>".to_string()),
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
             public_url: std::env::var("PUBLIC_URL")
                 .unwrap_or_else(|_| "http://localhost:5173".to_string())
                 .trim_end_matches('/')
@@ -96,11 +90,16 @@ impl Mailer {
             // Optimistic until something fails: a process that has sent
             // nothing yet has no reason to tell a visitor mail is broken.
             last_send_ok: AtomicBool::new(true),
+        };
+        if mailer.api_key.is_some() && mailer.from.is_none() {
+            tracing::error!("MAIL_FROM is unset — every email will be refused until it is set");
         }
+        mailer
     }
 
+    /// Both the provider key and the sender: either alone sends nothing.
     pub fn is_configured(&self) -> bool {
-        self.api_key.is_some()
+        self.api_key.is_some() && self.from.is_some()
     }
 
     /// Whether the most recent attempt reached the provider.
@@ -129,9 +128,12 @@ impl Mailer {
         let Some(api_key) = &self.api_key else {
             anyhow::bail!("email provider is not configured");
         };
+        let Some(from) = &self.from else {
+            anyhow::bail!("MAIL_FROM is not set");
+        };
 
         let payload = ResendPayload {
-            from: &self.from,
+            from,
             to: [to],
             subject: &message.subject,
             html: &message.html,
@@ -285,7 +287,7 @@ fn chrome(parts: Chrome<'_>) -> String {
     };
 
     format!(
-        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>{preview}</title></head><body style="margin:0;padding:0;background:{BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{INK}"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{BG}" style="background:{BG}"><tr><td align="center" style="padding:24px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{RAISE}" style="max-width:580px;background:{RAISE};border:1px solid {RULE};border-radius:14px;overflow:hidden"><tr><td style="height:3px;background:{CLEAR}"></td></tr><tr><td style="padding:20px 28px 17px;border-bottom:1px solid {RULE}"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td align="center" style="width:30px;height:30px;border-radius:8px;background:{CLEAR};color:#06251a;font-size:14px;font-weight:900"><img src="{site}/glarion-mark-64.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;object-fit:contain"></td><td style="padding-left:10px"><a href="{site}" style="color:{INK};font-size:19px;font-weight:800;text-decoration:none;letter-spacing:-.3px">Glarion</a></td></tr></table></td></tr><tr><td style="padding:28px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 14px"><tr><td style="padding:6px 10px;border:1px solid #2a4a3b;border-radius:999px;background:#10231a;color:{CLEAR};font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 style="margin:0 0 15px;color:{INK};font-size:24px;line-height:1.24;letter-spacing:-.4px">{heading}</h1>{body}{button}</td></tr><tr><td style="padding:17px 28px;background:{SINK};border-top:1px solid {RULE}"><p style="margin:0 0 6px;color:{INK_2};font-size:12px;line-height:1.6">{footer}</p><p style="margin:0;color:{INK_3};font-size:11px;line-height:1.5">Glarion &nbsp;&middot;&nbsp; <a href="{site}" style="color:{INK_2}">Website</a> &nbsp;&middot;&nbsp; <a href="{site}/privacy.html" style="color:{INK_2}">Privacy</a> &nbsp;&middot;&nbsp; <a href="{site}/terms.html" style="color:{INK_2}">Terms</a></p></td></tr></table></td></tr></table></body></html>"#
+        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light"><title>{preview}</title></head><body style="margin:0;padding:0;background:{BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{INK}"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{BG}" style="background:{BG}"><tr><td align="center" style="padding:24px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{RAISE}" style="max-width:580px;background:{RAISE};border:1px solid {RULE};border-radius:14px;overflow:hidden"><tr><td style="height:3px;background:{CLEAR}"></td></tr><tr><td style="padding:20px 28px 17px;border-bottom:1px solid {RULE}"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td align="center" style="width:30px;height:30px;border-radius:8px;background:{CLEAR};color:#06251a;font-size:14px;font-weight:900"><img src="{site}/glarion-mark-64.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;object-fit:contain"></td><td style="padding-left:10px"><a href="{site}" style="color:{INK};font-size:19px;font-weight:800;text-decoration:none;letter-spacing:-.3px">Glarion</a></td></tr></table></td></tr><tr><td style="padding:28px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 14px"><tr><td style="padding:6px 10px;border:1px solid #2a4a3b;border-radius:999px;background:#10231a;color:{CLEAR};font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 style="margin:0 0 15px;color:{INK};font-size:24px;line-height:1.24;letter-spacing:-.4px">{heading}</h1>{body}{button}</td></tr><tr><td style="padding:17px 28px;background:{SINK};border-top:1px solid {RULE}"><p style="margin:0 0 6px;color:{INK_2};font-size:12px;line-height:1.6">{footer}</p><p style="margin:0;color:{INK_3};font-size:11px;line-height:1.5">Glarion &nbsp;&middot;&nbsp; <a href="{site}" style="color:{INK_2}">Website</a> &nbsp;&middot;&nbsp; <a href="{site}/privacy.html" style="color:{INK_2}">Privacy</a> &nbsp;&middot;&nbsp; <a href="{site}/terms.html" style="color:{INK_2}">Terms</a></p></td></tr></table></td></tr></table></body></html>"#
     )
 }
 
@@ -797,11 +799,35 @@ mod tests {
     fn mailer() -> Mailer {
         Mailer {
             api_key: None,
-            from: "Glarion <hello@example.com>".to_string(),
+            from: Some("Glarion <hello@example.com>".to_string()),
             public_url: "https://glarion.example".to_string(),
             reply_to: None,
             last_send_ok: AtomicBool::new(true),
         }
+    }
+
+    /// A key without a sender used to fall back to onboarding@resend.dev,
+    /// which Resend only delivers to the account owner: every customer mail
+    /// was refused while the process reported itself configured.
+    #[tokio::test]
+    async fn a_key_without_a_sender_is_refused_before_any_request() {
+        let sender = Mailer {
+            api_key: Some("re_test".into()),
+            from: None,
+            public_url: "https://glarion.example".into(),
+            reply_to: None,
+            last_send_ok: AtomicBool::new(true),
+        };
+        assert!(!sender.is_configured());
+        let error = sender
+            .send(
+                "audit@example.invalid",
+                &welcome_email("Ada", "https://glarion.example/app#/targets"),
+            )
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("MAIL_FROM"));
+        assert!(!sender.last_send_ok());
     }
 
     /// The bug this pins cost a real account: the root serves the marketing
@@ -882,7 +908,7 @@ mod tests {
     fn links_are_built_from_configured_url_not_from_a_request() {
         let mailer = Mailer {
             api_key: None,
-            from: "x@example.com".into(),
+            from: Some("x@example.com".into()),
             public_url: "https://glarion.app".into(),
             reply_to: None,
             last_send_ok: AtomicBool::new(true),
@@ -1007,7 +1033,7 @@ mod tests {
     fn trailing_slashes_do_not_produce_a_double_slash() {
         let mailer = Mailer {
             api_key: None,
-            from: "x@example.com".into(),
+            from: Some("x@example.com".into()),
             public_url: "https://glarion.app/".trim_end_matches('/').to_string(),
             reply_to: None,
             last_send_ok: AtomicBool::new(true),
@@ -1236,7 +1262,7 @@ mod tests {
 
         let configured = Mailer {
             api_key: None,
-            from: "Glarion <noreply@example.com>".to_string(),
+            from: Some("Glarion <noreply@example.com>".to_string()),
             public_url: "https://glarion.example".to_string(),
             reply_to: Some("security@example.com".to_string()),
             last_send_ok: AtomicBool::new(true),

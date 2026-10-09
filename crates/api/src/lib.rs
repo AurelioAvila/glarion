@@ -90,7 +90,7 @@ pub async fn run() -> Result<()> {
         );
     } else {
         tracing::warn!(
-            "RESEND_API_KEY is unset — no email will be sent. Confirmation links are written to this log instead. Set RESEND_API_KEY, MAIL_FROM and PUBLIC_URL to deliver them."
+            "RESEND_API_KEY or MAIL_FROM is unset — no email will be sent. Set RESEND_API_KEY, MAIL_FROM and PUBLIC_URL to deliver them."
         );
     }
 

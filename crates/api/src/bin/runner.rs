@@ -33,7 +33,9 @@ async fn main() -> Result<()> {
     if !mailer.is_configured() {
         // Said out loud rather than left to be discovered by a customer
         // wondering why monitoring never told them anything.
-        tracing::warn!("RESEND_API_KEY is unset — change notifications will be logged, not sent.");
+        tracing::warn!(
+            "RESEND_API_KEY or MAIL_FROM is unset — change notifications will be logged, not sent."
+        );
     }
 
     tracing::info!("glarion scan runner started");
