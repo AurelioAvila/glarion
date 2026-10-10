@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { euro, msUntil, parsePromo, promoClock, promoEndLabel, promoPercent, promoThen } from "./promo.js";
 
-const offer = { plan: "solo", interval: "monthly", currency: "eur", regular: 1900, reference: 1900, price: 950, percentOff: 50, firstPeriodOnly: true };
+const offer = { plan: "solo", interval: "monthly", currency: "eur", regular: 1900, reference: 1900, price: 900, percentOff: 52, firstPeriodOnly: true };
 const active = { serverTime: "2026-11-06T22:59:00.000Z", id: "halloween50-2026", status: "active", startsAt: "2026-10-10T00:00:00Z", endsAt: "2026-11-06T23:00:00Z", offers: [offer] };
 
 test("a server response becomes an offer, nothing else does", () => {
@@ -14,13 +14,13 @@ test("a server response becomes an offer, nothing else does", () => {
 });
 
 test("a discount that is not real, or not in euro cents, is never drawn, and nothing valid means no offer", () => {
-  for (const broken of [{ price: 1900 }, { price: 1901 }, { reference: 2000 }, { price: 950.5 }, { currency: "usd" }, { interval: "weekly" }, { firstPeriodOnly: false }]) {
+  for (const broken of [{ price: 1900 }, { price: 1901 }, { reference: 2000 }, { price: 900.5 }, { currency: "usd" }, { interval: "weekly" }, { firstPeriodOnly: false }]) {
     assert.equal(parsePromo({ ...active, offers: [{ ...offer, ...broken }] }), null, JSON.stringify(broken));
   }
 });
 
 test("prices and percentages read honestly", () => {
-  assert.equal(promoPercent(offer), 50);
+  assert.equal(promoPercent(offer), 52);
   assert.equal(promoPercent({ reference: 1000, price: 801 }), 19, "rounded down, never up");
   assert.equal(euro(950), "€9.50");
   assert.equal(euro(17000), "€170");

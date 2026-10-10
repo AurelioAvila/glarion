@@ -140,7 +140,7 @@ export function createPromoBanner(): PromoBanner {
     + UNITS.map((unit) => `<div class="hw-offer-cell" aria-hidden="true"><strong>00</strong><small>${unit}</small></div>`).join("")
     + `</div></div></div>`;
   const heading = (promo: Pick<Promo, "endsAt">, percent: number) => {
-    element.querySelector(".hw-offer-heading")!.textContent = `${percent}% off your first month or year. Ends ${promoEndLabel(promo)}.`;
+    element.querySelector(".hw-offer-heading")!.textContent = `At least ${percent}% off your first month or year. Ends ${promoEndLabel(promo)}.`;
   };
   heading({ endsAt: new Date(PROMO_LAYOUT_UNTIL).toISOString() }, 50);
   element.querySelector(".hw-offer-fine")!.textContent = FINE;

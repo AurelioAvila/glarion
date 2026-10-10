@@ -1,4 +1,4 @@
-//! Halloween 2026: half price on the first month or year of every paid plan,
+//! Halloween 2026: at least 50% off the first month or year of every paid plan,
 //! from release until 23:59:59 on 6 November (Europe/Rome). Owner decision
 //! of 10 October 2026, the same offer PC Tweaker and Redaxa run.
 //!
@@ -9,7 +9,14 @@
 //! Stripe Prices and every Glarion Checkout Session since August (none was
 //! paid, none carried a discount): Studio €39/€350 and Agency €99/€750 since
 //! 28–30 August, Solo €19/€170 since 2 September, unchanged since. So the
-//! references equal today's prices and every badge reads 50%.
+//! references equal today's prices.
+//!
+//! Price rule (owner decision, 10 October 2026): a real 50% or more off the
+//! lawful reference, rounded down to a round figure: the highest P with
+//! P <= 50% of the reference, where P is a whole euro amount or ends in ,99,
+//! and from 100 euro a multiple of 5. Badges show the real percentage:
+//! Solo 19 -> 9 (52%), 170 -> 85; Studio 39 -> 19 (51%), 350 -> 175;
+//! Agency 99 -> 49 (50%), 750 -> 375.
 //!
 //! Amounts are euro cents excluding VAT, like the Stripe Prices. The coupon
 //! behind each offer takes exactly `regular - price` off the first paid
@@ -52,11 +59,11 @@ pub struct Offer {
 }
 
 pub const OFFERS: [Offer; 6] = [
-    offer(Plan::Solo, Interval::Monthly, 1_900, 1_900, 950),
+    offer(Plan::Solo, Interval::Monthly, 1_900, 1_900, 900),
     offer(Plan::Solo, Interval::Yearly, 17_000, 17_000, 8_500),
-    offer(Plan::Studio, Interval::Monthly, 3_900, 3_900, 1_950),
+    offer(Plan::Studio, Interval::Monthly, 3_900, 3_900, 1_900),
     offer(Plan::Studio, Interval::Yearly, 35_000, 35_000, 17_500),
-    offer(Plan::Agency, Interval::Monthly, 9_900, 9_900, 4_950),
+    offer(Plan::Agency, Interval::Monthly, 9_900, 9_900, 4_900),
     offer(Plan::Agency, Interval::Yearly, 75_000, 75_000, 37_500),
 ];
 
@@ -268,6 +275,35 @@ mod tests {
             .unwrap()
     }
 
+    /// The owner's rule: the highest whole-euro or ,99 amount at or under half
+    /// the reference; from 100 euro, a multiple of 5.
+    fn rounded_half(reference: i64) -> i64 {
+        let half = reference as f64 / 2.0;
+        if half >= 10_000.0 {
+            return (half / 500.0).floor() as i64 * 500;
+        }
+        let whole = (half / 100.0).floor() as i64 * 100;
+        let ninety_nine = ((half - 99.0) / 100.0).floor() as i64 * 100 + 99;
+        whole.max(ninety_nine)
+    }
+
+    #[test]
+    fn the_price_rule_rounds_down_to_round_figures() {
+        let cases = [
+            (799, 399),
+            (7_990, 3_900),
+            (1_499, 700),
+            (14_990, 7_400),
+            (1_900, 900),
+            (17_000, 8_500),
+            (35_000, 17_500),
+            (25_000, 12_500),
+        ];
+        for (reference, price) in cases {
+            assert_eq!(rounded_half(reference), price, "{reference}");
+        }
+    }
+
     #[test]
     fn every_struck_price_is_the_lowest_of_the_previous_thirty_days() {
         for o in OFFERS.iter() {
@@ -277,9 +313,14 @@ mod tests {
                 assert!(o.reference <= lowest_before(o.plan, o.interval, t));
                 t += Duration::hours(1);
             }
-            assert_eq!(o.price, o.regular / 2, "half the list price");
-            assert_eq!(percent_off(o.reference, o.price), 50);
+            assert_eq!(o.price, rounded_half(o.reference), "the price rule");
+            assert!(percent_off(o.reference, o.price) >= 50);
         }
+        let percents: Vec<i64> = OFFERS
+            .iter()
+            .map(|o| percent_off(o.reference, o.price))
+            .collect();
+        assert_eq!(percents, [52, 50, 51, 50, 50, 50]);
         assert_eq!(percent_off(1000, 801), 19, "rounded down, never up");
         // Every paid plan is on offer, in both intervals.
         for plan in crate::billing::PAID_PLANS {
