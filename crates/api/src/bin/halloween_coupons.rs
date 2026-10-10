@@ -156,7 +156,7 @@ fn main() -> ExitCode {
                 "cancel_url=https://glarion.app/app/#/plan".into(),
                 format!(
                     "expires_at={}",
-                    chrono::Utc::now().timestamp() + GRACE_SECONDS
+                    chrono::Utc::now().timestamp() + GRACE_SECONDS + 60
                 ),
                 format!("metadata[promo_verification]={PROMO_ID}"),
             ];

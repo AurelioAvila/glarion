@@ -273,7 +273,11 @@ let promoBanner: PromoBanner | null = null;
 watchPromo((view) => {
   const changed = Boolean(promoView?.promo) !== Boolean(view.promo);
   promoView = view;
-  if (changed) promoChanged?.();
+  if (changed) {
+    promoChanged?.();
+    // A plan notice quoting a price must never outlive the offer behind it.
+    document.querySelectorAll(".chosen-plan[data-priced]").forEach((node) => node.replaceWith(chosenPlanNotice() ?? node));
+  }
   else if (view.promo && promoBanner?.element.isConnected) promoBanner.tick(view.remaining);
 });
 
@@ -285,7 +289,7 @@ function chosenPlanNotice(review = false): HTMLElement | null {
   const price = promo
     ? `${euro(promo.price)} for the first ${yearly ? "year" : "month"}, then ${euro(promo.regular)} / ${yearly ? "year" : "month"}`
     : `€${yearly ? offer.yearly : offer.monthly} / ${yearly ? "year" : "month"}`;
-  return el("div", { class: "chosen-plan" }, [
+  return el("div", { class: "chosen-plan", "data-priced": review ? undefined : "" }, [
     el("strong", { text: `${offer.name} · up to ${offer.sites} websites` }),
     el("p", { text: review ? "Your selection is highlighted below. Review the billing frequency and price, then continue to Stripe. No payment is taken on this page." : `${price}, excluding VAT. Confirm your email, then review your plan before paying securely through Stripe.` }),
     el("a", { class: "inline", href: "/pricing.html", text: "Compare or change your choice" }),

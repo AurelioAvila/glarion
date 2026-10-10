@@ -13,9 +13,9 @@ test("a server response becomes an offer, nothing else does", () => {
   assert.deepEqual(parsePromo({ ...active, status: "scheduled" })?.offers, [], "a scheduled offer publishes no prices");
 });
 
-test("a discount that is not real, or not in euro cents, is never drawn", () => {
+test("a discount that is not real, or not in euro cents, is never drawn, and nothing valid means no offer", () => {
   for (const broken of [{ price: 1900 }, { price: 1901 }, { reference: 2000 }, { price: 950.5 }, { currency: "usd" }, { interval: "weekly" }, { firstPeriodOnly: false }]) {
-    assert.equal(parsePromo({ ...active, offers: [{ ...offer, ...broken }] })?.offers.length, 0, JSON.stringify(broken));
+    assert.equal(parsePromo({ ...active, offers: [{ ...offer, ...broken }] }), null, JSON.stringify(broken));
   }
 });
 

@@ -16,8 +16,14 @@
 //! invoice once: a Solo trial's zero invoice does not use it up (checked on
 //! Stripe test clocks, 10 October 2026). Coupons cannot be edited, so another
 //! amount or end date needs new IDs, and no STRIPE_PRICE_* may change during
-//! the window. `scripts/halloween-coupons.mjs` creates and checks them;
+//! the window. The `halloween_coupons` binary creates and checks them;
 //! nothing here talks to Stripe.
+//!
+//! A once-only coupon on a trial waits for the first paid invoice. Should the
+//! billing portal ever allow switching price, a downgrade during the trial
+//! (Solo yearly to monthly share a product) could leave a coupon larger than
+//! that invoice; today the portal offers no plans to switch to (both live
+//! configurations, 10 October 2026).
 //!
 //! Next promotions: until about 6 December the lowest prices of the previous
 //! 30 days are these promo prices, so a Black Friday reduction must strike
@@ -178,19 +184,31 @@ pub fn checkout_fields(
     if state.status != "active" || !offered {
         return Vec::new();
     }
-    let now_seconds = now.timestamp();
-    let end_seconds = at(ENDS_AT).timestamp();
-    // Checkout allows 30 minutes to 24 hours.
-    let expires_at = (now_seconds + 24 * 60 * 60).min(end_seconds.max(now_seconds + GRACE_SECONDS));
-    vec![
+    let mut fields = vec![
         ("discounts[0][coupon]".into(), coupon_id(plan, interval)),
-        ("expires_at".into(), expires_at.to_string()),
         ("metadata[promo_id]".into(), PROMO_ID.into()),
         (
             "subscription_data[metadata][promo_id]".into(),
             PROMO_ID.into(),
         ),
-    ]
+    ];
+    if let Some(expires_at) = expires_at(now) {
+        fields.push(("expires_at".into(), expires_at.to_string()));
+    }
+    fields
+}
+
+/// The Checkout `expires_at` for a promotional session, or None to keep
+/// Stripe's default of 24 hours. Stripe accepts 30 minutes to 24 hours after
+/// creation, measured on its own clock, so neither bound is ever used
+/// exactly: one extra minute at the short end, and the default whenever the
+/// end is at least 23.5 hours away (a default session then still closes no
+/// later than 30 minutes after the end).
+pub fn expires_at(now: DateTime<Utc>) -> Option<i64> {
+    let now_seconds = now.timestamp();
+    let end_seconds = at(ENDS_AT).timestamp();
+    (end_seconds - now_seconds < 23 * 3600 + 1800)
+        .then(|| end_seconds.max(now_seconds + GRACE_SECONDS + 60))
 }
 
 /// GET /api/promo: public, uncached (every API response is no-store).
@@ -344,24 +362,39 @@ mod tests {
     }
 
     #[test]
-    fn checkout_deadline_stays_inside_stripes_limits_and_the_grace() {
-        for now in [
-            start(),
-            during(),
-            end() - Duration::hours(1),
-            end() - Duration::seconds(1),
-        ] {
-            let fields = checkout_fields(true, now, Plan::Studio, Interval::Yearly);
-            let expires: i64 = fields
-                .iter()
-                .find(|(k, _)| k == "expires_at")
-                .unwrap()
-                .1
-                .parse()
-                .unwrap();
-            assert!(expires >= now.timestamp() + GRACE_SECONDS);
-            assert!(expires <= now.timestamp() + 24 * 60 * 60);
-            assert!(expires <= end().timestamp() + GRACE_SECONDS + 1);
+    fn checkout_deadline_never_touches_stripes_limits_or_outlives_the_grace() {
+        let mut now = start();
+        while now < end() {
+            let closes = match expires_at(now) {
+                Some(at) => {
+                    assert!(at >= now.timestamp() + GRACE_SECONDS + 60, "{now}");
+                    assert!(at <= now.timestamp() + 23 * 3600 + 1800, "{now}");
+                    at
+                }
+                None => now.timestamp() + 24 * 3600,
+            };
+            assert!(closes <= end().timestamp() + GRACE_SECONDS + 60, "{now}");
+            now += Duration::minutes(7);
         }
+        assert_eq!(
+            expires_at(during()),
+            None,
+            "Stripe's default far from the end"
+        );
+        assert_eq!(
+            expires_at(end() - Duration::hours(1)),
+            Some(end().timestamp())
+        );
+        let fields = checkout_fields(
+            true,
+            end() - Duration::hours(1),
+            Plan::Studio,
+            Interval::Yearly,
+        );
+        assert!(fields
+            .iter()
+            .any(|(k, v)| k == "expires_at" && *v == end().timestamp().to_string()));
+        let fields = checkout_fields(true, during(), Plan::Studio, Interval::Yearly);
+        assert!(!fields.iter().any(|(k, _)| k == "expires_at"));
     }
 }

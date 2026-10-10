@@ -31,6 +31,8 @@ export function parsePromo(value: unknown): Promo | null {
       && (o.price as number) < (o.reference as number) && (o.reference as number) <= (o.regular as number)
       && o.firstPeriodOnly === true)
     .map((o) => ({ plan: o.plan, interval: o.interval, regular: o.regular, reference: o.reference, price: o.price }) as PromoOffer);
+  // "Active" with nothing valid to sell is not an offer: never a banner without prices.
+  if (v.status === "active" && offers.length === 0) return null;
   return { serverTime: v.serverTime, id: v.id, status: v.status, startsAt: v.startsAt, endsAt: v.endsAt, offers: v.status === "active" ? offers : [] };
 }
 
@@ -118,7 +120,7 @@ export function watchPromo(render: (view: PromoView) => void): void {
 }
 
 const UNITS = ["Days", "Hours", "Minutes", "Seconds"] as const;
-const FINE = "Struck-through prices are our lowest in the 30 days before the offer. Renewals are at the regular price, and new Solo subscribers still start with the 14-day free trial. Prices exclude VAT.";
+const FINE = "Struck-through prices are our lowest in the 30 days before the offer. New subscriptions only; renewals are at the regular price, and new Solo subscribers still start with the 14-day free trial. Prices exclude VAT.";
 
 export type PromoBanner = { element: HTMLElement; show(promo: Promo): void; tick(remaining: number): void };
 
@@ -128,6 +130,7 @@ export type PromoBanner = { element: HTMLElement; show(promo: Promo): void; tick
 export function createPromoBanner(): PromoBanner {
   const element = document.createElement("section");
   element.className = "hw-offer hw-offer-reserved";
+  element.style.visibility = "hidden";
   element.setAttribute("aria-hidden", "true");
   element.innerHTML = `<div class="hw-offer-inner">`
     + `<span class="hw-offer-decor hw-offer-decor-left" aria-hidden="true">${HALLOWEEN_DECOR_LEFT}</span>`
@@ -145,6 +148,7 @@ export function createPromoBanner(): PromoBanner {
     element,
     show(promo) {
       heading(promo, Math.min(...promo.offers.map(promoPercent)));
+      element.style.removeProperty("visibility");
       element.classList.remove("hw-offer-reserved");
       element.removeAttribute("aria-hidden");
       element.setAttribute("aria-labelledby", "glarion-promo-title");
@@ -163,11 +167,17 @@ export function createPromoBanner(): PromoBanner {
 export function mountPromo(place: (banner: HTMLElement) => void, onChange: (view: PromoView) => void): void {
   const banner = createPromoBanner();
   let view: PromoView | null = null;
-  if (Date.now() < PROMO_LAYOUT_UNTIL) place(banner.element);
+  // Room is kept only for someone who last saw the offer running: while it is
+  // off, nobody's pricing jumps on load.
+  const KEY = "glarion.promo.last-seen";
+  let lastSeen = false;
+  try { lastSeen = localStorage.getItem(KEY) === "active"; } catch { /* storage blocked: no reservation */ }
+  if (lastSeen && Date.now() < PROMO_LAYOUT_UNTIL) place(banner.element);
   watchPromo((next) => {
     const changed = view === null || Boolean(view.promo) !== Boolean(next.promo);
     view = next;
     if (changed) {
+      try { localStorage.setItem(KEY, next.promo ? "active" : "off"); } catch { /* best effort */ }
       if (next.promo) {
         banner.show(next.promo);
         if (!banner.element.isConnected) place(banner.element);
