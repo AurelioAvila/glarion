@@ -1,0 +1,24 @@
+/* Halloween offer: one large countdown above the plans, on the landing page,
+   the pricing page and the dashboard. Shown only while the server confirms
+   the offer. Pumpkin orange marks the icon and frame only; text keeps the
+   product's ink so contrast stays at AA. */
+.promo { --promo-pumpkin:#c8571a; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1.25rem 2rem; align-items:center; margin:1.75rem 0; padding:1.6rem 1.75rem 1.25rem; color:var(--ink,#2d103a); background:linear-gradient(135deg,#fff4ec,#faf3fd); border:1px solid #ecc3a6; border-radius:14px; }
+.promo p { margin:0; }
+.promo .promo-title { display:flex; align-items:center; gap:.6rem; font-size:.8125rem; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
+.promo-icon { width:1.6rem; height:1.6rem; flex:none; color:var(--promo-pumpkin); }
+.promo .promo-lead { margin-top:.7rem; font-size:clamp(1.25rem,2.4vw,1.75rem); line-height:1.25; font-weight:650; letter-spacing:-.02em; text-wrap:balance; }
+.promo .promo-ends { margin-top:.45rem; font-size:.9375rem; color:var(--muted,#695174); }
+.promo-timer { display:grid; gap:.5rem; justify-items:end; }
+.promo .promo-ends-in { font-size:.75rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted,#695174); }
+.promo-clock { display:flex; gap:.6rem; }
+.promo-clock div { display:grid; justify-items:center; min-width:5.1rem; padding:.75rem .6rem .6rem; background:#fff; border:1px solid var(--rule,#dcd2e5); border-radius:10px; }
+.promo-clock strong { font-size:clamp(2.1rem,4.2vw,3.1rem); line-height:1; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+.promo-clock span { margin-top:.45rem; font-size:.6875rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted,#695174); }
+.promo .promo-terms { grid-column:1/-1; padding-top:.9rem; border-top:1px solid #efd9c9; font-size:.8125rem; line-height:1.6; color:var(--muted,#695174); }
+.promo-off, .plan-row-off { display:inline-block; padding:.15rem .45rem; border:1px solid #ecc3a6; border-radius:6px; color:var(--ink,#2d103a); background:#fff4ec; font-size:.8125rem; font-weight:750; line-height:1.4; }
+.purchase-cost s, .plan-row-was { color:var(--muted,#695174); font-weight:550; text-decoration-thickness:1.5px; }
+.purchase-cost s { font-size:1.25rem; }
+.plan-row-was { font-size:.85rem; margin-right:.35rem; }
+.plan-row-off { margin-left:.4rem; }
+@media (max-width:52rem) { .promo { grid-template-columns:1fr; padding:1.25rem 1.1rem 1rem; } .promo-timer { justify-items:start; width:100%; } .promo-clock { width:100%; gap:.45rem; } .promo-clock div { flex:1; min-width:0; } }
+@media (prefers-reduced-motion:no-preference) { .promo { animation:promo-in .4s ease-out both; } @keyframes promo-in { from { opacity:0; transform:translateY(6px); } } }

@@ -187,6 +187,15 @@ pub async fn start_checkout(
         ));
     }
 
+    // The Halloween offer follows the plan resolved above and the server's
+    // clock, never the client. Empty outside the window.
+    form.extend(crate::promo::checkout_fields(
+        crate::promo::enabled_from_env(),
+        Utc::now(),
+        plan,
+        interval,
+    ));
+
     // Reuse the customer when there is one, so a second subscription does
     // not create a duplicate record with the same person in it.
     match customer_id {

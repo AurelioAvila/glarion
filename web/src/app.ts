@@ -1,5 +1,6 @@
 import { recordPage } from "./acquisition.js";
 import { annualOffer } from "./annual-offer.js";
+import { euro, promoBanner, promoPercent, promoThen, updatePromoClock, watchPromo, type PromoOffer, type PromoView } from "./promo.js";
 let growthSignupSeen = false;
 function countSignupView(): void {
   if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
@@ -263,13 +264,30 @@ function unconfirmedNotice(email: string): HTMLElement {
 let pendingDomain: string | null = takeRememberedDomain();
 let pendingPlan = readPlanChoice();
 
+/// The Halloween offer, as last confirmed by the server: regular prices until
+/// then, and again the moment it ends or cannot be read. The plan page
+/// registers `promoChanged` to repaint when the offer starts or stops.
+let promoView: PromoView | null = null;
+let promoChanged: (() => void) | null = null;
+let promoBannerElement: HTMLElement | null = null;
+watchPromo((view) => {
+  const changed = Boolean(promoView?.promo) !== Boolean(view.promo);
+  promoView = view;
+  if (changed) promoChanged?.();
+  else if (promoBannerElement?.isConnected) updatePromoClock(promoBannerElement, view.remaining);
+});
+
 function chosenPlanNotice(review = false): HTMLElement | null {
   if (!pendingPlan) return null;
   const offer = PLANS.find((offer) => offer.plan === pendingPlan?.plan)!;
   const yearly = pendingPlan.interval === "yearly";
+  const promo = promoView?.offer(offer.plan, pendingPlan.interval) ?? null;
+  const price = promo
+    ? `${euro(promo.price)} for the first ${yearly ? "year" : "month"}, then ${euro(promo.regular)} / ${yearly ? "year" : "month"}`
+    : `€${yearly ? offer.yearly : offer.monthly} / ${yearly ? "year" : "month"}`;
   return el("div", { class: "chosen-plan" }, [
     el("strong", { text: `${offer.name} · up to ${offer.sites} websites` }),
-    el("p", { text: review ? "Your selection is highlighted below. Review the billing frequency and price, then continue to Stripe. No payment is taken on this page." : `€${yearly ? offer.yearly : offer.monthly} / ${yearly ? "year" : "month"}, excluding VAT. Confirm your email, then review your plan before paying securely through Stripe.` }),
+    el("p", { text: review ? "Your selection is highlighted below. Review the billing frequency and price, then continue to Stripe. No payment is taken on this page." : `${price}, excluding VAT. Confirm your email, then review your plan before paying securely through Stripe.` }),
     el("a", { class: "inline", href: "/pricing.html", text: "Compare or change your choice" }),
   ]);
 }
@@ -2436,11 +2454,30 @@ async function renderPlan(): Promise<void> {
   toggleRow.append(monthlyTab, yearlyTab);
 
   const list = el("ul", { class: "ledger plan-list" });
+  const promoSlot = el("div");
+
+  // An existing customer changes plan in Stripe's portal, where the offer
+  // does not apply, so only a first checkout is shown the offer.
+  const offerFor = (plan: string): PromoOffer | null =>
+    subscription.manageable ? null : (promoView?.offer(plan, interval) ?? null);
+
+  function paintPromo(): void {
+    promoBannerElement = promoView?.promo && !subscription.manageable ? promoBanner(promoView.promo, true) : null;
+    promoSlot.replaceChildren(...(promoBannerElement ? [promoBannerElement] : []));
+    if (promoBannerElement && promoView) updatePromoClock(promoBannerElement, promoView.remaining);
+  }
 
   function paintList(): void {
     clear(list);
-    for (const offer of PLANS) list.append(planRow(offer, subscription, interval, message));
+    for (const offer of PLANS) list.append(planRow(offer, subscription, interval, message, offerFor(offer.plan)));
   }
+
+  promoChanged = () => {
+    if (!list.isConnected) return;
+    paintPromo();
+    paintList();
+  };
+  paintPromo();
 
   function selectInterval(value: "monthly" | "yearly"): void {
     if (interval === value) return;
@@ -2457,7 +2494,7 @@ async function renderPlan(): Promise<void> {
   on(yearlyTab, "click", () => selectInterval("yearly"));
 
   paintList();
-  container.append(el("div", { style: "margin-top:1.75rem" }, [toggleRow]), list);
+  container.append(promoSlot, el("div", { style: "margin-top:1.75rem" }, [toggleRow]), list);
 
   container.append(
     el("p", { class: "muted", style: "margin-top:1.5rem" }, [
@@ -2481,6 +2518,7 @@ function planRow(
   subscription: Subscription,
   interval: "monthly" | "yearly",
   message: HTMLElement,
+  promo: PromoOffer | null,
 ): HTMLElement {
   const current = offer.plan === subscription.plan;
   const selected = offer.plan === pendingPlan?.plan;
@@ -2507,7 +2545,17 @@ function planRow(
     // have to decide the fate of the sites over the smaller allowance.
     right.append(el("span", { class: "mono-note", text: "Cancel to return" }));
   } else {
-    if (interval === "yearly") {
+    if (promo) {
+      // The struck price is the lowest of the previous 30 days, never an
+      // invented one; the twelve-payments comparison steps aside meanwhile.
+      price.append(
+        el("s", { class: "plan-row-was", text: euro(promo.reference) }),
+        el("span", { class: "plan-row-amount", text: euro(promo.price) }),
+        el("span", { class: "plan-row-unit", text: interval === "yearly" ? "/year" : "/month" }),
+        el("span", { class: "plan-row-off", text: `\u2212${promoPercent(promo)}%` }),
+      );
+      state.append(el("span", { text: promoThen(promo) }));
+    } else if (interval === "yearly") {
       price.append(
         el("span", { class: "plan-row-amount", text: `€${offer.yearly}` }),
         el("span", { class: "plan-row-unit", text: "/year" }),
