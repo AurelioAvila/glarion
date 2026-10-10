@@ -3,6 +3,7 @@ pub mod billing;
 pub mod config;
 pub mod error;
 pub mod growth;
+pub mod promo;
 pub mod rate_limit;
 pub mod routes;
 pub mod state;
@@ -229,6 +230,9 @@ pub fn router(state: AppState) -> Router {
             post(routes::billing::start_checkout),
         )
         .route("/api/billing/portal", post(routes::billing::open_portal))
+        // Public: the site and the dashboard draw the offer and its countdown
+        // from this; checkout applies it from the same clock.
+        .route("/api/promo", get(promo::public_promo))
         .route("/api/growth/page", post(growth::page))
         .route("/api/preview", post(routes::preview::run_preview))
         .route("/api/preview/email", post(routes::preview::email_preview))

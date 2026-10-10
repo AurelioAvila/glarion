@@ -1,21 +1,49 @@
 import { annualOffer } from './dist/annual-offer.js';
+import { euro, mountPromo, promoPercent, promoThen } from './dist/promo.js';
 
-// Without JavaScript every offer still links to the monthly selection.
+// Without JavaScript every offer still links to the monthly selection and
+// shows the regular prices; a running offer replaces them only once the
+// server has confirmed it, and they come back the moment it ends.
 document.querySelectorAll('.purchase-options').forEach((options) => {
-  options.querySelectorAll('[data-billing]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const yearly = button.dataset.billing === 'yearly';
-      options.querySelectorAll('[data-billing]').forEach((tab) => tab.setAttribute('aria-pressed', String(tab === button)));
-      options.querySelectorAll('[data-plan]').forEach((card) => {
-        const offer = annualOffer(Number(card.dataset.monthly), Number(card.dataset.yearly));
-        card.querySelector('[data-price]').textContent = `€${yearly ? card.dataset.yearly : card.dataset.monthly}`;
-        card.querySelector('[data-unit]').textContent = yearly ? '/ year' : '/ month';
-        card.querySelector('[data-comparison]').hidden = !yearly;
-        card.querySelector('[data-saving]').textContent = yearly
+  let yearly = false;
+  let view = null;
+
+  const paint = () => {
+    options.querySelectorAll('[data-billing]').forEach((tab) => tab.setAttribute('aria-pressed', String((tab.dataset.billing === 'yearly') === yearly)));
+    options.querySelectorAll('[data-plan]').forEach((card) => {
+      const offer = annualOffer(Number(card.dataset.monthly), Number(card.dataset.yearly));
+      const promo = view?.offer(card.dataset.plan, yearly ? 'yearly' : 'monthly') ?? null;
+      const cost = card.querySelector('.purchase-cost');
+      cost.querySelectorAll('[data-promo]').forEach((node) => node.remove());
+      card.querySelector('[data-price]').textContent = promo ? euro(promo.price) : `€${yearly ? card.dataset.yearly : card.dataset.monthly}`;
+      card.querySelector('[data-unit]').textContent = yearly ? '/ year' : '/ month';
+      if (promo) {
+        const was = Object.assign(document.createElement('s'), { textContent: euro(promo.reference) });
+        const off = Object.assign(document.createElement('span'), { className: 'promo-off', textContent: `−${promoPercent(promo)}%` });
+        was.dataset.promo = off.dataset.promo = '';
+        cost.prepend(was);
+        cost.append(off);
+      }
+      // One struck price at a time: during the offer the twelve-payments comparison steps aside.
+      card.querySelector('[data-comparison]').hidden = !yearly || Boolean(promo);
+      card.querySelector('[data-saving]').textContent = promo
+        ? `${promoThen(promo)}${yearly ? '' : ` Or €${card.dataset.yearly}/year with annual billing.`}`
+        : yearly
           ? `Equivalent to €${offer.monthlyEquivalent}/month. Billed €${card.dataset.yearly} yearly.`
           : `€${card.dataset.yearly}/year with annual billing · save ${offer.discount}%.`;
-        card.href = `/app/#/signup?plan=${card.dataset.plan}&interval=${yearly ? 'yearly' : 'monthly'}`;
-      });
+      card.href = `/app/#/signup?plan=${card.dataset.plan}&interval=${yearly ? 'yearly' : 'monthly'}`;
     });
+  };
+
+  options.querySelectorAll('[data-billing]').forEach((button) => {
+    button.addEventListener('click', () => {
+      yearly = button.dataset.billing === 'yearly';
+      paint();
+    });
+  });
+
+  mountPromo((banner) => options.querySelector('.purchase-switch').before(banner), (next) => {
+    view = next;
+    paint();
   });
 });
