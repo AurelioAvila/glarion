@@ -2,6 +2,8 @@
 // server decides the discount at checkout, from its own clock. Anything
 // malformed, missing or late means regular prices.
 
+import { HALLOWEEN_DECOR_LEFT, HALLOWEEN_DECOR_RIGHT } from "./halloween-decor.js";
+
 export type PromoOffer = {
   plan: string;
   interval: "monthly" | "yearly";
@@ -69,20 +71,28 @@ export function promoThen(offer: PromoOffer): string {
 
 export type PromoView = { promo: Promo | null; remaining: number; offer(plan: string, interval: string): PromoOffer | null };
 
-/** Reads the offer and calls `render` once a second while one runs, and once
- *  more when it ends or the server withdraws it. Re-read every five minutes
- *  and whenever the window regains focus. */
+/** Until this instant the pricing area keeps room for the banner while the
+ *  server answers, so the plans do not jump when it appears. It only reserves
+ *  space: nothing about the offer is shown without the server. */
+export const PROMO_LAYOUT_UNTIL = Date.parse("2026-11-06T23:00:00.000Z");
+
+/** Reads the offer and calls `render` on the first answer, once a second
+ *  while an offer runs, and once more when it ends or the server withdraws
+ *  it. Re-read every five minutes and whenever the window regains focus. */
 export function watchPromo(render: (view: PromoView) => void): void {
   const clock = () => ({ perf: performance.now(), wall: Date.now() });
   let received: { promo: Promo; at: ReturnType<typeof clock> } | null = null;
-  let shown = false;
+  let answered = false;
+  // null until the first answer has been rendered, then whether an offer is showing.
+  let shown: boolean | null = null;
   const tick = (): void => {
+    if (!answered) return;
     const promo = received?.promo ?? null;
     const now = clock();
     // Whichever clock advanced more: a paused (sleep) or wrong clock can only shorten the offer.
     const elapsed = received ? Math.max(now.perf - received.at.perf, now.wall - received.at.wall) : 0;
     const active = Boolean(promo && promo.status === "active" && msUntil(promo, promo.startsAt, elapsed) <= 0 && msUntil(promo, promo.endsAt, elapsed) > 0);
-    if (!active && !shown) return;
+    if (!active && shown === false) return;
     shown = active;
     render({
       promo: active ? promo : null,
@@ -98,6 +108,7 @@ export function watchPromo(render: (view: PromoView) => void): void {
     } catch {
       received = null;
     }
+    answered = true;
     tick();
   };
   void read();
@@ -106,29 +117,65 @@ export function watchPromo(render: (view: PromoView) => void): void {
   window.addEventListener("focus", () => void read());
 }
 
-const PUMPKIN = '<svg class="promo-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 7.5c-1.6-1-4.4-1.2-6.2.4C3.6 9.8 3.4 14 4.6 16.6c1.3 2.8 4.3 3.6 7.4 2.6 3.1 1 6.1.2 7.4-2.6 1.2-2.6 1-6.8-1.2-8.7-1.8-1.6-4.6-1.4-6.2-.4Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 7.5c-1.3 2.4-1.3 9.3 0 11.7m0-11.7c1.3 2.4 1.3 9.3 0 11.7M12 7.5c0-1.6.6-3 2-3.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-const UNITS = ["days", "hours", "min", "sec"] as const;
+const UNITS = ["Days", "Hours", "Minutes", "Seconds"] as const;
+const FINE = "Struck-through prices are our lowest in the 30 days before the offer. Renewals are at the regular price, and new Solo subscribers still start with the 14-day free trial. Prices exclude VAT.";
 
-/** The large countdown banner. Static strings and numbers only: nothing from
- *  the network reaches the markup except parsed cents and a parsed date. */
-export function promoBanner(promo: Promo, trial: boolean): HTMLElement {
-  const percent = Math.min(...promo.offers.map(promoPercent));
-  const banner = document.createElement("aside");
-  banner.className = "promo";
-  banner.setAttribute("aria-label", "Halloween offer");
-  banner.innerHTML = `<div class="promo-copy"><p class="promo-title">${PUMPKIN}<span>Halloween offer</span></p><p class="promo-lead"></p><p class="promo-ends"></p></div>`
-    + `<div class="promo-timer"><p class="promo-ends-in">Ends in</p><div class="promo-clock" role="timer" aria-live="off">${UNITS.map((unit) => `<div><strong>00</strong><span>${unit}</span></div>`).join("")}</div></div>`
-    + `<p class="promo-terms"></p>`;
-  banner.querySelector(".promo-lead")!.textContent = `${percent}% off your first month or year of Solo, Studio and Agency.`;
-  banner.querySelector(".promo-ends")!.textContent = `Ends ${promoEndLabel(promo)}.`;
-  banner.querySelector(".promo-terms")!.textContent = "Struck-through prices are the lowest we charged in the 30 days before the offer began. The discount applies to the first paid month or year only; renewals are at the regular price."
-    + (trial ? " New Solo subscribers still start with the 14-day free trial." : "")
-    + " Prices exclude VAT, which is added at checkout where applicable.";
-  return banner;
+export type PromoBanner = { element: HTMLElement; show(promo: Promo): void; tick(remaining: number): void };
+
+/** The Halloween banner shared with PC Tweaker (carved pumpkins, countdown
+ *  cells), as plain DOM. Starts reserved: invisible, holding its exact place
+ *  until `show`. Only static strings and numbers reach it. */
+export function createPromoBanner(): PromoBanner {
+  const element = document.createElement("section");
+  element.className = "hw-offer hw-offer-reserved";
+  element.setAttribute("aria-hidden", "true");
+  element.innerHTML = `<div class="hw-offer-inner">`
+    + `<span class="hw-offer-decor hw-offer-decor-left" aria-hidden="true">${HALLOWEEN_DECOR_LEFT}</span>`
+    + `<span class="hw-offer-decor hw-offer-decor-right" aria-hidden="true">${HALLOWEEN_DECOR_RIGHT}</span>`
+    + `<div class="hw-offer-copy"><p class="hw-offer-kicker">Halloween offer</p><p class="hw-offer-heading" id="glarion-promo-title"></p><p class="hw-offer-fine"></p></div>`
+    + `<div class="hw-offer-timer"><span aria-hidden="true">Ends in</span><div class="hw-offer-cells" role="timer" aria-live="off">`
+    + UNITS.map((unit) => `<div class="hw-offer-cell" aria-hidden="true"><strong>00</strong><small>${unit}</small></div>`).join("")
+    + `</div></div></div>`;
+  const heading = (promo: Pick<Promo, "endsAt">, percent: number) => {
+    element.querySelector(".hw-offer-heading")!.textContent = `${percent}% off your first month or year. Ends ${promoEndLabel(promo)}.`;
+  };
+  heading({ endsAt: new Date(PROMO_LAYOUT_UNTIL).toISOString() }, 50);
+  element.querySelector(".hw-offer-fine")!.textContent = FINE;
+  return {
+    element,
+    show(promo) {
+      heading(promo, Math.min(...promo.offers.map(promoPercent)));
+      element.classList.remove("hw-offer-reserved");
+      element.removeAttribute("aria-hidden");
+      element.setAttribute("aria-labelledby", "glarion-promo-title");
+    },
+    tick(remaining) {
+      const values = promoClock(remaining);
+      element.querySelectorAll(".hw-offer-cell strong").forEach((cell, i) => { if (cell.textContent !== values[i]) cell.textContent = values[i]!; });
+      element.querySelector(".hw-offer-cells")!.setAttribute("aria-label", `Ends in ${values.slice(0, 3).map((v, i) => `${Number(v)} ${UNITS[i]!.toLowerCase()}`).join(", ")}`);
+    },
+  };
 }
 
-export function updatePromoClock(banner: HTMLElement, remaining: number): void {
-  const values = promoClock(remaining);
-  banner.querySelectorAll(".promo-clock strong").forEach((cell, i) => { if (cell.textContent !== values[i]) cell.textContent = values[i]!; });
-  banner.querySelector(".promo-clock")!.setAttribute("aria-label", values.map((v, i) => `${v} ${UNITS[i]}`).join(", "));
+/** Puts a banner where `place` says, reserved until the server answers, keeps
+ *  it in step with the offer, and calls `onChange` when the offer first
+ *  becomes known, starts or stops. */
+export function mountPromo(place: (banner: HTMLElement) => void, onChange: (view: PromoView) => void): void {
+  const banner = createPromoBanner();
+  let view: PromoView | null = null;
+  if (Date.now() < PROMO_LAYOUT_UNTIL) place(banner.element);
+  watchPromo((next) => {
+    const changed = view === null || Boolean(view.promo) !== Boolean(next.promo);
+    view = next;
+    if (changed) {
+      if (next.promo) {
+        banner.show(next.promo);
+        if (!banner.element.isConnected) place(banner.element);
+      } else {
+        banner.element.remove();
+      }
+      onChange(next);
+    }
+    if (next.promo) banner.tick(next.remaining);
+  });
 }

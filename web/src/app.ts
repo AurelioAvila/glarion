@@ -1,6 +1,6 @@
 import { recordPage } from "./acquisition.js";
 import { annualOffer } from "./annual-offer.js";
-import { euro, promoBanner, promoPercent, promoThen, updatePromoClock, watchPromo, type PromoOffer, type PromoView } from "./promo.js";
+import { createPromoBanner, euro, promoPercent, promoThen, watchPromo, type PromoBanner, type PromoOffer, type PromoView } from "./promo.js";
 let growthSignupSeen = false;
 function countSignupView(): void {
   if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
@@ -269,12 +269,12 @@ let pendingPlan = readPlanChoice();
 /// registers `promoChanged` to repaint when the offer starts or stops.
 let promoView: PromoView | null = null;
 let promoChanged: (() => void) | null = null;
-let promoBannerElement: HTMLElement | null = null;
+let promoBanner: PromoBanner | null = null;
 watchPromo((view) => {
   const changed = Boolean(promoView?.promo) !== Boolean(view.promo);
   promoView = view;
   if (changed) promoChanged?.();
-  else if (promoBannerElement?.isConnected) updatePromoClock(promoBannerElement, view.remaining);
+  else if (view.promo && promoBanner?.element.isConnected) promoBanner.tick(view.remaining);
 });
 
 function chosenPlanNotice(review = false): HTMLElement | null {
@@ -2462,9 +2462,12 @@ async function renderPlan(): Promise<void> {
     subscription.manageable ? null : (promoView?.offer(plan, interval) ?? null);
 
   function paintPromo(): void {
-    promoBannerElement = promoView?.promo && !subscription.manageable ? promoBanner(promoView.promo, true) : null;
-    promoSlot.replaceChildren(...(promoBannerElement ? [promoBannerElement] : []));
-    if (promoBannerElement && promoView) updatePromoClock(promoBannerElement, promoView.remaining);
+    promoBanner = promoView?.promo && !subscription.manageable ? createPromoBanner() : null;
+    if (promoBanner && promoView?.promo) {
+      promoBanner.show(promoView.promo);
+      promoBanner.tick(promoView.remaining);
+    }
+    promoSlot.replaceChildren(...(promoBanner ? [promoBanner.element] : []));
   }
 
   function paintList(): void {

@@ -1,5 +1,5 @@
 import { annualOffer } from './dist/annual-offer.js';
-import { euro, promoBanner, promoPercent, promoThen, updatePromoClock, watchPromo } from './dist/promo.js';
+import { euro, mountPromo, promoPercent, promoThen } from './dist/promo.js';
 
 // Without JavaScript every offer still links to the monthly selection and
 // shows the regular prices; a running offer replaces them only once the
@@ -7,7 +7,6 @@ import { euro, promoBanner, promoPercent, promoThen, updatePromoClock, watchProm
 document.querySelectorAll('.purchase-options').forEach((options) => {
   let yearly = false;
   let view = null;
-  let banner = null;
 
   const paint = () => {
     options.querySelectorAll('[data-billing]').forEach((tab) => tab.setAttribute('aria-pressed', String((tab.dataset.billing === 'yearly') === yearly)));
@@ -43,15 +42,8 @@ document.querySelectorAll('.purchase-options').forEach((options) => {
     });
   });
 
-  watchPromo((next) => {
-    const changed = Boolean(view?.promo) !== Boolean(next.promo);
+  mountPromo((banner) => options.querySelector('.purchase-switch').before(banner), (next) => {
     view = next;
-    if (changed) {
-      banner?.remove();
-      banner = next.promo ? promoBanner(next.promo, true) : null;
-      if (banner) options.querySelector('.purchase-switch').before(banner);
-      paint();
-    }
-    if (banner) updatePromoClock(banner, next.remaining);
+    paint();
   });
 });
