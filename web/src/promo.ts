@@ -135,7 +135,7 @@ export function createPromoBanner(): PromoBanner {
   element.innerHTML = `<div class="hw-offer-inner">`
     + `<span class="hw-offer-decor hw-offer-decor-left" aria-hidden="true">${HALLOWEEN_DECOR_LEFT}</span>`
     + `<span class="hw-offer-decor hw-offer-decor-right" aria-hidden="true">${HALLOWEEN_DECOR_RIGHT}</span>`
-    + `<div class="hw-offer-copy"><p class="hw-offer-kicker">Halloween offer</p><p class="hw-offer-heading" id="glarion-promo-title"></p><p class="hw-offer-fine"></p></div>`
+    + `<div class="hw-offer-copy"><h3 class="hw-offer-kicker" id="glarion-promo-title">Halloween offer</h3><p class="hw-offer-heading"></p><p class="hw-offer-fine"></p></div>`
     + `<div class="hw-offer-timer"><span aria-hidden="true">Ends in</span><div class="hw-offer-cells" role="timer" aria-live="off">`
     + UNITS.map((unit) => `<div class="hw-offer-cell" aria-hidden="true"><strong>00</strong><small>${unit}</small></div>`).join("")
     + `</div></div></div>`;

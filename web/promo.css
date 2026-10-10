@@ -204,8 +204,8 @@
   }
 }
 
-/* Page styles reach every paragraph; the banner keeps its own type. */
-.hw-offer .hw-offer-kicker { margin: 0 0 5px; color: var(--hw-orange); font-size: 11px; line-height: normal; }
+/* Page styles reach every paragraph and heading; the banner keeps its own type. */
+.hw-offer .hw-offer-kicker { margin: 0 0 5px; color: var(--hw-orange); font-family: inherit; font-size: 11px; font-weight: 750; line-height: normal; letter-spacing: 0.16em; text-transform: uppercase; }
 .hw-offer .hw-offer-heading { margin: 0; color: var(--hw-text); font-size: 15px; line-height: 1.35; }
 .hw-offer .hw-offer-fine { margin: 5px 0 0; color: var(--hw-muted); font-size: 11px; line-height: 1.5; }
 
