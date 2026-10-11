@@ -1,0 +1,292 @@
+/* Halloween strip and offer card, in Glarion's own plum ink and ember. The
+   strip sits above the sticky header and scrolls away with the page; the
+   card sits under the hero copy. Ember is the highlight only where text on
+   it is plum (6:1); body text on plum is near-white (14:1). */
+.hw-strip,
+.hw-card {
+  --hw-ember: #ff6a3d;
+  --hw-amber: #f7a14a;
+  --hw-plum: #2d103a;
+  --hw-plum-2: #3b1a4d;
+  --hw-text: #fbf7fd;
+  --hw-muted: #d6c8e0;
+  font-family: Manrope, system-ui, sans-serif;
+}
+.hw-strip {
+  position: relative;
+  z-index: 6;
+  height: 40px;
+  color: var(--hw-text);
+  background:
+    radial-gradient(34% 260% at 50% 130%, rgba(255, 106, 61, 0.32), transparent 70%),
+    linear-gradient(90deg, var(--hw-plum), var(--hw-plum-2) 50%, var(--hw-plum));
+  border-bottom: 1px solid rgba(255, 106, 61, 0.38);
+}
+.hw-strip-reserved {
+  visibility: hidden;
+}
+.hw-strip-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 0 44px 0 16px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  animation: hw-strip-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.hw-strip-reserved .hw-strip-inner {
+  animation: none;
+}
+@keyframes hw-strip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+.hw-strip-pumpkin {
+  display: block;
+  flex: none;
+  width: 30px;
+  height: 28px;
+}
+.hw-strip-pumpkin svg,
+.hw-card-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hw-strip-label {
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.hw-strip-short {
+  display: none;
+}
+.hw-strip-timer {
+  color: var(--hw-muted);
+}
+.hw-strip-digits {
+  color: var(--hw-amber);
+  font-family: var(--site-brand-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.hw-strip-cta {
+  flex: none;
+  padding: 7px 13px;
+  border-radius: 8px;
+  background: var(--hw-ember);
+  color: var(--hw-plum);
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+.hw-strip-cta:hover {
+  background: #ff825c;
+  transform: translateY(-1px);
+}
+.hw-strip a:focus-visible,
+.hw-strip button:focus-visible {
+  outline: 2px solid var(--hw-amber);
+  outline-offset: 2px;
+}
+.hw-strip-close {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hw-text);
+  cursor: pointer;
+}
+.hw-strip-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+@media (max-width: 640px) {
+  .hw-strip-inner {
+    gap: 8px;
+    padding: 0 38px 0 10px;
+    font-size: 12px;
+  }
+  .hw-strip-pumpkin,
+  .hw-strip-ends,
+  .hw-strip-full {
+    display: none;
+  }
+  .hw-strip-short {
+    display: inline;
+  }
+  .hw-strip-cta {
+    padding: 7px 10px;
+  }
+}
+@media (max-width: 400px) {
+  .hw-strip-digits {
+    font-size: 11px;
+  }
+}
+
+/* Offer card: plum night panel with an ember hairline, like the plans banner. */
+.hw-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  max-width: 27rem;
+  margin-top: 1.1rem;
+  padding: 14px 18px 11px;
+  border: 1px solid rgba(255, 106, 61, 0.55);
+  border-radius: 16px;
+  color: var(--hw-text);
+  background:
+    radial-gradient(90% 130% at 100% 0%, rgba(255, 106, 61, 0.24), transparent 62%),
+    linear-gradient(160deg, var(--hw-plum-2), var(--hw-plum) 70%);
+  box-shadow: 0 24px 48px -28px rgba(255, 106, 61, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.hw-card-reserved {
+  visibility: hidden;
+}
+.hw-card:hover {
+  border-color: var(--hw-ember);
+  box-shadow: 0 28px 56px -26px rgba(255, 106, 61, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+.hw-card-mark {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  width: 78px;
+  height: 73px;
+  pointer-events: none;
+}
+.hw-card-mark svg {
+  filter: drop-shadow(0 6px 14px rgba(255, 106, 61, 0.5));
+}
+.hw-card-tag {
+  color: var(--hw-ember);
+  font-family: var(--site-brand-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.hw-card-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+  padding-right: 90px;
+}
+.hw-card-now {
+  font-size: 38px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.hw-card-was {
+  color: var(--hw-muted);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-decoration-thickness: 1.5px;
+}
+.hw-card-pct {
+  align-self: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--hw-ember);
+  color: var(--hw-plum);
+  font-family: var(--site-brand-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.hw-card-plan {
+  color: var(--hw-muted);
+  font-size: 13px;
+}
+.hw-card-foot {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.hw-card-note {
+  color: var(--hw-muted);
+  font-size: 12.5px;
+}
+.hw-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--hw-amber);
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.hw-card-cta svg {
+  transition: transform 0.2s ease;
+}
+.hw-card-cta:hover svg {
+  transform: translateX(3px);
+}
+.hw-card-cta:focus-visible {
+  outline: 2px solid var(--hw-amber);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+@media (max-width: 480px) {
+  .hw-card {
+    padding: 16px 16px 12px;
+  }
+  .hw-card-mark {
+    width: 62px;
+    height: 58px;
+    right: 10px;
+  }
+  .hw-card-row {
+    padding-right: 64px;
+    gap: 4px 9px;
+  }
+  .hw-card-now {
+    font-size: 34px;
+  }
+  .hw-card-was {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-strip-inner,
+  .hw-card,
+  .hw-card-cta svg,
+  .hw-strip-cta {
+    animation: none;
+    transition: none;
+  }
+  .hw-strip-cta:hover,
+  .hw-card-cta:hover svg {
+    transform: none;
+  }
+}
+@media print {
+  .hw-strip,
+  .hw-card {
+    display: none !important;
+  }
+}
