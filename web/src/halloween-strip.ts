@@ -8,6 +8,7 @@ import { HALLOWEEN_MARK_EMBER } from "./halloween-decor.js";
 import { euro, promoClock, promoEndLabel, promoPercent, promoThen, watchPromo, type PromoOffer, type PromoView } from "./promo.js";
 
 const LAST_SEEN = "glarion.promo.last-seen";
+const LAST_ID = "glarion.halloween-strip.last-id";
 const UNITS = ["Days", "Hours", "Minutes", "Seconds"];
 
 const store = {
@@ -60,6 +61,9 @@ export function mountHalloween(): void {
     if (wasActive) micro.after(card);
   }
 
+  // A dismissal is remembered per offer id; the id last seen decides whether to reserve room at all,
+  // otherwise a dismissed strip would come back as an empty 40px gap on every page.
+  const isDismissed = (id: string | null) => id !== null && store.get(`glarion.halloween-strip.${id}`) === "1";
   let dismissed = false;
   let shown = false;
   const q = (root: HTMLElement, sel: string) => root.querySelector(sel) as HTMLElement;
@@ -70,7 +74,7 @@ export function mountHalloween(): void {
     strip.remove();
   });
 
-  if (wasActive) header.before(strip);
+  if (wasActive && !isDismissed(store.get(LAST_ID))) header.before(strip);
 
   watchPromo((view) => {
     const promo = view.promo;
@@ -82,7 +86,9 @@ export function mountHalloween(): void {
       return;
     }
     strip.dataset.promo = promo.id;
-    if (store.get(`glarion.halloween-strip.${promo.id}`) === "1") dismissed = true;
+    store.set(LAST_ID, promo.id);
+    if (isDismissed(promo.id)) dismissed = true;
+    if (dismissed) strip.remove();
     const percent = Math.min(...promo.offers.map(promoPercent));
     if (!dismissed) {
       if (!strip.isConnected) header.before(strip);
