@@ -1,18 +1,21 @@
 //! Transactional email.
 //!
-//! Sends through Resend's HTTPS API, matching the provider already used
-//! elsewhere in the portfolio. HTTP rather than SMTP on purpose: several
-//! hosts block outbound port 587/465, and a blocked SMTP connection hangs
-//! until a timeout instead of failing fast.
+//! Sends through Resend's HTTPS API, then SMTP2GO and Mailjet once their keys
+//! are set (see `mail_relay`), matching the providers used elsewhere in the
+//! portfolio. HTTP rather than SMTP on purpose: several hosts block outbound
+//! port 587/465, and a blocked SMTP connection hangs until a timeout instead
+//! of failing fast.
 //!
 //! Missing configuration is a send failure, never a successful delivery.
 //! Message bodies are not logged because they can contain recovery tokens.
 
-use serde::Serialize;
+use crate::mail_relay::{Outgoing, Relay};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Mailer {
-    api_key: Option<String>,
+    /// The provider chain: RESEND_API_KEY, SMTP2GO_API_KEY, MAILJET_API_KEY +
+    /// MAILJET_API_SECRET, in EMAIL_PROVIDERS order.
+    relay: Relay,
     /// No default. A fallback to Resend's shared onboarding@resend.dev
     /// address used to hide a missing MAIL_FROM: Resend only lets that sender
     /// reach the account owner, so every customer email was refused while the
@@ -40,19 +43,6 @@ pub struct Mailer {
     last_send_ok: AtomicBool,
 }
 
-#[derive(Serialize)]
-struct ResendPayload<'a> {
-    from: &'a str,
-    to: [&'a str; 1],
-    subject: &'a str,
-    html: &'a str,
-    text: &'a str,
-    /// Omitted entirely when unset, rather than sent empty — Resend rejects a
-    /// blank one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reply_to: Option<&'a str>,
-}
-
 /// A complete message: what it is called, and both bodies.
 ///
 /// Both, not one. Every message here used to go out as HTML only, which spam
@@ -70,9 +60,7 @@ pub struct Message {
 impl Mailer {
     pub fn from_env() -> Self {
         let mailer = Self {
-            api_key: std::env::var("RESEND_API_KEY")
-                .ok()
-                .filter(|k| !k.is_empty()),
+            relay: Relay::from_env(),
             // Must be an address on a domain verified in Resend, with its
             // SPF and DKIM published (glarion.app sends via send.glarion.app).
             from: std::env::var("MAIL_FROM")
@@ -91,15 +79,15 @@ impl Mailer {
             // nothing yet has no reason to tell a visitor mail is broken.
             last_send_ok: AtomicBool::new(true),
         };
-        if mailer.api_key.is_some() && mailer.from.is_none() {
+        if mailer.relay.is_configured() && mailer.from.is_none() {
             tracing::error!("MAIL_FROM is unset — every email will be refused until it is set");
         }
         mailer
     }
 
-    /// Both the provider key and the sender: either alone sends nothing.
+    /// A provider key and the sender: either alone sends nothing.
     pub fn is_configured(&self) -> bool {
-        self.api_key.is_some() && self.from.is_some()
+        self.relay.is_configured() && self.from.is_some()
     }
 
     /// Whether the most recent attempt reached the provider.
@@ -125,36 +113,27 @@ impl Mailer {
     /// The attempt itself. Split out so every exit path, including the `?` on
     /// a transport error, is recorded by `send` rather than by each branch.
     async fn deliver(&self, to: &str, message: &Message) -> anyhow::Result<()> {
-        let Some(api_key) = &self.api_key else {
+        if !self.relay.is_configured() {
             anyhow::bail!("email provider is not configured");
-        };
+        }
         let Some(from) = &self.from else {
             anyhow::bail!("MAIL_FROM is not set");
         };
-
-        let payload = ResendPayload {
-            from,
-            to: [to],
-            subject: &message.subject,
-            html: &message.html,
-            text: &message.text,
-            reply_to: self.reply_to.as_deref(),
-        };
-
-        let response = reqwest::Client::new()
-            .post("https://api.resend.com/emails")
-            .bearer_auth(api_key)
-            .json(&payload)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            anyhow::bail!("email provider refused ({status})");
-        }
-
-        Ok(())
+        // One key per message, kept across providers: Resend dedupes on it,
+        // so asking again after an unclear answer cannot send a second copy.
+        let key = uuid::Uuid::new_v4().to_string();
+        self.relay
+            .send(&Outgoing {
+                from,
+                to,
+                subject: &message.subject,
+                html: &message.html,
+                text: &message.text,
+                reply_to: self.reply_to.as_deref(),
+                key: &key,
+            })
+            .await
+            .map(|_| ())
     }
 
     /// A link into the dashboard.
@@ -1038,7 +1017,7 @@ mod tests {
 
     fn mailer() -> Mailer {
         Mailer {
-            api_key: None,
+            relay: Relay::default(),
             from: Some("Glarion <hello@example.com>".to_string()),
             public_url: "https://glarion.example".to_string(),
             reply_to: None,
@@ -1052,7 +1031,10 @@ mod tests {
     #[tokio::test]
     async fn a_key_without_a_sender_is_refused_before_any_request() {
         let sender = Mailer {
-            api_key: Some("re_test".into()),
+            relay: Relay {
+                resend: Some("re_test".into()),
+                ..Relay::default()
+            },
             from: None,
             public_url: "https://glarion.example".into(),
             reply_to: None,
@@ -1150,7 +1132,7 @@ mod tests {
     #[test]
     fn links_are_built_from_configured_url_not_from_a_request() {
         let mailer = Mailer {
-            api_key: None,
+            relay: Relay::default(),
             from: Some("x@example.com".into()),
             public_url: "https://glarion.app".into(),
             reply_to: None,
@@ -1275,7 +1257,7 @@ mod tests {
     #[test]
     fn trailing_slashes_do_not_produce_a_double_slash() {
         let mailer = Mailer {
-            api_key: None,
+            relay: Relay::default(),
             from: Some("x@example.com".into()),
             public_url: "https://glarion.app/".trim_end_matches('/').to_string(),
             reply_to: None,
@@ -1508,7 +1490,7 @@ mod tests {
         );
 
         let configured = Mailer {
-            api_key: None,
+            relay: Relay::default(),
             from: Some("Glarion <noreply@example.com>".to_string()),
             public_url: "https://glarion.example".to_string(),
             reply_to: Some("security@example.com".to_string()),

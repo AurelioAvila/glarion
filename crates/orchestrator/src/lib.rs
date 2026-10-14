@@ -12,6 +12,7 @@ pub const USER_AGENT: &str = "Glarion/1.0 (+https://glarion.app/about-our-checks
 
 pub mod domain;
 pub mod finding;
+pub mod mail_relay;
 pub mod mailer;
 pub mod net_guard;
 pub mod policy;
