@@ -202,11 +202,11 @@ fn escape(input: &str) -> String {
     out
 }
 
-/// The shared frame every message wears: the email design kit's layout
-/// (my-apps/email-design-kit/_base/layout.html) in the prism identity of
-/// glarion.app. Tables and inline styles because Outlook drops most of
-/// everything else; the style block carries only the phone layout and the dark
-/// variant.
+/// The shared frame every message wears: design kit v3
+/// (my-apps/email-design-kit/glarion), one continuous deep-violet composition
+/// from the header to the footer, no white anywhere. Tables and inline styles
+/// because Outlook drops most of everything else; the style block carries only
+/// the phone layout and the dark-mode pins.
 struct Chrome<'a> {
     /// The line shown next to the subject in an inbox list. Left to chance,
     /// clients scrape the first words of the body instead, which on a report
@@ -224,27 +224,43 @@ struct Chrome<'a> {
     help: (&'a str, &'a str),
     /// The number that matters, on a violet band: (label, big line, sentence).
     moment: Option<(String, String, String)>,
+    tone: Tone,
 }
 
-// The prism identity of glarion.app (web/prism.css, web/landing.css): lavender
-// paper, deep violet ink, violet for the one action, the three prism colours as
-// the rule over the card. Contrast on the white card: ink 15.6:1, muted 7.6:1,
-// violet 6.3:1, white on the violet button 6.3:1, alarm 7.1:1. Dark mail apps get
-// the kit's shared dark neutrals through the classes in the style block.
-const BG: &str = "#f1eaf6";
-const RAISE: &str = "#ffffff";
-const SINK: &str = "#f6f1fb";
-/// Panels: a deeper lavender that reads on white and on the lavender section.
-const PANEL: &str = "#ece2f6";
-const RULE: &str = "#dcd2e5";
-const INK: &str = "#2d103a";
-const INK_3: &str = "#695174";
-const ALARM: &str = "#a33428";
+/// How loud a message is. It sets the rule over the header, the eyebrow and
+/// the edge of the help block; security notices also warm the header and the
+/// moment band towards oxblood, so they never look like routine mail.
+#[derive(Clone, Copy, PartialEq)]
+enum Tone {
+    Brand,
+    /// Something to act on soon: a failed payment, a proof about to lapse.
+    Warning,
+    /// Something changed that may be wrong.
+    Alarm,
+    /// The account itself: password or address.
+    Security,
+}
+
+// Design kit v3 palette, from the dark side of glarion.app's prism identity.
+// Contrast: ink on card 14.8:1, muted on card 8.7:1, lavender on card 6.2:1,
+// white on the violet button 6.3:1, alarm on panel 5.3:1.
+const BG: &str = "#1a0a22";
+const RAISE: &str = "#2d103a";
+const SINK: &str = "#24102f";
+/// Panels and step cards, raised off either section tint.
+const PANEL: &str = "#3a1a4a";
+const RULE: &str = "#4d2a5e";
+const INK: &str = "#f4eef7";
+const INK_3: &str = "#c9b8d2";
+/// Hero intro and footer links.
+const SOFT: &str = "#e3d6ec";
+const NIGHT: &str = "#120618";
+const ALARM: &str = "#ff6b57";
+const AMBER: &str = "#e0a63a";
 const VIOLET: &str = "#7345b2";
-const CRIMSON: &str = "#bc294a";
-const CORAL: &str = "#e74767";
+const LAVENDER: &str = "#b58fe0";
 /// The healthy-signal green of the mark's dot.
-const SIGNAL: &str = "#2ea36f";
+const SIGNAL: &str = "#52c78d";
 const FONT: &str = "Manrope,'Segoe UI',Arial,sans-serif";
 const MONO: &str = "ui-monospace,Menlo,Consolas,monospace";
 
@@ -264,13 +280,21 @@ fn site_url() -> &'static str {
     })
 }
 
+/// The radar mark of the moment band: two rings and a dot. `separate` keeps
+/// the radius on the borders, which collapsed tables drop.
+fn radar(ring: &str, dot: &str) -> String {
+    format!(
+        r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td align="center" width="64" height="64" style="width:64px;height:64px;border:2px solid {ring};border-radius:34px"><table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td align="center" width="40" height="40" style="width:40px;height:40px;border:2px solid {ring};border-radius:22px"><table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td width="14" height="14" bgcolor="{dot}" style="width:14px;height:14px;border-radius:7px;background:{dot};font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr></table></td></tr></table>"#
+    )
+}
+
 /// Renders the frame.
 ///
-/// The brand mark sits *on* its own coloured cell rather than replacing it.
-/// Most email clients refuse remote images until the reader asks for them, so
-/// a bare logo is a blank gap on first open. Keeping the cell's background and
-/// the alt text's styling means a blocked image degrades to a violet disc with
-/// a G in it, which is the mark anyway, rather than to nothing.
+/// The mark is a dark ring on a transparent ground, so it sits on its own
+/// white disc: on the violet header alone it would vanish. Most email clients
+/// refuse remote images until the reader asks for them, and keeping the disc
+/// and the alt text's styling means a blocked image degrades to a white disc
+/// naming the product rather than to nothing.
 fn chrome(parts: Chrome<'_>) -> String {
     let Chrome {
         preview,
@@ -282,6 +306,7 @@ fn chrome(parts: Chrome<'_>) -> String {
         footer,
         help,
         moment,
+        tone,
     } = parts;
     let preview = escape(preview);
     let eyebrow = escape(eyebrow);
@@ -295,15 +320,44 @@ fn chrome(parts: Chrome<'_>) -> String {
         "Write to"
     };
     let site = site_url();
-    let signal = format!(
-        r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="10" height="10" style="width:10px;height:10px;border-radius:5px;background:{VIOLET};font-size:0;line-height:0">&nbsp;</td><td width="6" style="font-size:0">&nbsp;</td><td width="10" height="10" style="width:10px;height:10px;border-radius:5px;background:{CRIMSON};font-size:0;line-height:0">&nbsp;</td><td width="6" style="font-size:0">&nbsp;</td><td width="10" height="10" style="width:10px;height:10px;border-radius:5px;background:{CORAL};font-size:0;line-height:0">&nbsp;</td><td width="6" style="font-size:0">&nbsp;</td><td width="34" height="10" style="width:34px;height:10px;border-radius:5px;background:{SIGNAL};font-size:0;line-height:0">&nbsp;</td></tr></table>"#
+    let accent = match tone {
+        Tone::Brand => LAVENDER,
+        Tone::Warning => AMBER,
+        Tone::Alarm | Tone::Security => ALARM,
+    };
+    let security = tone == Tone::Security;
+    let (hero_bg, hero_image, moment_image, bands) = if security {
+        (
+            "#4a1838",
+            "linear-gradient(160deg,#3a1230 0%,#5c2030 100%)",
+            "linear-gradient(135deg,#5c2030 0%,#3a1230 100%)",
+            ["#55243A", "#441C3F", "#34143D"],
+        )
+    } else {
+        (
+            "#3b1750",
+            "linear-gradient(160deg,#2d103a 0%,#4a1d63 100%)",
+            "linear-gradient(135deg,#4a1d63 0%,#2d103a 100%)",
+            ["#43205A", "#36184A", "#2A1238"],
+        )
+    };
+    let bands: String = bands
+        .iter()
+        .map(|band| format!(r#"<tr><td bgcolor="{band}" style="height:6px;font-size:0;line-height:0;background:{band}">&nbsp;</td></tr>"#))
+        .collect();
+    let dots = format!(
+        r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td width="8" height="8" bgcolor="{SIGNAL}" style="width:8px;height:8px;border-radius:4px;background:{SIGNAL};font-size:0;line-height:0">&nbsp;</td><td width="6" style="font-size:0">&nbsp;</td><td width="8" height="8" bgcolor="{AMBER}" style="width:8px;height:8px;border-radius:4px;background:{AMBER};font-size:0;line-height:0">&nbsp;</td><td width="6" style="font-size:0">&nbsp;</td><td width="8" height="8" bgcolor="{ALARM}" style="width:8px;height:8px;border-radius:4px;background:{ALARM};font-size:0;line-height:0">&nbsp;</td><td width="8" style="font-size:0">&nbsp;</td><td width="16" height="16" style="width:16px;height:16px;border:2px solid {LAVENDER};border-radius:9px;font-size:0;line-height:0">&nbsp;</td></tr></table>"#
     );
     let moment_band = match moment {
         Some((label, big, line)) => format!(
-            r#"<tr><td class="pad" bgcolor="{VIOLET}" style="background:{VIOLET};background-image:linear-gradient(120deg,#4d2276 0%,{VIOLET} 100%);padding:24px 36px"><p style="margin:0 0 6px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#e5d2fb">{}</p><p class="big" style="margin:0 0 6px;font-family:{FONT};font-size:32px;line-height:38px;font-weight:800;letter-spacing:-0.7px;color:#ffffff">{}</p><p style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:#efe4fb">{}</p></td></tr>"#,
+            r#"<tr><td class="pad" bgcolor="{hero_bg}" style="background:{hero_bg};background-image:{moment_image};padding:22px 36px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td valign="middle"><p style="margin:0 0 4px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:{accent}">{}</p><p class="big" style="margin:0 0 4px;font-family:{FONT};font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.6px;color:#ffffff">{}</p><p style="margin:0;font-family:{FONT};font-size:14px;line-height:20px;color:{SOFT}">{}</p></td><td class="hide-sm" width="80" align="right" valign="middle">{}</td></tr></table></td></tr>"#,
             escape(&label),
             escape(&big),
-            escape(&line)
+            escape(&line),
+            radar(
+                if security { ALARM } else { LAVENDER },
+                if security { ALARM } else { SIGNAL }
+            ),
         ),
         None => String::new(),
     };
@@ -311,22 +365,32 @@ fn chrome(parts: Chrome<'_>) -> String {
         String::new()
     } else {
         format!(
-            r#"<tr><td class="alt pad" bgcolor="{SINK}" style="background:{SINK};padding:28px 36px 8px">{after}</td></tr>"#
+            r#"<tr><td class="alt pad" bgcolor="{SINK}" style="background:{SINK};padding:24px 36px 8px">{after}</td></tr>"#
         )
+    };
+    // The help block takes the tint the next section would have had.
+    let (help_class, help_bg) = if after_row.is_empty() && moment_band.is_empty() {
+        ("alt", SINK)
+    } else {
+        ("card", RAISE)
     };
     let button = match cta {
         Some((label, url)) => {
             let (url, label) = (escape(url), escape(label));
-            let width = (label.chars().count() * 9 + 64).min(520);
+            let width = (label.chars().count() * 9 + 68).min(520);
             format!(
-                r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn" style="margin:4px 0 24px"><tr><td align="center" bgcolor="{VIOLET}" style="border-radius:10px;background:{VIOLET}"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:48px;v-text-anchor:middle;width:{width}px" arcsize="21%" stroke="f" fillcolor="{VIOLET}"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700">{label}</center></v:roundrect><![endif]--><!--[if !mso]><!--><a href="{url}" style="display:inline-block;padding:14px 28px;font-family:{FONT};font-size:16px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;background:{VIOLET}">{label}</a><!--<![endif]--></td></tr></table>"#
+                r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn" style="margin:4px 0 24px"><tr><td align="center" bgcolor="{VIOLET}" style="border-radius:10px;background:{VIOLET}"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:50px;v-text-anchor:middle;width:{width}px" arcsize="20%" stroke="f" fillcolor="{VIOLET}"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700">{label}</center></v:roundrect><![endif]--><!--[if !mso]><!--><a href="{url}" style="display:inline-block;padding:15px 34px;font-family:{FONT};font-size:16px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;background:{VIOLET}">{label}</a><!--<![endif]--></td></tr></table>"#
             )
         }
         None => String::new(),
     };
+    let dark = format!(".bg{{background:{BG}!important}}.card{{background:{RAISE}!important}}.alt{{background:{SINK}!important}}.panel{{background:{PANEL}!important}}.ink{{color:{INK}!important}}.muted{{color:{INK_3}!important}}.rule{{border-color:{RULE}!important}}.alarm{{color:{ALARM}!important}}");
+    let ogsc = dark
+        .replace("}.", "}[data-ogsc] .")
+        .replace(".bg{", "[data-ogsc] .bg{");
 
     format!(
-        r##"<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>{preview}</title><style>@font-face{{font-family:Manrope;src:url('{site}/fonts/manrope.woff2') format('woff2');font-weight:200 800}}body,table,td,p,a{{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}}table,td{{mso-table-lspace:0;mso-table-rspace:0;border-collapse:collapse}}img{{border:0;outline:none;text-decoration:none;display:block}}body{{margin:0;padding:0;width:100%!important}}a[x-apple-data-detectors]{{color:inherit!important;text-decoration:none!important}}@media only screen and (max-width:620px){{.wrap{{padding:10px 6px!important}}.pad{{padding-left:20px!important;padding-right:20px!important}}.hero{{padding-top:24px!important;padding-bottom:22px!important}}.h1{{font-size:26px!important;line-height:32px!important}}.big{{font-size:28px!important;line-height:34px!important}}.btn,.btn td,.btn a{{width:100%!important;display:block!important;text-align:center!important;box-sizing:border-box!important}}.hide-sm{{display:none!important}}}}@media (prefers-color-scheme:dark){{.bg{{background:#120a17!important}}.card{{background:#1d1225!important}}.alt{{background:#241830!important}}.panel{{background:#2d1f3a!important}}.ink{{color:#f3ecf8!important}}.muted{{color:#bba9c8!important}}.rule{{border-color:#3a2747!important}}.link,.eyebrow{{color:#cdb0f2!important}}.alarm{{color:#ff9a8a!important}}}}[data-ogsc] .bg{{background:#120a17!important}}[data-ogsc] .card{{background:#1d1225!important}}[data-ogsc] .alt{{background:#241830!important}}[data-ogsc] .panel{{background:#2d1f3a!important}}[data-ogsc] .ink{{color:#f3ecf8!important}}[data-ogsc] .muted{{color:#bba9c8!important}}[data-ogsc] .link,[data-ogsc] .eyebrow{{color:#cdb0f2!important}}</style></head><body class="bg" style="margin:0;padding:0;background:{BG}"><div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:{BG}">{preview}{pad}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" bgcolor="{BG}" style="background:{BG}" lang="en" dir="ltr"><tr><td align="center" class="wrap" style="padding:28px 14px"><!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]--><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:600px;margin:0 auto"><tr><td bgcolor="{CORAL}" style="height:6px;font-size:0;line-height:0;background:{CORAL};background-image:linear-gradient(90deg,{VIOLET} 0%,{CRIMSON} 55%,{CORAL} 100%);border-radius:16px 16px 0 0">&nbsp;</td></tr><tr><td class="hero pad" bgcolor="{INK}" style="background:{INK};background-image:linear-gradient(160deg,#22092d 0%,#4d2276 100%);padding:28px 36px 26px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="mark" width="44" height="44" align="center" valign="middle" style="width:44px;height:44px;border-radius:22px;background:#ffffff;color:#2d103a;font-family:{FONT};font-size:16px;font-weight:800"><a href="{site}" style="text-decoration:none;color:#2d103a"><img src="{site}/glarion-mark-64.png" width="34" height="34" alt="Glarion" style="display:block;width:34px;height:34px;margin:5px;border:0;border-radius:17px"></a></td><td valign="middle" style="padding-left:12px;font-family:{FONT};font-size:15px;line-height:20px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase"><a href="{site}" style="color:#ffffff;text-decoration:none">Glarion</a></td><td class="hide-sm" align="right" valign="middle">{signal}</td></tr></table><p style="margin:24px 0 8px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#d7b9f7">{eyebrow}</p><h1 class="h1" style="margin:0 0 10px;font-family:{FONT};font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.7px;color:#ffffff">{heading}</h1><p style="margin:0;font-family:{FONT};font-size:16px;line-height:25px;color:#e7dcf1">{preview}</p></td></tr><tr><td bgcolor="{VIOLET}" style="height:5px;font-size:0;line-height:0;background:{VIOLET}">&nbsp;</td></tr><tr><td bgcolor="{CRIMSON}" style="height:5px;font-size:0;line-height:0;background:{CRIMSON}">&nbsp;</td></tr><tr><td bgcolor="{CORAL}" style="height:5px;font-size:0;line-height:0;background:{CORAL}">&nbsp;</td></tr><tr><td class="card pad" bgcolor="{RAISE}" style="background:{RAISE};padding:30px 36px 8px">{body}{button}</td></tr>{moment_band}{after_row}<tr><td class="alt pad" bgcolor="{SINK}" style="background:{SINK};padding:8px 36px 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="#ece2f6" style="background:#ece2f6;border-left:4px solid {VIOLET};border-radius:6px"><tr><td style="padding:16px 18px"><p class="ink" style="margin:0 0 4px;font-family:{FONT};font-size:14px;line-height:21px;font-weight:700;color:{INK}">{help_title}</p><p class="muted" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK_3}">{help_text} {write} <a href="mailto:hello@glarion.app" class="link" style="color:{VIOLET}">hello@glarion.app</a>. Never send a password by email.</p></td></tr></table></td></tr><tr><td class="pad" bgcolor="{INK}" style="background:{INK};padding:24px 36px 26px;border-radius:0 0 16px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td valign="middle"><p style="margin:0;font-family:{FONT};font-size:15px;line-height:20px;font-weight:800;color:#ffffff">Know what changed. Show what matters.</p><p style="margin:2px 0 0;font-family:{FONT};font-size:12px;line-height:18px;color:#cdbbd8">Website security monitoring for agencies</p></td><td class="hide-sm" align="right" valign="middle">{signal}</td></tr></table><p style="margin:16px 0 6px;font-family:{FONT};font-size:12px;line-height:18px;color:#cdbbd8">{footer}</p><p style="margin:0;font-family:{FONT};font-size:12px;line-height:18px;color:#cdbbd8">Glarion &middot; <a href="{site}" style="color:#e9dbf7">Website</a> &middot; <a href="{site}/privacy.html" style="color:#e9dbf7">Privacy</a> &middot; <a href="{site}/terms.html" style="color:#e9dbf7">Terms</a> &middot; <a href="mailto:hello@glarion.app" style="color:#e9dbf7">Support</a></p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>"##,
+        r##"<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>{preview}</title><style>@font-face{{font-family:Manrope;src:url('{site}/fonts/manrope.woff2') format('woff2');font-weight:200 800}}body,table,td,p,a{{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}}table,td{{mso-table-lspace:0;mso-table-rspace:0;border-collapse:collapse}}img{{border:0;outline:none;text-decoration:none;display:block}}body{{margin:0;padding:0;width:100%!important}}a[x-apple-data-detectors]{{color:inherit!important;text-decoration:none!important}}@media only screen and (max-width:620px){{.wrap{{padding:10px 6px!important}}.pad{{padding-left:20px!important;padding-right:20px!important}}.hero{{padding-top:24px!important;padding-bottom:22px!important}}.h1{{font-size:26px!important;line-height:32px!important}}.big{{font-size:26px!important;line-height:32px!important}}.btn,.btn td,.btn a{{width:100%!important;display:block!important;text-align:center!important;box-sizing:border-box!important}}.hide-sm{{display:none!important}}}}@media (prefers-color-scheme:dark){{{dark}}}{ogsc}</style></head><body class="bg" style="margin:0;padding:0;background:{BG}"><div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:{BG}">{preview}{pad}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" bgcolor="{BG}" style="background:{BG}" lang="en" dir="ltr"><tr><td align="center" class="wrap" style="padding:28px 14px"><!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]--><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:600px;margin:0 auto"><tr><td bgcolor="{accent}" style="height:6px;font-size:0;line-height:0;background:{accent};border-radius:16px 16px 0 0">&nbsp;</td></tr><tr><td class="hero pad" bgcolor="{hero_bg}" style="background:{hero_bg};background-image:{hero_image};padding:28px 36px 26px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td class="mark" width="44" height="44" align="center" valign="middle" style="width:44px;height:44px;border-radius:22px;background:#ffffff;color:#2d103a;font-family:{FONT};font-size:16px;font-weight:800"><a href="{site}" style="text-decoration:none;color:#2d103a"><img src="{site}/glarion-mark-64.png" width="34" height="34" alt="Glarion" style="display:block;width:34px;height:34px;margin:5px;border:0;border-radius:17px"></a></td><td valign="middle" style="padding-left:12px;font-family:{FONT};font-size:14px;line-height:18px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase"><a href="{site}" style="color:#d9c6ea;text-decoration:none">Glarion</a></td><td align="right" valign="middle" class="hide-sm" style="font-family:{FONT};font-size:12px;line-height:16px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:{accent}">{eyebrow}</td></tr></table><h1 class="h1" style="margin:22px 0 10px;font-family:{FONT};font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.6px;color:#ffffff">{heading}</h1><p style="margin:0;font-family:{FONT};font-size:16px;line-height:25px;color:{SOFT}">{preview}</p></td></tr>{bands}<tr><td class="card pad" bgcolor="{RAISE}" style="background:{RAISE};padding:28px 36px 8px">{body}{button}</td></tr>{moment_band}{after_row}<tr><td class="{help_class} pad" bgcolor="{help_bg}" style="background:{help_bg};padding:22px 36px 26px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border-left:4px solid {accent};border-radius:0 12px 12px 0"><tr><td style="padding:14px 20px"><p class="ink" style="margin:0 0 4px;font-family:{FONT};font-size:14px;line-height:21px;font-weight:700;color:{INK}">{help_title}</p><p class="muted" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK_3}">{help_text} {write} <a href="mailto:hello@glarion.app" class="link" style="color:{LAVENDER}">hello@glarion.app</a>. Never send a password by email.</p></td></tr></table></td></tr><tr><td class="pad" bgcolor="{NIGHT}" style="background:{NIGHT};padding:20px 36px 22px;border-radius:0 0 16px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td width="32" height="32" align="center" valign="middle" style="width:32px;height:32px;border-radius:16px;background:#ffffff"><img src="{site}/glarion-mark-64.png" width="24" height="24" alt="" style="display:block;width:24px;height:24px;margin:4px;border:0;border-radius:12px"></td><td valign="middle" style="padding-left:10px;font-family:{FONT};font-size:15px;line-height:20px;font-weight:800;color:{SOFT}">Glarion<br><span style="font-size:12px;line-height:18px;font-weight:400;color:#a893b8">Website security monitoring for agencies</span></td><td class="hide-sm" align="right" valign="middle">{dots}</td></tr></table><p style="margin:14px 0 6px;font-family:{FONT};font-size:12px;line-height:18px;color:#a893b8">{footer}</p><p style="margin:0;font-family:{FONT};font-size:12px;line-height:18px;color:{SOFT}"><a href="{site}" style="color:{SOFT}">glarion.app</a> &middot; <a href="{site}/privacy.html" style="color:{SOFT}">Privacy</a> &middot; <a href="{site}/terms.html" style="color:{SOFT}">Terms</a> &middot; <a href="mailto:hello@glarion.app" style="color:{SOFT}">Support</a></p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>"##,
         pad = "&#8199;&#847;".repeat(60)
     )
 }
@@ -338,7 +402,7 @@ fn para(text: &str) -> String {
     )
 }
 
-/// Small print tied to this message: expiry, what Stripe sends, where a setting lives.
+/// Small print tied to this message: expiry, where a setting lives.
 fn note(text: &str) -> String {
     format!(
         r#"<p class="muted" style="margin:0 0 20px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">{}</p>"#,
@@ -346,23 +410,43 @@ fn note(text: &str) -> String {
     )
 }
 
-/// The kit's details card: label and value rows on the panel colour.
+/// The kit's details card: label and value rows on a raised panel.
 fn rows(items: &[(&str, &str)]) -> String {
-    let last = items.len().saturating_sub(1);
+    rows_card(items, None)
+}
+
+/// The details card with the figure that matters printed on violet at its foot.
+fn rows_card(items: &[(&str, &str)], total: Option<(&str, &str)>) -> String {
     let body: String = items
         .iter()
         .enumerate()
         .map(|(i, (label, value))| {
-            let rule = if i < last { format!("border-bottom:1px solid {RULE};") } else { String::new() };
+            let rule = if i > 0 { format!("border-top:1px solid {RULE};") } else { String::new() };
             format!(
-                r#"<tr><td class="muted rule" width="38%" valign="top" style="padding:10px 12px 10px 0;{rule}font-family:{FONT};font-size:13px;line-height:20px;color:{INK_3}">{}</td><td class="ink rule" valign="top" style="padding:10px 0;{rule}font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;color:{INK};word-break:break-word">{}</td></tr>"#,
+                r#"<tr><td class="muted rule" width="40%" valign="top" style="padding:9px 12px 9px 0;{rule}font-family:{FONT};font-size:13px;line-height:20px;color:{INK_3}">{}</td><td class="ink rule" valign="top" style="padding:9px 0;{rule}font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;color:{INK};word-break:break-word">{}</td></tr>"#,
                 escape(label),
                 escape(value)
             )
         })
         .collect();
+    let foot = match total {
+        Some((label, value)) => format!(
+            r#"<tr><td bgcolor="{VIOLET}" style="background:{VIOLET};padding:12px 20px;border-radius:0 0 11px 11px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="40%" style="font-family:{FONT};font-size:13px;line-height:20px;font-weight:700;color:#ffffff">{}</td><td style="font-family:{FONT};font-size:16px;line-height:20px;font-weight:800;color:#ffffff;word-break:break-word">{}</td></tr></table></td></tr>"#,
+            escape(label),
+            escape(value)
+        ),
+        None => String::new(),
+    };
     format!(
-        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border-radius:10px;margin:0 0 24px"><tr><td style="padding:6px 18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{body}</table></td></tr></table>"#
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border:1px solid {RULE};border-radius:12px;margin:0 0 24px;border-collapse:separate"><tr><td style="padding:6px 20px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{body}</table></td></tr>{foot}</table>"#
+    )
+}
+
+/// One raised card with a marker on the left: a ringed number for steps, a
+/// tick or a cross for the two outcomes of a security notice.
+fn marked_card(marker: &str, ring: &str, text: &str) -> String {
+    format!(
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border:1px solid {RULE};border-radius:12px;margin:0 0 10px;border-collapse:separate"><tr><td width="50" valign="top" style="padding:14px 0 14px 14px"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate"><tr><td align="center" width="34" height="34" style="width:34px;height:34px;border:2px solid {ring};border-radius:19px;font-family:Arial,sans-serif;font-size:14px;line-height:34px;font-weight:700;color:{ring}">{marker}</td></tr></table></td><td class="ink" valign="top" style="padding:16px 16px 14px 10px;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}">{text}</td></tr></table>"#
     )
 }
 
@@ -372,16 +456,10 @@ fn steps(heading: &str, items: &[&str]) -> String {
     let body: String = items
         .iter()
         .enumerate()
-        .map(|(i, item)| {
-            format!(
-                r#"<tr><td width="24" valign="top" style="padding:1px 12px 12px 0"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" width="24" height="24" bgcolor="{VIOLET}" style="width:24px;height:24px;border-radius:12px;background:{VIOLET};font-family:Arial,sans-serif;font-size:12px;line-height:24px;font-weight:700;color:#ffffff">{}</td></tr></table></td><td class="ink" valign="top" style="padding:0 0 12px;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}">{}</td></tr>"#,
-                i + 1,
-                escape(item)
-            )
-        })
+        .map(|(i, item)| marked_card(&(i + 1).to_string(), LAVENDER, &escape(item)))
         .collect();
     format!(
-        r#"<p class="muted" style="margin:0 0 10px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:{INK_3}">{}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px">{body}</table>"#,
+        r#"<p class="eyebrow" style="margin:0 0 12px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:{LAVENDER}">{}</p>{body}<div style="height:12px;font-size:0;line-height:0">&nbsp;</div>"#,
         escape(heading)
     )
 }
@@ -389,7 +467,7 @@ fn steps(heading: &str, items: &[&str]) -> String {
 /// A titled panel for the one thing worth reading twice.
 fn panel(title: &str, text: &str) -> String {
     format!(
-        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border-radius:10px;margin:0 0 24px"><tr><td style="padding:16px 18px"><p class="ink" style="margin:0 0 6px;font-family:{FONT};font-size:15px;line-height:22px;font-weight:700;color:{INK}">{}</p><p class="ink" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK}">{}</p></td></tr></table>"#,
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border:1px solid {RULE};border-radius:12px;margin:0 0 24px;border-collapse:separate"><tr><td style="padding:16px 20px"><p class="ink" style="margin:0 0 6px;font-family:{FONT};font-size:15px;line-height:22px;font-weight:700;color:{INK}">{}</p><p class="ink" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK}">{}</p></td></tr></table>"#,
         escape(title),
         escape(text)
     )
@@ -398,9 +476,17 @@ fn panel(title: &str, text: &str) -> String {
 /// Security notices get "if this was you / if it was not" instead of steps.
 fn security(if_you: &str, if_not: &str) -> String {
     format!(
-        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border-radius:10px;margin:0 0 24px"><tr><td style="padding:16px 18px"><p class="ink" style="margin:0 0 8px;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}"><strong>If this was you:</strong> {}</p><p class="ink" style="margin:0;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}"><strong>If it was not:</strong> {}</p></td></tr></table>"#,
-        escape(if_you),
-        escape(if_not)
+        r#"{}{}<div style="height:12px;font-size:0;line-height:0">&nbsp;</div>"#,
+        marked_card(
+            "&#10003;",
+            SIGNAL,
+            &format!("<strong>If this was you:</strong> {}", escape(if_you))
+        ),
+        marked_card(
+            "&#10007;",
+            ALARM,
+            &format!("<strong>If it was not:</strong> {}", escape(if_not))
+        ),
     )
 }
 
@@ -409,7 +495,7 @@ fn security(if_you: &str, if_not: &str) -> String {
 /// where it is a button.
 fn fallback(link: &str) -> String {
     format!(
-        r#"<p class="muted" style="margin:-8px 0 24px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3};word-break:break-all">If the button does not open, copy this address into your browser:<br><span class="ink" style="color:{INK}">{}</span></p>"#,
+        r#"<p class="muted" style="margin:-8px 0 24px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">If the button does not open, copy this address into your browser:<br><span class="ink" style="color:{INK};word-break:break-all">{}</span></p>"#,
         escape(link)
     )
 }
@@ -448,6 +534,7 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
             footer: "You received this email because this address was used to create a Glarion account.",
             help: ("Link expired?", "Sign in with your email and password and Glarion offers to send a new one."),
             moment: None,
+            tone: Tone::Brand,
         }),
         text: format!(
             "{hello}\n\nConfirm this address to finish setting up your Glarion account:\n{link}\n\nThe link is valid for 24 hours. If you did not create an account, you can ignore this message."
@@ -496,6 +583,7 @@ pub fn welcome_email(first_name: &str, link: &str) -> Message {
                 "A couple of minutes".to_string(),
                 "Headers, certificate, DNS and email security of the first site you add, with nothing to install.".to_string(),
             )),
+            tone: Tone::Brand,
         }),
         text: format!(
             "{hello}\n\nYour Glarion account is ready. One account covers every site you look after.\n\n1. Add a site you look after\n2. Prove you are allowed to scan it: one DNS record or one file\n3. Run the full scan, on a plan\n\nThe free check reads what a site publishes to any visitor and costs nothing. The full scan goes looking instead, and that is what a plan pays for. We only scan domains whose ownership has been proven, which is what makes the report something you can hand to a client.\n\nStart here: {link}"
@@ -534,6 +622,7 @@ pub fn ownership_lapsing_email(
             footer: "You received this email because this site is on a scan schedule in your Glarion account.",
             help: ("Record still in place?", "Reply with the domain and we will check what Glarion sees."),
             moment: None,
+            tone: Tone::Warning,
         }),
         text: format!(
             "{hello}\n\nWe checked {domain} again and could not find the DNS record or file that proves you may scan it. Proof lapses on {when}; after that, its scheduled scans stop.\n\nIf it was removed by mistake, put it back: we check again every hour. If the site has moved, verify it again from Glarion.\n\n{link}"
@@ -587,13 +676,14 @@ pub fn subscription_email(
                     "{}{}{}",
                     para(&hello),
                     para(&charge),
-                    rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule), ("First payment", &when)]),
+                    rows_card(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)], Some(("First payment", &when))),
                 ),
                 cta: Some(("Open Glarion", link)),
                 after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.")),
                 footer: "You received this email because you started a Glarion trial with this address.",
                 help: ("Billing question?", "Reply to this email from the address on the account."),
                 moment: Some((format!("{plan_name} trial"), format!("Up to {max_targets} sites"), format!("Everything on the plan until {when}. {cadence}"))),
+                tone: Tone::Brand,
             }),
             text: format!(
                 "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing."
@@ -612,13 +702,14 @@ pub fn subscription_email(
                 "{}{}{}",
                 para(&hello),
                 para(&format!("Your {plan_name} plan is active. {cadence} Nothing else needs setting up.")),
-                rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)]),
+                rows_card(&[("Plan", plan_name), ("Scheduled checks", schedule)], Some(("Sites monitored", &sites))),
             ),
             cta: Some(("Open Glarion", link)),
             after: &note("You can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."),
             footer: "You received this email because a Glarion subscription on this address changed.",
             help: ("Billing question?", "Reply to this email from the address on the account."),
             moment: Some((format!("{plan_name} plan"), format!("Up to {max_targets} sites"), cadence.to_string())),
+            tone: Tone::Brand,
         }),
         text: format!(
             "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."
@@ -649,6 +740,7 @@ pub fn email_change_confirmation(first_name: &str, link: &str, valid_minutes: i6
             footer: "If you were not expecting this, ignore it: nothing changes until the link is followed, and whoever asked cannot read this message.",
             help: ("Not expecting this?", "Ignore it. Nothing moves without the link."),
             moment: None,
+            tone: Tone::Brand,
         }),
         text: format!(
             "{hello}\n\nSomeone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.\n\nIf you were not expecting this, ignore it: nothing changes until the link is followed."
@@ -685,6 +777,7 @@ pub fn email_change_alert(first_name: &str, new_email: &str) -> Message {
             footer: "This security notice is sent to the address currently on the account whenever a change is requested, and cannot be turned off.",
             help: ("Did not ask for this?", "Reply to this message straight away and we will help you secure the account."),
             moment: None,
+            tone: Tone::Security,
         }),
         text: format!(
             "{hello}\n\nYour Glarion account is being moved to {new_email}. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's.\n\nIf this was you, nothing else is needed. If it was not, change your password now, because someone is signed in who should not be, and reply to this message."
@@ -744,6 +837,7 @@ pub fn subscription_ended_email(
             footer: "You received this email because a Glarion plan on this address changed state. Stripe holds the payment record.",
             help: ("Card updated but still paused?", "Reply to this email from the address on the account."),
             moment: None,
+            tone: if payment_problem { Tone::Warning } else { Tone::Brand },
         }),
         text: format!(
             "{hello}\n\n{explain}\n\n{kept}\n\n{action}: {link}"
@@ -774,6 +868,7 @@ pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> Me
             footer: "You are getting this because this site is on a scanning schedule. Turn it off on the site's page.",
             help: ("Expected change?", "Open the site's page to see the latest scan, or reply if the result looks wrong."),
             moment: None,
+            tone: Tone::Alarm,
         }),
         text: format!(
             "{summary}\n{domain}\n\n{detail}\n\nSee what changed: {link}\n\nYou are getting this because this site is on a scanning schedule. Turn it off on the site's page."
@@ -838,12 +933,12 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
     let preview =
         format!("What any visitor can see on {domain}, and what this check did not look at");
     let body = format!(
-        r#"<p class="muted" style="margin:-6px 0 18px;font-family:{MONO};font-size:14px;line-height:20px;color:{INK_3}">{}</p>{}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border-radius:10px;margin:0 0 24px"><tr><td style="padding:6px 18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{rows_html}</table></td></tr></table>"#,
+        r#"<p class="muted" style="margin:-6px 0 18px;font-family:{MONO};font-size:14px;line-height:20px;color:{INK_3}">{}</p>{}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{PANEL}" style="background:{PANEL};border:1px solid {RULE};border-radius:12px;margin:0 0 24px;border-collapse:separate"><tr><td style="padding:6px 20px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{rows_html}</table></td></tr></table>"#,
         escape(domain),
         para("This is your requested partial public check. It is useful on its own, but it is not a full security scan."),
     );
     let after = format!(
-        r#"{}<p class="muted" style="margin:0 0 20px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">Want to see the format before choosing a plan? <a class="link" href="{sample_link}" style="color:{VIOLET};font-weight:700">View a sample full report</a>. The sample uses fictional findings.</p>"#,
+        r#"{}<p class="muted" style="margin:0 0 20px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">Want to see the format before choosing a plan? <a class="link" href="{sample_link}" style="color:{LAVENDER};font-weight:700">View a sample full report</a>. The sample uses fictional findings.</p>"#,
         panel("What this did not look at", &scope),
     );
 
@@ -860,6 +955,7 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
             footer: "You received this because this report was requested from your address. We do not add you to anything by sending it.",
             help: ("Questions about a result?", "Reply with the line that puzzles you and we will explain what it means for the site."),
             moment: None,
+            tone: Tone::Brand,
         }),
         text: format!(
             "{headline}\n{domain}\n\nThis is your requested partial public check. It is useful on its own, but it is not a full security scan.\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nCompare paid plans for the full scan: {pricing_link}\nView a sample full report (fictional findings): {sample_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
@@ -890,6 +986,7 @@ pub fn password_reset_email(first_name: &str, link: &str, valid_minutes: i64) ->
             footer: "We will never ask you for your password by email, and we will never ask you to send it back to us.",
             help: ("Link expired?", "Ask for a new one with Forgot your password? on the sign-in page."),
             moment: None,
+            tone: Tone::Security,
         }),
         text: format!(
             "{hello}\n\nUse the link below to choose a new password for your Glarion account. Signing in everywhere else stops working as soon as you do.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it: your password stays unchanged.\n\nWe will never ask you for your password by email."
@@ -926,6 +1023,7 @@ pub fn password_changed_email(first_name: &str) -> Message {
             footer: "This security notice is sent every time the password changes and cannot be turned off.",
             help: ("Did not change it?", "Reply to this message straight away from this address."),
             moment: None,
+            tone: Tone::Security,
         }),
         text: format!(
             "{hello}\n\nThe password on your Glarion account was changed, and every device that was signed in has been signed out.\n\nIf this was you, nothing else is needed. If it was not, reply to this message straight away: someone else set that password.\n\nWe will never ask you for your password by email."
