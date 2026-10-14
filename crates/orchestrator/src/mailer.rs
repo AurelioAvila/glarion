@@ -486,7 +486,7 @@ pub fn welcome_email(first_name: &str, link: &str) -> Message {
                 ),
                 panel(
                     "Why ownership comes first",
-                    "We only scan domains whose ownership has been proven. That is what keeps the full scan legal to run, and what makes the report something you can hand to a client. The full scan, the one that goes looking rather than reading, is what a plan pays for."
+                    "We only scan domains whose ownership has been proven, which is why step 2 exists. It is also what makes the report something you can hand to a client. The full scan, the one that goes looking rather than reading, is what a plan pays for."
                 ),
             ),
             footer: "You received this email because you just confirmed a Glarion account. It is sent once.",
@@ -590,13 +590,13 @@ pub fn subscription_email(
                     rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule), ("First payment", &when)]),
                 ),
                 cta: Some(("Open Glarion", link)),
-                after: &note(&format!("{cadence} Nothing has been charged yet; Stripe sends a receipt when the first payment is taken.")),
+                after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.")),
                 footer: "You received this email because you started a Glarion trial with this address.",
                 help: ("Billing question?", "Reply to this email from the address on the account."),
                 moment: Some((format!("{plan_name} trial"), format!("Up to {max_targets} sites"), format!("Everything on the plan until {when}. {cadence}"))),
             }),
             text: format!(
-                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet; Stripe sends a receipt when the first payment is taken."
+                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing."
             ),
         };
     }
@@ -615,13 +615,13 @@ pub fn subscription_email(
                 rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)]),
             ),
             cta: Some(("Open Glarion", link)),
-            after: &note("You can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."),
+            after: &note("You can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."),
             footer: "You received this email because a Glarion subscription on this address changed.",
             help: ("Billing question?", "Reply to this email from the address on the account."),
             moment: Some((format!("{plan_name} plan"), format!("Up to {max_targets} sites"), cadence.to_string())),
         }),
         text: format!(
-            "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."
+            "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."
         ),
     }
 }
@@ -713,12 +713,12 @@ pub fn subscription_ended_email(
         "Your plan has ended"
     };
     let explain = if payment_problem {
-        format!("We could not take payment for your Glarion {plan_name} plan, so scheduled scanning is paused and your account is back on the free plan. Updating the card puts it back exactly as it was.")
+        format!("We could not take payment for your Glarion {plan_name} plan, so scheduled scanning is paused and your account is back on the free plan. Updating the card puts it back exactly as it was: open Pricing in Glarion and choose Manage billing.")
     } else {
         format!("Your Glarion {plan_name} plan has ended, so scheduled scanning is off and your account is back on the free plan. Subscribing again turns it back on.")
     };
     let action = if payment_problem {
-        "Update your card"
+        "Open Pricing in Glarion"
     } else {
         "Subscribe again"
     };
@@ -772,7 +772,7 @@ pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> Me
             cta: Some(("See what changed", link)),
             after: "",
             footer: "You are getting this because this site is on a scanning schedule. Turn it off on the site's page.",
-            help: ("Expected change?", "Open the site's page to compare it with the previous scan, or reply if the result looks wrong."),
+            help: ("Expected change?", "Open the site's page to see the latest scan, or reply if the result looks wrong."),
             moment: None,
         }),
         text: format!(
