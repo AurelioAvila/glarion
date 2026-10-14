@@ -749,9 +749,11 @@ async function renderTargets(): Promise<void> {
   });
 
   container.append(
-    el("div", { class: "workspace-heading" }, [el("h1", { text: "Your websites" }), el("p", { text: "Monitor client sites and review the changes that need your attention." })]),
+    el("div", { class: "workspace-heading with-action" }, [
+      el("div", {}, [el("h1", { text: "Your websites" }), el("p", { text: "Monitor client sites and review the changes that need your attention." })]),
+      addButton,
+    ]),
     standingStatement(rows, subscription),
-    el("div", { class: "head-row" }, [el("div"), addButton]),
     addPanel,
     sectionRule("Sites", countOf(rows.length, "site")),
   );
@@ -1922,16 +1924,29 @@ async function renderScan(scanId: string): Promise<void> {
     );
   }
 
+  const tally = el("ul", { class: "tally", "aria-label": "Findings by priority" });
+  for (const level of ["urgent", "high", "medium", "low"] as const) {
+    const n = detail.triaged.actionable.concat(detail.triaged.review).filter((f) => f.priority === level).length;
+    if (n > 0) {
+      tally.append(
+        el("li", {}, [
+          el("span", { class: `tally-n rank-${level}`, text: String(n) }),
+          ` ${level}`,
+        ]),
+      );
+    }
+  }
+
   container.append(
     el("a", { class: "back", href: `#/targets/${detail.target_id}`, text: `← ${detail.domain}` }),
-    verdict,
+    el("div", { class: "scan-head" }, [verdict, download]),
     el("p", {
       class: "standing-meta",
       text: `${countOf(detail.finding_count, "check")} · ${detail.triaged.review.length} to decide · scanned ${relativeTime(detail.completed_at ?? detail.created_at)}`,
     }),
-    el("div", { class: "head-row", style: "margin-bottom:2rem" }, [el("div"), download]),
     message,
   );
+  if (tally.childElementCount > 0) message.before(tally);
 
   if (detail.triaged.actionable.length > 0) {
     container.append(sectionRule("Fix these", countOf(detail.triaged.actionable.length, "item")));
@@ -1950,7 +1965,12 @@ async function renderScan(scanId: string): Promise<void> {
   if (detail.triaged.inventory.length > 0) {
     const items = el("ul", { class: "appendix" });
     for (const finding of detail.triaged.inventory) {
-      items.append(el("li", { text: finding.title }));
+      items.append(
+        el("li", {}, [
+          finding.title,
+          finding.matcher ? el("span", { class: "appendix-detail", text: finding.matcher }) : null,
+        ]),
+      );
     }
     container.append(
       el("div", { style: "margin-top:2.75rem" }, [

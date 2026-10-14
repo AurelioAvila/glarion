@@ -432,3 +432,10 @@ footer{border-top:1px solid var(--site-line);padding:2.5rem 0}
 @media(max-width:38rem){.wrap{width:calc(100% - 2rem)}.wordmark{font-size:1.35rem}.brand-mark{width:28px;height:28px}.top-nav{gap:.8rem}.top-nav a{font-size:.76rem}.nav-cta{padding:.6rem .7rem}.hero{padding-top:1.7rem}h1{font-size:clamp(2.8rem,12vw,4.3rem)}.prism-art{position:relative;grid-column:1;grid-row:2;width:82%;margin:-2rem auto -1.7rem;top:auto;right:auto;opacity:1;z-index:0}.hero-copy{grid-row:1}.product-description{max-width:29ch}.actions{gap:.65rem}.hero-copy .primary,.hero-copy .secondary{padding:.8rem 1rem;font-size:.8rem}.micro{max-width:42ch}.check-panel{padding:1.5rem;margin-top:1rem}.check-row{flex-direction:column;align-items:stretch}.check-title{font-size:1.75rem}.report-sample{padding:1.5rem}.fact{grid-template-columns:1fr;gap:.3rem}.foot-links{margin-left:0}.final .primary{width:100%}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 @media print{.top,footer,.hero-copy,.check-panel,main>section,.prism-art{display:none!important}.hero-grid{display:block}.hero{padding:0}.wrap{width:100%}#result{display:block!important;border:0}.print-source{display:block;color:#111}.verdict,.fact-value,.fact-label,.verdict-meta{color:#111!important}body{background:white;color:#111}}
+
+/* Polish pass 2026-10: opaque sticky header, calmer result footer. */
+.top{background:#faf7fb;box-shadow:0 1px 0 var(--site-soft)}
+#result .check{margin-top:2.25rem;padding-top:1.75rem;border-top:1px solid var(--site-soft)}
+#result .foot-note{display:block;margin-top:.9rem}
+#result .check-row{align-items:flex-end}
+@media (prefers-reduced-motion:no-preference){.primary,.secondary,.ghost{transition:transform .14s ease,box-shadow .14s ease,background-color .14s ease}.primary:active,.secondary:active,.ghost:active{transform:scale(.97)}}
