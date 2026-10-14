@@ -1,0 +1,41 @@
+# Glarion
+
+> Glarion is website security monitoring for digital agencies and freelancers. It checks client websites on a schedule, separates actionable findings from scanner noise and produces reports under your own name and logo. It is operated by Aurelio Avila, an individual.
+
+## What it does
+
+- Free public check, no account: https://glarion.app/ . It makes three GET requests (the homepage, robots.txt and security.txt), reads the TLS certificate expiry and looks up SPF and DMARC records. It probes nothing and guesses no paths.
+- Full scans: only on domains whose owner has proved control with a DNS TXT record or a hosted token file. The proof lasts 30 days and is checked again when a scan runs. Scans check for known vulnerability fingerprints, at most 20 requests per second, with intrusive, brute-force, fuzzing and denial-of-service template categories excluded, and at most six full scans per site per rolling 24 hours.
+- Weekly or monthly scheduled checks, email alerts when results change, and reports (self-contained HTML, printable to PDF) with the agency's name and logo.
+- Findings keep their evidence and are sorted into Act, Review and Inventory. Glarion is automated monitoring, not a penetration test, and it does not guarantee that a website is secure or apply fixes.
+
+## Plans (EUR, read from the structured data of the pricing page)
+
+- Free: EUR 0. One site. Public check only, no full scan and no scheduling.
+- Solo: EUR 19 a month. Five sites, full scans, weekly or monthly checks, agency-branded reports. 170 EUR a year.
+- Studio: EUR 39 a month. Ten sites, full scans, weekly or monthly checks, agency-branded reports. 350 EUR a year.
+- Agency: EUR 99 a month. Forty sites, full scans, weekly or monthly checks, agency-branded reports. 750 EUR a year.
+
+Prices exclude VAT. Yearly billing is cheaper; the pricing page shows the yearly totals. Checkout and cancellation are hosted by Stripe, so no card detail reaches Glarion's servers. New Solo subscribers get a trial, with the terms shown before they pay.
+
+## Pages
+
+- [Glarion Pricing — From €19/month for 5 Client Sites](https://glarion.app/pricing.html)
+- [How Glarion Works — Verify, Scan, Triage, Report](https://glarion.app/how-it-works.html)
+- [Free Website Security Check — No Account Needed](https://glarion.app/free-website-security-check.html)
+- [SSL Certificate Expiry Monitoring for Client Sites](https://glarion.app/ssl-certificate-expiry-monitoring.html)
+- [Security Headers Check: What Each One Does | Glarion](https://glarion.app/security-headers-check.html)
+- [SPF and DMARC Check for Client Domains | Glarion](https://glarion.app/email-spoofing-spf-dmarc.html)
+- [Sample Website Security Report | Glarion](https://glarion.app/sample-report.html)
+- [Website Security Monitoring for Agencies | Glarion](https://glarion.app/website-security-monitoring.html)
+- [Client-Ready Website Security Reports | Glarion](https://glarion.app/agency-security-reports.html)
+- [Website Vulnerability Scanner: What to Check | Glarion](https://glarion.app/website-vulnerability-scanner.html)
+- [Safe Nuclei Monitoring for Client Websites | Glarion](https://glarion.app/nuclei-monitoring.html)
+- [About the Glarion Crawler — What Our Checks Do](https://glarion.app/about-our-checks.html)
+- [Privacy Policy — Glarion](https://glarion.app/privacy.html)
+- [Terms of Service — Glarion](https://glarion.app/terms.html)
+
+## Contact and policies
+
+- Contact: hello@glarion.app. Security reports: https://glarion.app/.well-known/security.txt
+- [llms-full.txt](https://glarion.app/llms-full.txt)
