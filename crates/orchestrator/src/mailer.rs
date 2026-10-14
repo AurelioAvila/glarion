@@ -223,15 +223,31 @@ struct Chrome<'a> {
     footer: &'a str,
 }
 
-const BG: &str = "#0b0b0c";
-const RAISE: &str = "#131315";
-const SINK: &str = "#08080a";
-const RULE: &str = "#22232a";
-const INK: &str = "#f0f0f2";
-const INK_2: &str = "#9c9ea8";
-const INK_3: &str = "#7c7e88";
-const CLEAR: &str = "#52c78d";
-const ALARM: &str = "#ff6b57";
+// The prism identity of glarion.app (web/landing.css, web/prism.css): lavender
+// paper, deep violet ink, crimson for the one action, violet for labels.
+// Contrast on the white card: ink 15.6:1, body 10.1:1, muted 7.6:1, alarm
+// 7.1:1, white on the crimson button 5.7:1. Dark mail apps get the night
+// variant through the classes in `chrome`'s style block.
+const BG: &str = "#faf7fb";
+const RAISE: &str = "#ffffff";
+const SINK: &str = "#f2edf8";
+const RULE: &str = "#dcd2e5";
+const INK: &str = "#2d103a";
+const INK_2: &str = "#4f3a5c";
+const INK_3: &str = "#695174";
+const ALARM: &str = "#a33428";
+const ACCENT: &str = "#bc294a";
+const VIOLET: &str = "#7345b2";
+const CORAL: &str = "#e74767";
+const FONT: &str =
+    "Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+/// A tinted panel for steps, limits and notices; dark mail apps get the night variant.
+fn panel(inner: &str) -> String {
+    format!(
+        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="gl-sink" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td class="gl-ink2" style="padding:18px 20px;color:{INK_2};font-size:14px;line-height:1.8">{inner}</td></tr></table>"#
+    )
+}
 /// Where the chrome's own links point: the wordmark, the mark, and the three
 /// in the footer.
 ///
@@ -278,22 +294,25 @@ fn chrome(parts: Chrome<'_>) -> String {
     let footer = escape(footer);
     let site = site_url();
     let button = match cta {
-        Some((label, url)) => format!(
-            r#"<table role="presentation" cellspacing="0" cellpadding="0" style="margin:26px 0 6px"><tr><td style="border-radius:8px;background:{CLEAR};padding:12px 22px"><a href="{}" style="display:inline-block;color:#06251a;font-size:15px;font-weight:700;text-decoration:none">{} &nbsp;&rarr;</a></td></tr></table>"#,
-            escape(url),
-            escape(label)
-        ),
+        Some((label, url)) => {
+            let (url, label) = (escape(url), escape(label));
+            let width = (label.chars().count() * 9 + 64).min(520);
+            format!(
+                r#"<table role="presentation" cellspacing="0" cellpadding="0" class="gl-bt" style="margin:26px 0 8px"><tr><td class="gl-btn" align="center" bgcolor="{ACCENT}" style="border-radius:8px;background:{ACCENT}"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:46px;v-text-anchor:middle;width:{width}px" arcsize="17%" stroke="f" fillcolor="{ACCENT}"><w:anchorlock/><center style="color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:700">{label}</center></v:roundrect><![endif]--><!--[if !mso]><!--><a class="gl-btn-a" href="{url}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;text-decoration:none;border-radius:8px">{label} &nbsp;&rarr;</a><!--<![endif]--></td></tr></table>"#
+            )
+        }
         None => String::new(),
     };
 
     format!(
-        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light"><title>{preview}</title></head><body style="margin:0;padding:0;background:{BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:{INK}"><div style="display:none;max-height:0;overflow:hidden;opacity:0">{preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{BG}" style="background:{BG}"><tr><td align="center" style="padding:24px 14px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{RAISE}" style="max-width:580px;background:{RAISE};border:1px solid {RULE};border-radius:14px;overflow:hidden"><tr><td style="height:3px;background:{CLEAR}"></td></tr><tr><td style="padding:20px 28px 17px;border-bottom:1px solid {RULE}"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td align="center" style="width:30px;height:30px;border-radius:8px;background:{CLEAR};color:#06251a;font-size:14px;font-weight:900"><img src="{site}/glarion-mark-64.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;object-fit:contain"></td><td style="padding-left:10px"><a href="{site}" style="color:{INK};font-size:19px;font-weight:800;text-decoration:none;letter-spacing:-.3px">Glarion</a></td></tr></table></td></tr><tr><td style="padding:28px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 14px"><tr><td style="padding:6px 10px;border:1px solid #2a4a3b;border-radius:999px;background:#10231a;color:{CLEAR};font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 style="margin:0 0 15px;color:{INK};font-size:24px;line-height:1.24;letter-spacing:-.4px">{heading}</h1>{body}{button}</td></tr><tr><td style="padding:17px 28px;background:{SINK};border-top:1px solid {RULE}"><p style="margin:0 0 6px;color:{INK_2};font-size:12px;line-height:1.6">{footer}</p><p style="margin:0;color:{INK_3};font-size:11px;line-height:1.5">Glarion &nbsp;&middot;&nbsp; <a href="{site}" style="color:{INK_2}">Website</a> &nbsp;&middot;&nbsp; <a href="{site}/privacy.html" style="color:{INK_2}">Privacy</a> &nbsp;&middot;&nbsp; <a href="{site}/terms.html" style="color:{INK_2}">Terms</a></p></td></tr></table></td></tr></table></body></html>"#
+        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>{preview}</title><style>@font-face{{font-family:Manrope;src:url('{site}/fonts/manrope.woff2') format('woff2');font-weight:200 800}}:root{{color-scheme:light dark;supported-color-schemes:light dark}}body{{margin:0;padding:0;-webkit-text-size-adjust:100%}}@media only screen and (max-width:620px){{.gl-wrap{{padding:16px 10px!important}}.gl-pad{{padding-left:22px!important;padding-right:22px!important}}.gl-h1{{font-size:23px!important}}.gl-bt{{width:100%!important}}.gl-bt a{{display:block!important}}}}@media (prefers-color-scheme:dark){{.gl-page{{background:#160a1d!important}}.gl-card{{background:#21122a!important;border-color:#3a2747!important}}.gl-sink{{background:#1a0e22!important;border-color:#3a2747!important}}.gl-rule{{border-color:#3a2747!important}}.gl-ink,.gl-ink a{{color:#f5eefa!important}}.gl-ink2{{color:#d9cce2!important}}.gl-ink3,.gl-ink3 a{{color:#b9a6c6!important}}.gl-pill{{background:#2c1838!important;border-color:#4b3060!important;color:#cdb0f2!important}}.gl-btn{{background:#f07a93!important}}.gl-btn-a{{color:#2d103a!important}}.gl-alarm{{color:#ff8f80!important}}.gl-mark{{background:#f5eefa!important}}}}</style></head><body class="gl-page" style="margin:0;padding:0;background:{BG};font-family:{FONT};color:{INK}"><div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:{BG}">{preview}{pad}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="gl-page" bgcolor="{BG}" style="background:{BG}"><tr><td align="center" class="gl-wrap" style="padding:32px 16px"><!--[if mso]><table role="presentation" width="600" cellspacing="0" cellpadding="0"><tr><td><![endif]--><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px"><tr><td style="padding:0 4px 18px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td class="gl-mark" align="center" valign="middle" style="width:34px;height:34px;border-radius:17px;background:{INK};color:#ffffff;font-size:15px;font-weight:800"><img src="{site}/glarion-mark-64.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;margin:2px;border:0;border-radius:15px"></td><td style="padding-left:11px"><a class="gl-ink" href="{site}" style="color:{INK};font-family:{FONT};font-size:21px;font-weight:800;text-decoration:none;letter-spacing:-.6px">Glarion</a></td></tr></table></td></tr><tr><td class="gl-card" bgcolor="{RAISE}" style="background:{RAISE};border:1px solid {RULE};border-radius:16px;overflow:hidden"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="height:4px;line-height:4px;font-size:0;background:{VIOLET}" width="34%">&nbsp;</td><td style="height:4px;line-height:4px;font-size:0;background:{ACCENT}" width="33%">&nbsp;</td><td style="height:4px;line-height:4px;font-size:0;background:{CORAL}" width="33%">&nbsp;</td></tr><tr><td colspan="3" class="gl-pad" style="padding:32px 36px 30px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 16px"><tr><td class="gl-pill" style="padding:6px 11px;border:1px solid #d9c7ee;border-radius:999px;background:#f2eafb;color:{VIOLET};font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 class="gl-ink gl-h1" style="margin:0 0 16px;color:{INK};font-family:{FONT};font-size:26px;line-height:1.24;font-weight:800;letter-spacing:-.6px">{heading}</h1>{body}{button}</td></tr></table></td></tr><tr><td class="gl-ink3" style="padding:22px 6px 6px;color:{INK_3};font-size:12px;line-height:1.6">{footer}<br>Questions? Reply to this email or write to <a class="gl-ink3" href="mailto:hello@glarion.app" style="color:{VIOLET}">hello@glarion.app</a>.</td></tr><tr><td class="gl-ink3" style="padding:0 6px 26px;color:{INK_3};font-size:12px;line-height:1.6">Glarion &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}" style="color:{VIOLET}">Website</a> &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}/privacy.html" style="color:{VIOLET}">Privacy</a> &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}/terms.html" style="color:{VIOLET}">Terms</a></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>"#,
+        pad = "&#8199;&#847;".repeat(60)
     )
 }
 
 fn para(text: &str) -> String {
     format!(
-        r#"<p style="margin:0 0 15px;color:{INK_2};font-size:15px;line-height:1.7">{}</p>"#,
+        r#"<p class="gl-ink2" style="margin:0 0 15px;color:{INK_2};font-size:15px;line-height:1.7">{}</p>"#,
         escape(text)
     )
 }
@@ -318,7 +337,7 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
     let hello = greeting(first_name);
     let safe_link = escape(link);
     let tail = format!(
-        r#"<p style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p style="margin:12px 0 0;color:{INK_3};font-size:13px">The link is valid for 24 hours. If you did not create an account, you can ignore this message.</p>"#
+        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link is valid for 24 hours. If you did not create an account, you can ignore this message.</p>"#
     );
     Message {
         subject: "Confirm your email for Glarion".to_string(),
@@ -353,9 +372,9 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
 /// the promise and the refusal.
 pub fn welcome_email(first_name: &str, link: &str) -> Message {
     let hello = greeting(first_name);
-    let steps = format!(
-        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td style="padding:17px;color:{INK_2};font-size:14px;line-height:1.8"><strong style="color:{INK}">1.</strong> &nbsp;Add a site you look after<br><strong style="color:{INK}">2.</strong> &nbsp;Prove you are allowed to scan it — one DNS record or one file<br><strong style="color:{INK}">3.</strong> &nbsp;Run the full scan, on a plan</td></tr></table>"#
-    );
+    let steps = panel(&format!(
+        r#"<strong class="gl-ink" style="color:{VIOLET}">1.</strong> &nbsp;Add a site you look after<br><strong class="gl-ink" style="color:{VIOLET}">2.</strong> &nbsp;Prove you are allowed to scan it — one DNS record or one file<br><strong class="gl-ink" style="color:{VIOLET}">3.</strong> &nbsp;Run the full scan, on a plan"#
+    ));
     Message {
         subject: "Your Glarion account is ready".to_string(),
         html: chrome(Chrome {
@@ -442,9 +461,9 @@ pub fn subscription_email(
     };
     let safe_plan = escape(plan_name);
     let safe_cadence = escape(cadence);
-    let limits = format!(
-        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td style="padding:17px;color:{INK_2};font-size:14px;line-height:1.8">Up to <strong style="color:{INK}">{max_targets}</strong> sites monitored<br>{safe_cadence}</td></tr></table>"#
-    );
+    let limits = panel(&format!(
+        r#"Up to <strong class="gl-ink" style="color:{INK}">{max_targets}</strong> sites monitored<br>{safe_cadence}"#
+    ));
     if let Some(ends) = trial_ends {
         let when = ends.format("%-d %B %Y").to_string();
         let heading = format!("Your {plan_name} trial has started.");
@@ -510,7 +529,7 @@ pub fn email_change_confirmation(first_name: &str, link: &str, valid_minutes: i6
     let hello = greeting(first_name);
     let safe_link = escape(link);
     let tail = format!(
-        r#"<p style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.</p>"#
+        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.</p>"#
     );
     Message {
         subject: "Confirm your new Glarion address".to_string(),
@@ -554,9 +573,10 @@ pub fn email_change_alert(first_name: &str, new_email: &str) -> Message {
             eyebrow: "Security notice",
             heading: "A change of address was requested.",
             body: &format!(
-                "{}{}<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px\"><tr><td style=\"padding:17px;color:{INK_2};font-size:14px;line-height:1.7\">Requested new address<br><strong style=\"color:{INK}\">{safe_new}</strong></td></tr></table>{}",
+                "{}{}{}{}",
                 para(&hello),
                 para("Your Glarion account is being moved to another address. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's."),
+                panel(&format!(r#"Requested new address<br><strong class="gl-ink" style="color:{INK}">{safe_new}</strong>"#)),
                 para("If this was you, nothing else is needed. If it was not, change your password now — someone is signed in who should not be — and reply to this message."),
             ),
             cta: None,
@@ -638,7 +658,7 @@ pub fn subscription_ended_email(
 pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> Message {
     let preview = format!("{summary} — {domain}");
     let domain_line = format!(
-        r#"<p style="margin:0 0 20px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>"#,
+        r#"<p class="gl-ink3" style="margin:0 0 20px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>"#,
         escape(domain)
     );
     Message {
@@ -686,10 +706,14 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
     let mut rows = String::new();
     let mut plain_rows = String::new();
     for line in lines {
-        let colour = if line.is_finding { ALARM } else { INK };
-        let weight = if line.is_finding { "600" } else { "400" };
+        let (colour, class) = if line.is_finding {
+            (ALARM, "gl-alarm")
+        } else {
+            (INK, "gl-ink")
+        };
+        let weight = if line.is_finding { "700" } else { "500" };
         rows.push_str(&format!(
-            r#"<tr><td style="padding:7px 16px 7px 0;color:{INK_3};font-size:13px;white-space:nowrap;vertical-align:top">{}</td><td style="padding:7px 0;color:{colour};font-weight:{weight};font-size:14px">{}</td></tr>"#,
+            r#"<tr><td class="gl-ink3 gl-rule" style="padding:10px 16px 10px 0;border-top:1px solid {RULE};color:{INK_3};font-size:13px;white-space:nowrap;vertical-align:top">{}</td><td class="{class} gl-rule" style="padding:10px 0;border-top:1px solid {RULE};color:{colour};font-weight:{weight};font-size:14px">{}</td></tr>"#,
             escape(&line.label),
             escape(&line.value),
         ));
@@ -706,7 +730,7 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
     );
     let preview = format!("{headline} on {domain}");
     let body = format!(
-        r#"<p style="margin:0 0 12px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>{}<table style="border-collapse:collapse;width:100%;margin-bottom:24px">{rows}</table><p style="margin:0 0 6px;color:{INK};font-size:15px;font-weight:700">What this did not look at</p>{}<p style="margin:18px 0 0;color:{INK_3};font-size:14px">Want to see the format before choosing a plan? <a href="{sample_link}" style="color:{INK};font-weight:600">View a sample full report</a>. The sample uses fictional findings.</p>"#,
+        r#"<p class="gl-ink3" style="margin:0 0 12px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>{}<table role="presentation" style="border-collapse:collapse;width:100%;margin-bottom:24px">{rows}</table><p class="gl-ink" style="margin:0 0 6px;color:{INK};font-size:15px;font-weight:700">What this did not look at</p>{}<p class="gl-ink3" style="margin:18px 0 0;color:{INK_3};font-size:14px">Want to see the format before choosing a plan? <a class="gl-ink" href="{sample_link}" style="color:{VIOLET};font-weight:700">View a sample full report</a>. The sample uses fictional findings.</p>"#,
         escape(domain),
         para("This is your requested partial public check. It is useful on its own, but it is not a full security scan."),
         para(&scope),
@@ -739,7 +763,7 @@ pub fn password_reset_email(first_name: &str, link: &str, valid_minutes: i64) ->
     let hello = greeting(first_name);
     let safe_link = escape(link);
     let tail = format!(
-        r#"<p style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it — your password stays unchanged, and nobody was told whether this address has an account.</p>"#
+        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it — your password stays unchanged, and nobody was told whether this address has an account.</p>"#
     );
     Message {
         subject: "Reset your Glarion password".to_string(),
@@ -778,9 +802,10 @@ pub fn password_changed_email(first_name: &str) -> Message {
             eyebrow: "Security notice",
             heading: "Your password was changed.",
             body: &format!(
-                "{}{}<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px\"><tr><td style=\"padding:17px;color:{INK_2};font-size:14px;line-height:1.7\">If this was you, nothing else is needed.<br>If it was not, reply to this message straight away — someone else set that password.</td></tr></table>{}",
+                "{}{}{}{}",
                 para(&hello),
                 para("The password on your Glarion account was changed, and every device that was signed in has been signed out."),
+                panel("If this was you, nothing else is needed.<br>If it was not, reply to this message straight away — someone else set that password."),
                 para("We will never ask you for your password by email."),
             ),
             cta: None,
@@ -893,7 +918,10 @@ mod tests {
         let link = "https://glarion.app/#/verify/abc123";
         let body = verification_email("Aurelio", link).html;
 
-        assert_eq!(body.matches(link).count(), 2);
+        // The button twice (VML for Outlook's Word engine, the anchor for
+        // everyone else) and the copyable text once.
+        assert_eq!(body.matches(link).count(), 3);
+        assert_eq!(body.matches(&format!("href=\"{link}\"")).count(), 2);
     }
 
     #[test]
@@ -1059,7 +1087,7 @@ mod tests {
         assert!(html.contains("/glarion-mark-64.png"));
         assert!(html.contains("width=\"30\""));
         assert!(
-            html.contains("background:#52c78d;color:#06251a;font-size:14px;font-weight:900\"><img"),
+            html.contains("background:#2d103a;color:#ffffff;font-size:15px;font-weight:800\"><img"),
             "the mark must sit on its own coloured cell, or a blocked image shows nothing"
         );
     }
