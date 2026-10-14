@@ -344,7 +344,7 @@ pub async fn verify_email(
     .await?;
 
     let (user_id, token_version, email, first_name) = row.ok_or_else(|| {
-        ApiError::BadRequest("This confirmation link is no longer valid. Request a new one.".into())
+        ApiError::BadRequest("This confirmation link has expired or was already used. If you confirmed your address already, just sign in; otherwise sign in to request a new link.".into())
     })?;
 
     // Exactly once per account, without needing a column to remember it: the

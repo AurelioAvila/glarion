@@ -513,9 +513,8 @@ async function renderVerify(token: string): Promise<void> {
         el("h1", { text: "That link did not work" }),
         notice("error", describeError(error)),
         el("p", { class: "switch" }, [
-          "You can ",
-          el("a", { class: "inline", href: "#/signin", text: "sign in" }),
-          " to request a new one.",
+          el("a", { class: "inline", href: "#/signin", text: "Sign in" }),
+          " to continue, or to request a new link if your address is not confirmed yet.",
         ]),
       ]),
     );
