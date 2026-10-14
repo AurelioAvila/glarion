@@ -229,7 +229,8 @@ struct Chrome<'a> {
 
 /// How loud a message is. It sets the rule over the header, the eyebrow and
 /// the edge of the help block; security notices also warm the header and the
-/// moment band towards oxblood, so they never look like routine mail.
+/// moment band towards oxblood, so they never look like routine mail. A reset
+/// link the reader asked for is routine, so it stays on the brand tone.
 #[derive(Clone, Copy, PartialEq)]
 enum Tone {
     Brand,
@@ -237,7 +238,7 @@ enum Tone {
     Warning,
     /// Something changed that may be wrong.
     Alarm,
-    /// The account itself: password or address.
+    /// The account changed: a new password, a requested new address.
     Security,
 }
 
@@ -986,7 +987,7 @@ pub fn password_reset_email(first_name: &str, link: &str, valid_minutes: i64) ->
             footer: "We will never ask you for your password by email, and we will never ask you to send it back to us.",
             help: ("Link expired?", "Ask for a new one with Forgot your password? on the sign-in page."),
             moment: None,
-            tone: Tone::Security,
+            tone: Tone::Brand,
         }),
         text: format!(
             "{hello}\n\nUse the link below to choose a new password for your Glarion account. Signing in everywhere else stops working as soon as you do.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it: your password stays unchanged.\n\nWe will never ask you for your password by email."
