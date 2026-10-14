@@ -274,6 +274,35 @@ limit.
 Checkout and cancellation are hosted by Stripe, so no card detail reaches
 these servers.
 
+### Free trial
+
+`TRIAL_ENABLED=true` turns on the three-day trial; unset or anything else
+leaves billing exactly as before (the 14-day Solo trial for a first
+subscription, and a failed payment keeping the plan while Stripe retries).
+With it on:
+
+- Every paid plan, monthly or yearly, offers two buttons: *Start 3-day free
+  trial* (`start_trial: true`) and *Subscribe now* (`false`, charged at once).
+  The trial needs a payment method; Stripe charges automatically when it ends.
+- One trial per account, per normalised mailbox (`email_hash`) and per card
+  (`card_fingerprint`), held in `trial_claims` and enforced when Stripe
+  creates the subscription: a duplicate is cancelled before any charge, with
+  `cancellation_details.comment = trial_already_used`. A site already scanned
+  during another account's trial is not scanned free again.
+- During the trial: 3 sites at most, 2 full scans per site a day, reports
+  without agency branding. The ownership gate is unchanged.
+- A failed payment blocks the plan at once (`past_due` is no longer grace);
+  a later successful payment restores it. Schedules pause rather than reset.
+- `GET /api/billing/prices` (public) publishes the Stripe Prices;
+  `GET /api/billing` adds `state`, `blocked_reason`, `trial_ends_at`,
+  `can_start_trial`, `trial_limits` and `first_charge` (Stripe's preview).
+- The worker sends the reminder a day before the trial ends.
+
+The webhook endpoint needs `invoice.paid`, `invoice.payment_failed`,
+`invoice.payment_action_required` and `customer.subscription.trial_will_end`
+besides the `customer.subscription.*` events. The behaviour is pinned by
+`crates/api/tests/trial.rs`, which plays Stripe back through a local stand-in.
+
 Copy `.env.local.example` to `.env.local` and fill it in; `dev-api.sh`
 loads it. That file is gitignored, and secrets belong in it rather than on
 a command line, where they end up in shell history. With none of it set the

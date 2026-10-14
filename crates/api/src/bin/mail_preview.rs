@@ -12,7 +12,8 @@ use chrono::{Duration, Utc};
 use orchestrator::mailer::{
     change_email, email_change_alert, email_change_confirmation, ownership_lapsing_email,
     password_changed_email, password_reset_email, preview_report_email, subscription_email,
-    subscription_ended_email, verification_email, welcome_email, Mailer, Message, ReportLine,
+    subscription_ended_email, trial_ending_email, trial_rejected_email, trial_started_email,
+    verification_email, welcome_email, Mailer, Message, ReportLine, TrialTerms,
 };
 
 fn samples(site: &str) -> Vec<(&'static str, Message)> {
@@ -63,6 +64,36 @@ fn samples(site: &str) -> Vec<(&'static str, Message)> {
                 &format!("{app}/targets"),
                 Some(Utc::now() + Duration::days(14)),
             ),
+        ),
+        (
+            "trial-3-day-started",
+            trial_started_email(
+                "Ada",
+                "Studio",
+                Utc::now() + Duration::days(3),
+                Some("€47.58"),
+                "month",
+                TrialTerms {
+                    sites: 3,
+                    scans_per_site_per_day: 2,
+                },
+                &format!("{app}/targets"),
+            ),
+        ),
+        (
+            "trial-3-day-ending",
+            trial_ending_email(
+                "Ada",
+                "Studio",
+                Utc::now() + Duration::hours(23),
+                Some("€47.58"),
+                "month",
+                &format!("{app}/plan"),
+            ),
+        ),
+        (
+            "trial-3-day-refused",
+            trial_rejected_email("Ada", "Studio", &format!("{app}/plan")),
         ),
         (
             "plan-active",

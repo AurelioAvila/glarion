@@ -30,7 +30,7 @@
 <header><div class="top-inner"><a class="wordmark" href="/"><img class="brand-mark" src="/glarion-mark-64.png" alt="" width="26" height="26"><span>Glarion</span></a></div></header>
 <main id="main">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated 5 October 2026</p>
+  <p class="updated">Last updated 14 October 2026</p>
 
   <p class="notice">
     This is a small, single-operator service. Where this policy names "we"
@@ -68,6 +68,10 @@
         <td>Recorded permanently as evidence of who authorized a scan against a domain and when. This is the record that protects both of us if a scan is ever disputed — see <strong>Retention</strong> for why it outlives the rest of your account.</td>
       </tr>
       <tr>
+        <td>If you start a free trial: a one-way hash of your email address, and Stripe's fingerprint of the card you add</td>
+        <td>To allow one free trial per person. The hash cannot be turned back into your address, and the fingerprint is a reference Stripe gives us to recognise the same card on another account — never the card number.</td>
+      </tr>
+      <tr>
         <td>Payment details</td>
         <td>Never collected by us. Checkout and billing are handled entirely by Stripe — see <strong>Who else touches your data</strong>.</td>
       </tr>
@@ -78,6 +82,7 @@
   <ul>
     <li><strong>Account, scanning, and billing data</strong> — necessary to perform the contract you enter by creating an account (Article 6(1)(b) GDPR).</li>
     <li><strong>Date of birth</strong> — a legal obligation, since a contract cannot be entered into with a minor (Article 6(1)(c)).</li>
+    <li><strong>The free-trial record</strong> (email hash, card fingerprint, trial dates) — our legitimate interest in offering a free trial without it being started again and again by the same person (Article 6(1)(f)).</li>
     <li><strong>The scan-authorization record</strong> (IP address, browser identifier, timestamp) — our legitimate interest in being able to prove who authorized a scan, which is also the legal basis the law allows us to keep it on after you delete your account (Article 6(1)(f) and Article 17(3)(e)).</li>
   </ul>
 
@@ -117,6 +122,12 @@
     that <em>an</em> account authorized <em>this</em> scan on <em>this</em>
     date from <em>this</em> address — the law explicitly allows keeping
     exactly this much, for exactly this reason (Article 17(3)(e)).
+  </p>
+
+  <p>
+    The free-trial record is kept after deletion too, on the same
+    legitimate interest: otherwise deleting an account would be a way to
+    start the same trial again. It holds no address and no card number.
   </p>
 
   <h2>Deleting your account</h2>

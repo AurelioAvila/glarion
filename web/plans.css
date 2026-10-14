@@ -48,3 +48,4 @@ body[data-page="pricing"] .nav { align-items:center; }
 @media(max-width:70rem) { .purchase-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .purchase-audience { min-height:3.2em; } }
 @media(max-width:42rem) { .purchase-grid { grid-template-columns:1fr; } .purchase-audience { min-height:0; } .purchase-saving { min-height:0; } body[data-page="pricing"] .wrap { width:calc(100% - 2rem); } body[data-page="pricing"] .top .wrap { height:auto; min-height:80px; padding-block:1rem; flex-wrap:wrap; gap:.5rem 1rem; } body[data-page="pricing"] .nav { width:100%; margin:0; gap:.2rem 1rem; } body[data-page="pricing"] .nav a { font-size:.875rem; } }
 @media(prefers-reduced-motion:reduce) { .purchase-card { transition:none; } }
+.purchase-card .purchase-trial-line { color:var(--offer-muted); font-size:.875rem; line-height:1.55; margin:-.3rem 0 1.1rem; }

@@ -912,3 +912,19 @@ body[data-shell='workspace'] main { margin-left: 224px; }
 
 .plan-comparison { font-variant-numeric: tabular-nums; }
 .plan-discount { font-weight: 750; color: #6520a0; }
+
+/* The three-day free trial: two choices per plan, and a running trial's clock. */
+.plan-actions { display: flex; flex-direction: column; gap: .5rem; min-width: 12.5rem; }
+.plan-actions .primary, .plan-actions .ghost { width: 100%; }
+.plan-trial { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--rule); font-size: .86rem; line-height: 1.55; color: var(--ink-2); }
+.plan-trial p { margin: 0; }
+.plan-trial .plan-trial-now { margin-top: .35rem; color: var(--ink-3); }
+.trial-status { max-width: 52rem; margin: 0 0 1.5rem; padding: 1.2rem 1.35rem; background: var(--raise); border: 1px solid var(--rule); border-left: 4px solid var(--violet); border-radius: 0 14px 14px 0; }
+.trial-status-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem 1rem; }
+.trial-status-head strong { font-size: 1.15rem; font-weight: 650; color: var(--ink); }
+.trial-status-head span { font-size: .86rem; color: var(--ink-2); }
+.trial-bar { height: 6px; margin: .8rem 0 .9rem; border-radius: 999px; background: var(--sink); overflow: hidden; }
+.trial-bar span { display: block; height: 100%; border-radius: inherit; background: var(--violet); }
+.trial-status p { margin: 0; line-height: 1.6; color: var(--ink); }
+.trial-status .trial-limits { margin-top: .5rem; font-size: .86rem; color: var(--ink-2); }
+@media (max-width: 46rem) { .plan-actions { min-width: 0; width: 100%; } }

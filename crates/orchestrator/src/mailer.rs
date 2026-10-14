@@ -697,6 +697,197 @@ pub fn subscription_email(
     }
 }
 
+/// "€47.58", or "€39" for whole euros: an amount Stripe gave in minor units,
+/// written the way the site writes prices.
+pub fn money(amount: i64, currency: &str) -> String {
+    let symbol = match currency.to_ascii_lowercase().as_str() {
+        "eur" => "€".to_string(),
+        "usd" => "$".to_string(),
+        "gbp" => "£".to_string(),
+        other => format!("{} ", other.to_ascii_uppercase()),
+    };
+    if amount % 100 == 0 {
+        format!("{symbol}{}", amount / 100)
+    } else {
+        format!("{symbol}{}.{:02}", amount / 100, amount % 100)
+    }
+}
+
+/// What a three-day trial includes, for the copy that has to say so.
+pub struct TrialTerms {
+    pub sites: i32,
+    pub scans_per_site_per_day: i64,
+}
+
+/// "17 October 2026 at 14:05 UTC": the exact moment, because the charge
+/// is taken then and not at some point on that day.
+fn trial_moment(at: chrono::DateTime<chrono::Utc>) -> String {
+    at.format("%-d %B %Y at %H:%M UTC").to_string()
+}
+
+/// "billed monthly" or "billed yearly" from Stripe's `month`/`year`.
+fn billed(interval: &str) -> &'static str {
+    if interval == "year" {
+        "billed yearly"
+    } else {
+        "billed monthly"
+    }
+}
+
+/// The message sent when a three-day trial starts.
+///
+/// Nothing has been charged, so it reads as a start, not a receipt: when the
+/// first payment is taken, how much (Stripe's own preview, coupon and tax
+/// included), what the trial does not include yet, and how to stop before
+/// any of it happens.
+pub fn trial_started_email(
+    first_name: &str,
+    plan_name: &str,
+    ends_at: chrono::DateTime<chrono::Utc>,
+    first_charge: Option<&str>,
+    interval: &str,
+    terms: TrialTerms,
+    link: &str,
+) -> Message {
+    let hello = greeting(first_name);
+    let when = trial_moment(ends_at);
+    let day = ends_at.format("%-d %B").to_string();
+    let every = if interval == "year" { "year" } else { "month" };
+    let charge_sentence = match first_charge {
+        Some(amount) => format!("On {when} the {plan_name} plan starts and {amount} is taken from the card you added, unless you cancel before then."),
+        None => format!("On {when} the {plan_name} plan starts and its first {every} is charged to the card you added, unless you cancel before then."),
+    };
+    let limits = format!(
+        "Up to {} sites, {} full scans per site a day",
+        terms.sites, terms.scans_per_site_per_day
+    );
+    let first = first_charge.map(|amount| format!("{amount} on {day}"));
+    let plan_row = format!("{plan_name}, {}", billed(interval));
+    let then = match first_charge {
+        Some(amount) => format!(
+            "First payment {amount}, then {plan_name} renews every {every} until you cancel."
+        ),
+        None => format!("Then {plan_name} renews every {every} until you cancel."),
+    };
+    let later = format!("Branded reports, the plan's full site allowance and up to {} full scans per site a day start with the first payment. To cancel, open Pricing in Glarion and choose Manage billing: cancel before the trial ends and nothing is charged.", crate::policy::MAX_SCANS_PER_TARGET_PER_DAY);
+    Message {
+        subject: "Your 3-day Glarion trial has started".to_string(),
+        html: chrome(Chrome {
+            preview: &format!("Nothing is charged until {day}. Here is what the trial includes."),
+            eyebrow: "Trial started",
+            heading: &format!("Your {plan_name} trial has started"),
+            body: &format!(
+                "{}{}{}{}",
+                para(&hello),
+                para("You have three days to run full scans of the sites you prove are yours. Nothing has been charged."),
+                para(&charge_sentence),
+                rows_card(
+                    &[("Plan", &plan_row), ("Trial ends", &when), ("During the trial", &limits)],
+                    first.as_deref().map(|value| ("First payment", value)),
+                ),
+            ),
+            cta: Some(("Add your first site", link)),
+            after: &(steps(
+                "Make the most of the three days",
+                &[
+                    "Add a site, then prove you control it with a DNS record or a file.",
+                    "Run a full scan and work through the findings in the order shown.",
+                    "Turn on weekly checks, so monitoring is already in place when the plan starts.",
+                ],
+            ) + &note(&later)),
+            footer: "You received this email because you started a Glarion trial with this address.",
+            help: ("Billing question?", "Reply to this email from the address on the account."),
+            moment: Some(("Trial ends".to_string(), day.clone(), then.clone())),
+            tone: Tone::Brand,
+        }),
+        text: format!(
+            "{hello}\n\nYou have three days to run full scans of the sites you prove are yours. Nothing has been charged.\n\n{charge_sentence}\n\nPlan: {plan_row}\nTrial ends: {when}\nDuring the trial: {limits}\n\n{then}\n\nAdd your first site: {link}\n\n{later}"
+        ),
+    }
+}
+
+/// The reminder a day before a three-day trial ends.
+///
+/// Sent once per trial end, and only while the trial is still running and
+/// has not been cancelled (orchestrator::trial_reminder). It says the date,
+/// the amount and the one place to cancel, and nothing else.
+pub fn trial_ending_email(
+    first_name: &str,
+    plan_name: &str,
+    ends_at: chrono::DateTime<chrono::Utc>,
+    first_charge: Option<&str>,
+    interval: &str,
+    link: &str,
+) -> Message {
+    let hello = greeting(first_name);
+    let when = trial_moment(ends_at);
+    let day = ends_at.format("%-d %B").to_string();
+    let every = if interval == "year" { "year" } else { "month" };
+    let charge = match first_charge {
+        Some(amount) => format!("{amount} is taken from the card you added"),
+        None => format!("the first {every} is charged to the card you added"),
+    };
+    let explain = format!("Your Glarion {plan_name} trial ends on {when}. The plan then starts and {charge}. To keep monitoring your sites, there is nothing to do.");
+    let stop = format!("Open Pricing in Glarion and choose Manage billing to cancel before {when}. Nothing is charged, and your sites and reports stay on the free plan.");
+    let plan_row = format!("{plan_name}, {}", billed(interval));
+    Message {
+        subject: format!("Your Glarion trial ends on {day}"),
+        html: chrome(Chrome {
+            preview: &match first_charge {
+                Some(amount) => format!("{amount} is taken on {day} unless you cancel before then"),
+                None => format!("The {plan_name} plan starts on {day} unless you cancel before then"),
+            },
+            eyebrow: "Trial ending",
+            heading: "Your trial ends in a day",
+            body: &format!(
+                "{}{}{}",
+                para(&hello),
+                para(&explain),
+                rows_card(
+                    &[("Plan", &plan_row), ("Trial ends", &when)],
+                    first_charge.map(|amount| ("First payment", amount)),
+                ),
+            ),
+            cta: Some(("Review your plan", link)),
+            after: &panel("Not continuing?", &stop),
+            footer: "You received this email because a Glarion trial on this address ends soon. It is sent once per trial.",
+            help: ("Question about the charge?", "Reply to this email from the address on the account."),
+            moment: None,
+            tone: Tone::Brand,
+        }),
+        text: format!("{hello}\n\n{explain}\n\nNot continuing? {stop}\n\nReview your plan: {link}"),
+    }
+}
+
+/// The message sent when a trial is refused because this person already had
+/// one: same account, same mailbox or same card. The subscription was
+/// cancelled before any charge, which is the first thing it says.
+pub fn trial_rejected_email(first_name: &str, plan_name: &str, link: &str) -> Message {
+    let hello = greeting(first_name);
+    let explain = "Glarion offers one free trial per person: one per account, per email address and per card. This one matched a trial that has already been used, so we cancelled the new subscription straight away. Nothing was charged, and nothing will be.";
+    let instead = format!("You can still subscribe to {plan_name} directly from Pricing in Glarion: the plan starts at once and the first payment is taken that day.");
+    Message {
+        subject: "Your Glarion trial could not start".to_string(),
+        html: chrome(Chrome {
+            preview: "A free trial was already used here. Nothing was charged.",
+            eyebrow: "Trial not started",
+            heading: "This trial could not start",
+            body: &format!("{}{}{}", para(&hello), para(explain), para(&instead)),
+            cta: Some(("Open Pricing", link)),
+            after: "",
+            footer:
+                "You received this email because a Glarion trial was started with this address.",
+            help: (
+                "Think this is a mistake?",
+                "Reply to this email from the address on the account.",
+            ),
+            moment: None,
+            tone: Tone::Brand,
+        }),
+        text: format!("{hello}\n\n{explain}\n\n{instead}\n\nOpen Pricing: {link}"),
+    }
+}
+
 /// The link that moves an account to a new address.
 ///
 /// Sent to the new address, never to the old one: the whole question this
@@ -1547,5 +1738,97 @@ mod tests {
             );
             assert!(message.text.contains("verifications"));
         }
+    }
+
+    fn trial_end() -> chrono::DateTime<chrono::Utc> {
+        use chrono::TimeZone;
+        chrono::Utc
+            .with_ymd_and_hms(2026, 10, 17, 14, 5, 0)
+            .unwrap()
+    }
+
+    fn terms() -> TrialTerms {
+        TrialTerms {
+            sites: 3,
+            scans_per_site_per_day: 2,
+        }
+    }
+
+    #[test]
+    fn a_three_day_trial_names_the_moment_and_the_amount_and_charges_nothing_yet() {
+        let message = trial_started_email(
+            "Ada",
+            "Studio",
+            trial_end(),
+            Some("€47.58"),
+            "month",
+            terms(),
+            "https://glarion.app/app#/targets",
+        );
+        for body in [&message.text, &message.html] {
+            assert!(body.contains("17 October 2026 at 14:05 UTC"), "{body}");
+            assert!(body.contains("€47.58"));
+            assert!(body.contains("Nothing has been charged"));
+            assert!(body.contains("Up to 3 sites, 2 full scans per site a day"));
+            assert!(body.contains("Manage billing"));
+            assert!(!body.contains("is active"));
+        }
+        assert!(message.subject.contains("3-day"));
+        // Without Stripe's preview the copy names the plan, never a number.
+        let unknown = trial_started_email(
+            "",
+            "Solo",
+            trial_end(),
+            None,
+            "year",
+            terms(),
+            "https://glarion.app/app",
+        );
+        assert!(unknown.text.contains("its first year is charged"));
+        assert!(!unknown.text.contains('€'));
+    }
+
+    #[test]
+    fn the_trial_reminder_says_when_how_much_and_how_to_stop() {
+        let message = trial_ending_email(
+            "Ada",
+            "Agency",
+            trial_end(),
+            Some("€49"),
+            "month",
+            "https://glarion.app/app#/plan",
+        );
+        assert_eq!(message.subject, "Your Glarion trial ends on 17 October");
+        for body in [&message.text, &message.html] {
+            assert!(body.contains("17 October 2026 at 14:05 UTC"));
+            assert!(body.contains("€49 is taken"));
+            assert!(body.contains("Manage billing"));
+            assert!(body.contains("Nothing is charged"));
+        }
+    }
+
+    #[test]
+    fn a_refused_trial_says_nothing_was_charged_and_offers_the_plan() {
+        let message = trial_rejected_email("Ada", "Solo", "https://glarion.app/app#/plan");
+        assert!(message.text.contains("Nothing was charged"));
+        assert!(message.text.contains("subscribe to Solo directly"));
+        assert!(message.html.contains("one free trial per person"));
+        // No refund language anywhere: nothing was taken.
+        assert!(!message.text.to_lowercase().contains("refund"));
+    }
+
+    #[test]
+    fn trial_emails_escape_the_name() {
+        let message = trial_started_email(
+            "<b>Ada</b>",
+            "Solo",
+            trial_end(),
+            None,
+            "month",
+            terms(),
+            "https://glarion.app/app",
+        );
+        assert!(!message.html.contains("<b>Ada</b>"));
+        assert!(message.html.contains("&lt;b&gt;Ada&lt;/b&gt;"));
     }
 }

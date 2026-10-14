@@ -23,4 +23,5 @@ pub mod schedule;
 pub mod scheduler;
 pub mod tools;
 pub mod triage;
+pub mod trial_reminder;
 pub mod verification;

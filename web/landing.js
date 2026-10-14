@@ -1,4 +1,6 @@
 import { acquisitionHeaders, recordPage } from "/dist/acquisition.js";
+import { loadPrices, priceFor } from "/dist/trial.js";
+import { euro } from "/dist/promo.js";
 recordPage("landing_view");
 
 /*
@@ -13,6 +15,9 @@ const input = document.getElementById('domain');
 const button = document.getElementById('check-go');
 const note = document.getElementById('check-note');
 const result = document.getElementById('result');
+
+// Read once per visit, for the free check's call to action.
+const trialPrices = loadPrices();
 
 const DEFAULT_NOTE =
   'No account, no email. This reads only what the site already publishes to every visitor.';
@@ -149,9 +154,18 @@ function render(payload) {
   // warmest moment on the site and the last one before somebody goes off to
   // edit a client's DNS: finding out about the price after that work is done
   // is not a pricing objection, it is a grievance.
-  cta.append(el('span', 'foot-note',
-    'A full scan checks far more. Solo is free for 14 days, then €19 a month excl. VAT; you add a card at checkout and can cancel before day 14. Full scans also need proof the domain is yours.'));
+  const footNote = el('span', 'foot-note',
+    'A full scan checks far more. Solo is free for 14 days, then €19 a month excl. VAT; you add a card at checkout and can cancel before day 14. Full scans also need proof the domain is yours.');
+  cta.append(footNote);
   result.append(cta);
+  // With the three-day trial on, the offer here is the one every plan has,
+  // priced from Stripe. Until the server says so, the page keeps today's.
+  void trialPrices.then((list) => {
+    const solo = list?.trialEnabled ? priceFor(list, 'solo', 'monthly') : null;
+    if (!solo) return;
+    signup.textContent = `Try full scans free for ${list.trialDays} days`;
+    footNote.textContent = `A full scan checks far more. Every plan starts with a ${list.trialDays}-day free trial: you add a card at checkout and nothing is charged for ${list.trialDays} days. Solo is then ${euro(solo.amount)} a month excl. VAT. Full scans also need proof the domain is yours.`;
+  });
 
   if (payload.domain) result.append(shareRow(payload.domain));
 

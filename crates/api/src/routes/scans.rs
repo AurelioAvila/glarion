@@ -9,6 +9,8 @@
 //!   4. The target is within its scan-rate budget.
 //!   5. The user explicitly accepted the scan terms for this request.
 //!   6. The account is on a plan that includes the full scan.
+//!   7. On a three-day trial: the trial's smaller budget, and a site no
+//!      other account has already scanned during its own trial.
 //!
 //! Each of these is checked here, before any row is written. The
 //! authorization record is inserted in the same transaction as the job, so
@@ -118,11 +120,11 @@ pub async fn create_scan(
     // interface: a control nobody can see is not a limit, it is a
     // suggestion, and this one is the thing the subscription buys. No
     // entitlement row reads as the free plan, the same fail-closed way the
-    // site allowance does — see billing::current_plan.
-    if !crate::billing::current_plan(&state.pool, user.id)
-        .await?
-        .allows_full_scan()
-    {
+    // site allowance does — see billing::current_plan. A trial changes the
+    // limits below, never the gate above: an unverified domain is refused
+    // on a trial exactly as on any plan.
+    let access = crate::billing::current_access(&state.pool, user.id).await?;
+    if !access.plan.allows_full_scan() {
         return Err(ApiError::PlanLimit(
             "the full scan is part of the paid plans — the free check on the site page needs no subscription".into(),
         ));
@@ -138,10 +140,42 @@ pub async fn create_scan(
     .fetch_one(&state.pool)
     .await?;
 
-    if !within_scan_budget(recent) {
-        return Err(ApiError::PlanLimit(
-            "this target has reached its scan limit for the last 24 hours".into(),
-        ));
+    if !within_scan_budget(recent) || recent >= access.scans_per_target_per_day() {
+        return Err(ApiError::PlanLimit(if access.trial {
+            format!(
+                "during the free trial each site can be scanned {} times in 24 hours",
+                access.scans_per_target_per_day()
+            )
+        } else {
+            "this target has reached its scan limit for the last 24 hours".into()
+        }));
+    }
+
+    // (7) One trial per site. A domain already scanned during somebody
+    // else's free trial is not scanned free again: otherwise a new mailbox
+    // and a new card every three days would monitor a client's site for
+    // nothing. Read from the authorization trail, which outlives accounts.
+    if access.trial {
+        let already: bool = sqlx::query_scalar(
+            "select exists (
+                 select 1 from scan_authorizations a
+                 join targets other on other.id = a.target_id
+                 join trial_claims c on c.user_id = a.user_id
+                 where other.domain = (select domain from targets where id = $1)
+                   and a.user_id <> $2
+                   and a.accepted_terms_at >= c.created_at
+                   and a.accepted_terms_at < c.trial_ends_at
+             )",
+        )
+        .bind(body.target_id)
+        .bind(user.id)
+        .fetch_one(&state.pool)
+        .await?;
+        if already {
+            return Err(ApiError::PlanLimit(
+                "this site was already scanned during another account's free trial — subscribe to scan it".into(),
+            ));
+        }
     }
 
     // Audit record and job are written together: a job without a matching
