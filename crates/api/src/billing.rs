@@ -238,7 +238,7 @@ pub const TRIAL_DAYS: u32 = 3;
 /// to abuse than the plan is to buy: fewer sites, fewer scans per site, and
 /// no white-label reports, which are what an agency resells.
 pub const TRIAL_MAX_TARGETS: i32 = 3;
-pub const TRIAL_MAX_SCANS_PER_TARGET_PER_DAY: i64 = 2;
+pub use orchestrator::policy::TRIAL_MAX_SCANS_PER_TARGET_PER_DAY;
 
 /// Subscription metadata that marks a three-day trial checkout, so the
 /// webhook can tell it from the 14-day Solo trial.

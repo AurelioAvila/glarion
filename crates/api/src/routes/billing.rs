@@ -544,10 +544,13 @@ pub async fn open_portal(
         .await?
         .ok_or_else(|| ApiError::BadRequest("there is no subscription to manage".into()))?;
 
-    let form = vec![
+    let mut form = vec![
         ("customer".to_string(), customer_id),
         ("return_url".to_string(), state.mailer.app_link("/plan")),
     ];
+    if let Some(configuration) = portal_configuration().await {
+        form.push(("configuration".to_string(), configuration));
+    }
 
     let url = stripe_post(&secret, &stripe_url("/v1/billing_portal/sessions"), &form)
         .await?
@@ -1408,6 +1411,145 @@ async fn preview_first_charge(subscription_id: &str) -> Option<(i64, String)> {
         )),
         Err(_) => None,
     }
+}
+
+/// Marks Glarion's own customer-portal configuration in its metadata.
+const PORTAL_MARK: &str = "glarion-portal-v1";
+static PORTAL_CONFIGURATION: tokio::sync::OnceCell<String> = tokio::sync::OnceCell::const_new();
+
+/// Glarion's own customer-portal configuration: cancel at period end, card,
+/// invoices, and plan changes between Glarion's prices only. The account's
+/// default configuration is shared with the other products sold through the
+/// same Stripe account and offers their prices as "plan changes", which would
+/// move a Glarion subscriber onto another product's price. Found by its
+/// metadata, created the first time, remembered for the process;
+/// STRIPE_PORTAL_CONFIGURATION overrides. None (the account default, as
+/// before) when Stripe refuses, so the portal still opens.
+// ponytail: two machines starting together can each create one; either works.
+pub async fn portal_configuration() -> Option<String> {
+    if let Some(id) = std::env::var("STRIPE_PORTAL_CONFIGURATION")
+        .ok()
+        .filter(|value| value.starts_with("bpc_"))
+    {
+        return Some(id);
+    }
+    let secret = stripe_secret().ok()?;
+    match PORTAL_CONFIGURATION
+        .get_or_try_init(|| ensure_portal_configuration(&secret))
+        .await
+    {
+        Ok(id) => Some(id.clone()),
+        Err(error) => {
+            tracing::error!(
+                ?error,
+                "no Glarion portal configuration; using the account default"
+            );
+            None
+        }
+    }
+}
+
+async fn ensure_portal_configuration(secret: &str) -> ApiResult<String> {
+    let existing = stripe_get(
+        secret,
+        &stripe_url("/v1/billing_portal/configurations"),
+        &[("active", "true"), ("limit", "100")],
+    )
+    .await?;
+    if let Some(id) = existing["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|config| config["metadata"]["glarion"] == PORTAL_MARK)
+        .and_then(|config| config["id"].as_str())
+    {
+        return Ok(id.to_string());
+    }
+
+    // Grouped by product, as the portal wants them: Glarion's plans are
+    // separate products per interval on the live account, one on test.
+    let mut products: Vec<(String, Vec<String>)> = Vec::new();
+    for plan in PAID_PLANS {
+        for interval in [Interval::Monthly, Interval::Yearly] {
+            let Some(price) = price_env_var(plan, interval)
+                .and_then(|var| std::env::var(var).ok())
+                .filter(|value| !value.is_empty())
+            else {
+                continue;
+            };
+            let read = stripe_get(secret, &stripe_url(&format!("/v1/prices/{price}")), &[]).await?;
+            let Some(product) = read["product"].as_str() else {
+                continue;
+            };
+            match products.iter_mut().find(|(id, _)| id == product) {
+                Some((_, prices)) => prices.push(price),
+                None => products.push((product.to_string(), vec![price])),
+            }
+        }
+    }
+    if products.is_empty() {
+        return Err(ApiError::Internal(anyhow::anyhow!(
+            "no plan prices configured"
+        )));
+    }
+
+    let mut form: Vec<(String, String)> = [
+        (
+            "business_profile[headline]",
+            "Manage your Glarion subscription",
+        ),
+        ("features[customer_update][enabled]", "true"),
+        ("features[customer_update][allowed_updates][]", "name"),
+        ("features[customer_update][allowed_updates][]", "email"),
+        ("features[customer_update][allowed_updates][]", "address"),
+        ("features[customer_update][allowed_updates][]", "phone"),
+        ("features[invoice_history][enabled]", "true"),
+        ("features[payment_method_update][enabled]", "true"),
+        ("features[subscription_cancel][enabled]", "true"),
+        ("features[subscription_cancel][mode]", "at_period_end"),
+        ("features[subscription_cancel][proration_behavior]", "none"),
+        ("features[subscription_update][enabled]", "true"),
+        (
+            "features[subscription_update][default_allowed_updates][]",
+            "price",
+        ),
+        (
+            "features[subscription_update][proration_behavior]",
+            "always_invoice",
+        ),
+        // Nothing is charged during a trial (Terms): a plan change keeps it.
+        (
+            "features[subscription_update][trial_update_behavior]",
+            "continue_trial",
+        ),
+        ("metadata[glarion]", PORTAL_MARK),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value.to_string()))
+    .collect();
+    for (index, (product, prices)) in products.iter().enumerate() {
+        form.push((
+            format!("features[subscription_update][products][{index}][product]"),
+            product.clone(),
+        ));
+        for price in prices {
+            form.push((
+                format!("features[subscription_update][products][{index}][prices][]"),
+                price.clone(),
+            ));
+        }
+    }
+
+    let created = stripe_post(
+        secret,
+        &stripe_url("/v1/billing_portal/configurations"),
+        &form,
+    )
+    .await?;
+    created["id"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("Stripe returned no configuration id")))
 }
 
 /// Stripe's API. Tests point debug builds at a local stand-in through

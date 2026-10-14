@@ -20,6 +20,9 @@ const TICK_SECS: u64 = 300;
 #[derive(sqlx::FromRow)]
 struct Candidate {
     id: Uuid,
+    user_id: Uuid,
+    /// On a three-day trial: its smaller scan budget and the one-trial-per-site rule apply.
+    on_trial: bool,
     domain: String,
     scan_cadence: String,
     last_scheduled_at: Option<DateTime<Utc>>,
@@ -47,9 +50,12 @@ pub async fn run_forever(pool: PgPool) {
     }
 }
 
-async fn tick(pool: &PgPool) -> anyhow::Result<()> {
+pub async fn tick(pool: &PgPool) -> anyhow::Result<()> {
     let candidates: Vec<Candidate> = sqlx::query_as(
-        "select t.id, t.domain, t.scan_cadence, t.last_scheduled_at,
+        "select t.id, t.user_id, t.domain, t.scan_cadence, t.last_scheduled_at,
+                coalesce(e.subscription_status = 'trialing', false)
+                    and exists (select 1 from trial_claims c
+                                 where c.subscription_id = e.stripe_subscription_id) as on_trial,
                 v.id as verification_id, v.expires_at as verification_expires_at,
                 (select count(*) from scan_jobs j
                  where j.target_id = t.id and j.created_at >= now() - interval '24 hours'
@@ -104,6 +110,30 @@ async fn tick(pool: &PgPool) -> anyhow::Result<()> {
                 "scheduled scan skipped: target is at its daily limit"
             );
             continue;
+        }
+
+        // A trial's schedule keeps the trial's rules, exactly as a manual scan
+        // does (see routes::scans in the api crate).
+        if candidate.on_trial {
+            if candidate.recent_scans >= crate::policy::TRIAL_MAX_SCANS_PER_TARGET_PER_DAY {
+                continue;
+            }
+            match crate::policy::site_used_in_another_trial(pool, candidate.id, candidate.user_id)
+                .await
+            {
+                Ok(false) => {}
+                Ok(true) => {
+                    tracing::warn!(
+                        target_id = %candidate.id,
+                        "scheduled scan skipped: site already scanned during another account's free trial"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    tracing::error!(target_id = %candidate.id, error = ?error, "trial site check failed");
+                    continue;
+                }
+            }
         }
 
         let Some(verification_id) = candidate.verification_id else {

@@ -80,6 +80,10 @@ pub async fn run() -> Result<()> {
 
     let state = AppState::new(pool, config.jwt_secret.clone());
 
+    // Ready before the first customer opens billing, and checkable in Stripe
+    // right after a deploy. A no-op without STRIPE_SECRET_KEY.
+    tokio::spawn(routes::billing::portal_configuration());
+
     // Said out loud at boot rather than left to be discovered by waiting
     // for a message that will never arrive. Logging instead of sending is
     // the right default for development, but it is a difference worth

@@ -575,13 +575,16 @@ pub async fn forgot_password(
         &link,
         RESET_VALID_MINUTES,
     );
-    if let Err(error) = state.mailer.send(&email, &message).await {
-        // Logged rather than surfaced. The caller cannot act on our mail
-        // provider having a bad minute, and an error here that the "if that
-        // address has an account" path does not also produce would tell an
-        // attacker the address exists.
-        tracing::error!(error = ?error, "could not send the password reset email");
-    }
+    // Spawned, not awaited, for the reason send_verification gives: waiting on
+    // the provider only when the address has an account would let the
+    // response time say what the response body does not. Errors are logged
+    // rather than surfaced for the same reason.
+    let mailer = state.mailer.clone();
+    tokio::spawn(async move {
+        if let Err(error) = mailer.send(&email, &message).await {
+            tracing::error!(error = ?error, "could not send the password reset email");
+        }
+    });
 
     answer
 }

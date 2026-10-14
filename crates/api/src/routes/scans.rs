@@ -155,27 +155,13 @@ pub async fn create_scan(
     // else's free trial is not scanned free again: otherwise a new mailbox
     // and a new card every three days would monitor a client's site for
     // nothing. Read from the authorization trail, which outlives accounts.
-    if access.trial {
-        let already: bool = sqlx::query_scalar(
-            "select exists (
-                 select 1 from scan_authorizations a
-                 join targets other on other.id = a.target_id
-                 join trial_claims c on c.user_id = a.user_id
-                 where other.domain = (select domain from targets where id = $1)
-                   and a.user_id <> $2
-                   and a.accepted_terms_at >= c.created_at
-                   and a.accepted_terms_at < c.trial_ends_at
-             )",
-        )
-        .bind(body.target_id)
-        .bind(user.id)
-        .fetch_one(&state.pool)
-        .await?;
-        if already {
-            return Err(ApiError::PlanLimit(
-                "this site was already scanned during another account's free trial — subscribe to scan it".into(),
-            ));
-        }
+    if access.trial
+        && orchestrator::policy::site_used_in_another_trial(&state.pool, body.target_id, user.id)
+            .await?
+    {
+        return Err(ApiError::PlanLimit(
+            "this site was already scanned during another account's free trial — subscribe to scan it".into(),
+        ));
     }
 
     // Audit record and job are written together: a job without a matching
