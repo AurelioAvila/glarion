@@ -150,7 +150,9 @@ export class ApiError extends Error {
   readonly code: string;
 
   constructor(status: number, code: string, message: string) {
-    super(message);
+    // The API words some refusals as log lines ("the passwords do not
+    // match"); shown to a person, they read as sentences.
+    super(message && message.charAt(0).toUpperCase() + message.slice(1) + (/[.!?]$/.test(message) ? "" : "."));
     this.name = "ApiError";
     this.status = status;
     this.code = code;
