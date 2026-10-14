@@ -48,6 +48,21 @@ export interface Subscription {
   status: string | null;
   current_period_end: string | null;
   manageable: boolean;
+  // The three-day free trial. Optional: an API from before it sends none of
+  // these, and the page then looks exactly as it did.
+  trial_enabled?: boolean;
+  trial_days?: number;
+  /** none | trialing | active | blocked; anything else reads as none. */
+  state?: string;
+  /** none | payment_failed | canceled | trial_already_used. */
+  blocked_reason?: string;
+  trial_ends_at?: string | null;
+  cancel_at_period_end?: boolean;
+  can_start_trial?: boolean;
+  billing_interval?: "month" | "year" | null;
+  trial_limits?: { max_targets: number; scans_per_site_per_day: number; branded_reports: boolean } | null;
+  /** What Stripe will take when the trial ends, in cents, tax and coupon included. */
+  first_charge?: { amount: number; currency: string } | null;
 }
 
 export type Cadence = "manual" | "weekly" | "monthly";
@@ -394,8 +409,14 @@ export const api = {
     return request<Subscription>("GET", "/api/billing");
   },
 
-  checkout(plan: string, interval: "monthly" | "yearly") {
-    return request<{ url: string }>("POST", "/api/billing/checkout", { plan, interval });
+  /// `startTrial` is sent only when the server offers the trial: true from
+  /// "Start 3-day free trial", false from "Subscribe now".
+  checkout(plan: string, interval: "monthly" | "yearly", startTrial?: boolean) {
+    return request<{ url: string; trial?: boolean }>("POST", "/api/billing/checkout", {
+      plan,
+      interval,
+      ...(startTrial === undefined ? {} : { start_trial: startTrial }),
+    });
   },
 
   billingPortal() {

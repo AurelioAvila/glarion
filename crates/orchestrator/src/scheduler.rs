@@ -40,6 +40,9 @@ pub async fn run_forever(pool: PgPool) {
         if let Err(error) = tick(&pool).await {
             tracing::error!(error = ?error, "scheduler tick failed");
         }
+        if let Err(error) = crate::trial_reminder::send_due(&pool, &mailer, now).await {
+            tracing::error!(error = ?error, "trial reminders failed");
+        }
         tokio::time::sleep(std::time::Duration::from_secs(TICK_SECS)).await;
     }
 }
@@ -57,6 +60,12 @@ async fn tick(pool: &PgPool) -> anyhow::Result<()> {
              where target_id = t.id and verified_at is not null
              order by verified_at desc limit 1
          ) v on true
+         -- Only accounts whose paid plan is in force. A plan paused by a
+         -- failed payment keeps its schedules, and they resume here by
+         -- themselves once a retry succeeds.
+         join entitlements e on e.user_id = t.user_id
+                            and e.product = 'glarion'
+                            and e.plan in ('solo', 'studio', 'agency')
          where t.scan_cadence <> 'manual'",
     )
     .fetch_all(pool)

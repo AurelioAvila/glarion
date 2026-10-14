@@ -181,8 +181,10 @@ pub async fn create_target(
     // allowance at all: that is our bookkeeping problem, and locking somebody
     // out of the product entirely is the wrong way to notice it. See
     // billing::current_plan.
-    let plan = current_plan(&state.pool, user.id).await?;
-    let max_targets = plan.max_targets();
+    // A three-day trial holds fewer sites than the plan it tries.
+    let access = crate::billing::current_access(&state.pool, user.id).await?;
+    let plan = access.plan;
+    let max_targets = access.max_targets();
 
     let current: i64 = sqlx::query_scalar("select count(*) from targets where user_id = $1")
         .bind(user.id)
@@ -190,11 +192,18 @@ pub async fn create_target(
         .await?;
 
     if current >= max_targets as i64 {
-        return Err(ApiError::PlanLimit(format!(
-            "the {} plan covers {max_targets} {}",
-            plan.display_name().to_lowercase(),
-            if max_targets == 1 { "site" } else { "sites" }
-        )));
+        return Err(ApiError::PlanLimit(if access.trial {
+            format!(
+                "the free trial covers {max_targets} sites; the {} plan's full allowance starts with the first payment",
+                plan.display_name()
+            )
+        } else {
+            format!(
+                "the {} plan covers {max_targets} {}",
+                plan.display_name().to_lowercase(),
+                if max_targets == 1 { "site" } else { "sites" }
+            )
+        }));
     }
 
     let client_name = body

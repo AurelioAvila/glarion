@@ -120,7 +120,8 @@ export function watchPromo(render: (view: PromoView) => void): void {
 }
 
 const UNITS = ["Days", "Hours", "Minutes", "Seconds"] as const;
-const FINE = "Struck-through prices are our lowest in the 30 days before the offer. New subscriptions only; renewals are at the regular price, and new Solo subscribers still start with the 14-day free trial. Prices exclude VAT.";
+// No trial length here: it depends on the trial switch, and each plan's own line says it.
+const FINE = "Struck-through prices are our lowest in the 30 days before the offer. New subscriptions only; after any free trial the first payment is discounted and renewals are at the regular price. Prices exclude VAT.";
 
 export type PromoBanner = { element: HTMLElement; show(promo: Promo): void; tick(remaining: number): void };
 

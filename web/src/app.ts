@@ -48,6 +48,7 @@ import {
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { accountDestination, cleanPlanChoice, readPlanChoice, rememberPlanChoice } from "./plan-choice.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
+import { firstChargeDate, loadPrices, longDate, priceFor, subscribeNowLine, timeLeft, trialLine, trialProgress, type PriceList } from "./trial.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
 import { siteProfile } from "./profile.js";
@@ -2367,6 +2368,10 @@ async function renderPlan(): Promise<void> {
   container.append(skeleton());
 
   let subscription: Subscription;
+  // Read alongside the account, and never allowed to fail the page: without
+  // the Stripe prices there is simply no trial line.
+  const pricesRequest = loadPrices();
+  const pricesAsked = performance.now();
   try {
     subscription = await api.subscription();
   } catch (error) {
@@ -2375,16 +2380,23 @@ async function renderPlan(): Promise<void> {
     container.append(notice("error", describeError(error)));
     return;
   }
+  const prices = await pricesRequest;
 
   if (routeId !== currentRouteId) return;
   clear(container);
   const message = el("div");
+  const trialOn = subscription.trial_enabled === true;
+  const trialing = trialOn && subscription.state === "trialing" && Boolean(subscription.trial_ends_at);
+  const trial: TrialOffer | null =
+    trialOn && subscription.can_start_trial === true && !subscription.manageable && prices?.trialEnabled
+      ? { prices, chargeOn: firstChargeDate(prices, performance.now() - pricesAsked) }
+      : null;
 
   // Where they stand, as a sentence that has already done the
   // interpreting — the same shape as every other page here.
   const usage = el("p", { class: "standing" });
   usage.append(
-    el("strong", { text: subscription.plan_name }),
+    el("strong", { text: trialing ? `${subscription.plan_name} trial` : subscription.plan_name }),
     " — ",
     `${subscription.targets_used} of ${subscription.max_targets} ${
       subscription.max_targets === 1 ? "site" : "sites"
@@ -2394,10 +2406,12 @@ async function renderPlan(): Promise<void> {
 
   const meta: string[] = [];
   if (!subscription.allows_scheduling) meta.push("Automatic checks not included");
-  if (subscription.current_period_end) {
-    meta.push(`Renews ${shortDate(subscription.current_period_end)}`);
+  // With the trial on, the trial panel and the notices below say what the
+  // raw Stripe status used to; a paused plan has no renewal to announce.
+  if (subscription.current_period_end && !trialing && (!trialOn || subscription.allows_scheduling)) {
+    meta.push(`${trialOn && subscription.cancel_at_period_end ? "Ends" : "Renews"} ${shortDate(subscription.current_period_end)}`);
   }
-  if (subscription.status && subscription.status !== "active") {
+  if (subscription.status && subscription.status !== "active" && !trialOn) {
     meta.push(subscription.status.replace(/_/g, " "));
   }
 
@@ -2410,6 +2424,17 @@ async function renderPlan(): Promise<void> {
     message,
   );
 
+  if (trialing) container.append(trialPanel(subscription));
+  if (trialOn && subscription.state === "blocked") {
+    if (subscription.blocked_reason === "payment_failed") {
+      container.append(notice("error", "Your last payment did not go through, so full scans and scheduled checks are paused. Update your payment method in Manage billing: everything resumes as soon as the payment succeeds, with your sites and schedules as they were."));
+    } else if (subscription.blocked_reason === "trial_already_used") {
+      container.append(notice("info", "A free trial has already been used with this account, email address or card, so that subscription was cancelled and nothing was charged. You can subscribe directly below."));
+    }
+  } else if (trialOn && !subscription.manageable && subscription.can_start_trial === false && subscription.state !== "trialing") {
+    container.append(notice("info", "This account has already used its free trial, so a plan you choose starts straight away."));
+  }
+
   if (pendingPlan) {
     container.append(chosenPlanNotice(true)!);
     // The choice has reached billing review. Do not keep routing future logins here.
@@ -2418,7 +2443,7 @@ async function renderPlan(): Promise<void> {
 
   // Being out of room is the one thing on this page somebody needs told
   // rather than left to work out from two numbers.
-  if (subscription.targets_used >= subscription.max_targets) {
+  if (subscription.targets_used >= subscription.max_targets && !(trialOn && subscription.blocked_reason === "payment_failed")) {
     container.append(
       notice(
         "info",
@@ -2430,7 +2455,8 @@ async function renderPlan(): Promise<void> {
   }
 
   if (subscription.manageable) {
-    const manage = el("button", { class: "ghost", type: "button", text: "Manage billing" });
+    const paused = trialOn && subscription.blocked_reason === "payment_failed";
+    const manage = el("button", { class: paused ? "primary" : "ghost", type: "button", text: paused ? "Update payment method" : "Manage billing" });
     on(manage, "click", () => {
       void withPending(manage, "Opening…", async () => {
         try {
@@ -2475,7 +2501,7 @@ async function renderPlan(): Promise<void> {
 
   function paintList(): void {
     clear(list);
-    for (const offer of PLANS) list.append(planRow(offer, subscription, interval, message, offerFor(offer.plan)));
+    for (const offer of pricedPlans(prices)) list.append(planRow(offer, subscription, interval, message, offerFor(offer.plan), trial));
   }
 
   promoChanged = () => {
@@ -2503,12 +2529,60 @@ async function renderPlan(): Promise<void> {
   container.append(promoSlot, el("div", { style: "margin-top:1.75rem" }, [toggleRow]), list);
 
   container.append(
-    el("p", { class: "muted", style: "margin-top:1.5rem" }, [
-      "Prices exclude VAT. Any applicable tax and the final total are shown in Stripe before you pay. ",
-      subscription.manageable ? "" : "Solo starts with a 14-day free trial for new subscribers: you add a card at checkout and are charged only if you keep Solo after day 14. ",
-      "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
-    ]),
+    el("p", { class: "muted", style: "margin-top:1.5rem" }, trialOn
+      ? [
+          "Prices exclude VAT. Any applicable tax and the final total are shown in Stripe before you pay. ",
+          trial ? `The free trial needs a card or another payment method Stripe accepts and charges nothing for ${trial.prices.trialDays} days; the plan then renews automatically until you cancel in Manage billing. One trial per account, email address, card and site. During the trial: up to 3 sites, 2 full scans per site a day, and reports without your branding. ` : "",
+          "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
+        ]
+      : [
+          "Prices exclude VAT. Any applicable tax and the final total are shown in Stripe before you pay. ",
+          subscription.manageable ? "" : "Solo starts with a 14-day free trial for new subscribers: you add a card at checkout and are charged only if you keep Solo after day 14. ",
+          "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
+        ]),
   );
+}
+
+type TrialOffer = { prices: PriceList; chargeOn: Date };
+
+/// The plan list with the Stripe prices in place of the ones written here,
+/// wherever the server published them, so a row and its trial line can never
+/// quote two different amounts.
+function pricedPlans(prices: PriceList | null): PlanOffer[] {
+  return PLANS.map((offer) => {
+    const monthly = priceFor(prices, offer.plan, "monthly");
+    const yearly = priceFor(prices, offer.plan, "yearly");
+    return { ...offer, monthly: monthly ? monthly.amount / 100 : offer.monthly, yearly: yearly ? yearly.amount / 100 : offer.yearly } as PlanOffer;
+  });
+}
+
+/// A running trial: time left, the first payment, and what waits for it.
+function trialPanel(subscription: Subscription): HTMLElement {
+  const ends = subscription.trial_ends_at!;
+  const days = subscription.trial_days ?? 3;
+  const progress = Math.round(trialProgress(ends, days) * 100);
+  const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeStyle: "short" }).format(new Date(ends));
+  const every = subscription.billing_interval === "year" ? "yearly" : "monthly";
+  const charge = subscription.first_charge ? euro(subscription.first_charge.amount) : null;
+  const limits = subscription.trial_limits;
+  const bar = el("div", { class: "trial-bar", role: "progressbar", "aria-label": "Trial used", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(progress) }, [
+    el("span", { style: `width:${progress}%` }),
+  ]);
+  return el("section", { class: "trial-status", "aria-label": "Free trial" }, [
+    el("div", { class: "trial-status-head" }, [
+      el("strong", { text: subscription.cancel_at_period_end ? "Trial cancelled" : timeLeft(ends) }),
+      el("span", { text: `Ends ${when}` }),
+    ]),
+    bar,
+    el("p", {
+      text: subscription.cancel_at_period_end
+        ? `Nothing will be charged. The trial runs until ${longDate(ends)}, then the account returns to the free plan with your sites and reports in place.`
+        : `${charge ? `First payment: ${charge} on ${longDate(ends)}` : `First payment on ${longDate(ends)}`}, then ${subscription.plan_name} renews ${every} until you cancel. Cancel before then in Manage billing and nothing is charged.`,
+    }),
+    limits
+      ? el("p", { class: "trial-limits", text: `During the trial: up to ${limits.max_targets} sites, ${limits.scans_per_site_per_day} full scans per site a day, and reports without your agency branding. The full ${subscription.plan_name} plan starts with the first payment.` })
+      : null,
+  ]);
 }
 
 /// One plan, as a row on a hairline.
@@ -2525,7 +2599,9 @@ function planRow(
   interval: "monthly" | "yearly",
   message: HTMLElement,
   promo: PromoOffer | null,
+  trial: TrialOffer | null = null,
 ): HTMLElement {
+  let trialLines: HTMLElement | null = null;
   const current = offer.plan === subscription.plan;
   const selected = offer.plan === pendingPlan?.plan;
   const annual = offer.monthly > 0 ? annualOffer(offer.monthly, offer.yearly) : null;
@@ -2579,28 +2655,53 @@ function planRow(
       state.append(el("span", { class: "plan-discount", text: `Save ${annual!.discount}% with yearly billing` }));
     }
 
-    // Mirrors trial_days() in the API: Solo, for an account with no billing
-    // history yet. The server decides; this only says so before checkout.
-    const trial = offer.plan === "solo" && !subscription.manageable;
-    if (trial) state.append(el("span", { class: "plan-discount", text: "14-day free trial" }));
-    const subscribe = el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : trial ? "Start 14-day free trial" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` });
-    on(subscribe, "click", () => {
-      clear(message);
-      void withPending(subscribe, "Opening…", async () => {
-        try {
-          const result = subscription.manageable
-            ? await api.billingPortal()
-            : await api.checkout(offer.plan, interval);
-          pendingPlan = null;
-          rememberPlanChoice(null);
-          window.location.href = result.url;
-        } catch (error) {
-          message.replaceChildren(notice("error", describeError(error)));
-        }
+    const go = (button: HTMLButtonElement, startTrial?: boolean): HTMLButtonElement => {
+      on(button, "click", () => {
+        clear(message);
+        void withPending(button, "Opening…", async () => {
+          try {
+            const result = subscription.manageable
+              ? await api.billingPortal()
+              : await api.checkout(offer.plan, interval, startTrial);
+            pendingPlan = null;
+            rememberPlanChoice(null);
+            window.location.href = result.url;
+          } catch (error) {
+            // A trial used elsewhere with this mailbox, found between loading
+            // the page and pressing the button: offer the plan itself.
+            if (error instanceof ApiError && error.code === "trial_unavailable") {
+              message.replaceChildren(notice("info", "The free trial is no longer available for this account. Choose Subscribe now to start the plan straight away."));
+              return;
+            }
+            message.replaceChildren(notice("error", describeError(error)));
+          }
+        });
       });
-    });
+      return button;
+    };
 
-    right.append(price, subscribe);
+    // Two choices while the server offers this account a trial: the trial,
+    // or the plan straight away. The trial line quotes the Stripe price and
+    // the day it is charged; without that price there is no trial button.
+    const stripePrice = trial ? priceFor(trial.prices, offer.plan, interval) : null;
+    if (trial && stripePrice && !subscription.manageable) {
+      state.append(el("span", { class: "plan-discount", text: `${trial.prices.trialDays}-day free trial` }));
+      right.append(price, el("div", { class: "plan-actions" }, [
+        go(el("button", { class: "primary", type: "button", text: `Start ${trial.prices.trialDays}-day free trial` }), true),
+        go(el("button", { class: "ghost", type: "button", text: "Subscribe now" }), false),
+      ]));
+      trialLines = el("div", { class: "plan-trial" }, [
+        el("p", { text: trialLine(trial.prices.trialDays, stripePrice, trial.chargeOn, promo) }),
+        el("p", { class: "plan-trial-now", text: subscribeNowLine(stripePrice, promo) }),
+      ]);
+    } else {
+      // Mirrors trial_days() in the API while the three-day trial is off:
+      // Solo, for an account with no billing history yet. The server
+      // decides; this only says so before checkout.
+      const legacyTrial = subscription.trial_enabled !== true && offer.plan === "solo" && !subscription.manageable;
+      if (legacyTrial) state.append(el("span", { class: "plan-discount", text: "14-day free trial" }));
+      right.append(price, go(el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : legacyTrial ? "Start 14-day free trial" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` })));
+    }
   }
 
   return el("li", { class: `plan-item plan-${offer.plan}${selected ? " plan-selected" : ""}` }, [
@@ -2610,6 +2711,7 @@ function planRow(
         el("div", { class: "entry-name", text: `${offer.name}${selected ? " · Selected" : ""}` }),
       ]), state]),
       right,
+      trialLines,
     ]),
   ]);
 }

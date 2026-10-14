@@ -36,6 +36,12 @@ pub enum ApiError {
     #[error("plan limit reached: {0}")]
     PlanLimit(String),
 
+    /// A trial was asked for that this account cannot have: the switch is
+    /// off, or the account, its mailbox or its card already had one. Its own
+    /// code so the dashboard can offer "Subscribe now" instead.
+    #[error("the free trial is not available for this account")]
+    TrialUnavailable,
+
     #[error("too many requests — try again later")]
     TooManyRequests,
 
@@ -73,6 +79,9 @@ impl IntoResponse for ApiError {
                 self.to_string(),
             ),
             ApiError::PlanLimit(_) => (StatusCode::FORBIDDEN, "plan_limit", self.to_string()),
+            ApiError::TrialUnavailable => {
+                (StatusCode::CONFLICT, "trial_unavailable", self.to_string())
+            }
             ApiError::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",

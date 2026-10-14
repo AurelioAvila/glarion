@@ -181,26 +181,164 @@ pub fn plan_for_price(price_id: &str) -> Option<Plan> {
     None
 }
 
-/// Subscription states that should keep an account working.
-///
-/// `past_due` is included deliberately. A failed card is usually an expired
-/// card, and locking somebody out of their monitoring the hour a payment
-/// bounces loses a customer who would have paid on the retry. Stripe moves
-/// the subscription to `canceled` or `unpaid` once it gives up, and those
-/// are not on this list.
+/// Whether a subscription is still alive at Stripe: it is either paid up or
+/// Stripe is still trying to collect. Decides "you already have a
+/// subscription" and "cancel before deleting the account" — not access,
+/// which is `status_keeps_plan`.
 pub fn status_grants_access(status: &str) -> bool {
     matches!(status, "active" | "trialing" | "past_due")
 }
 
-/// Free trial length for a checkout, if one applies.
+/// Whether a subscription in this state keeps the paid plan.
+///
+/// `strict` is the three-day trial's rule (owner decision, 14 October 2026):
+/// a failed payment stops the plan at once, and a successful retry brings it
+/// back. It applies to every subscription while TRIAL_ENABLED is on, and
+/// always to one that began as a three-day trial. Otherwise `past_due` keeps
+/// the plan, as it always has: a failed card is usually an expired one, and
+/// Stripe retries before giving up with `unpaid` or `canceled`.
+pub fn status_keeps_plan(status: &str, strict: bool) -> bool {
+    match status {
+        "active" | "trialing" => true,
+        "past_due" => !strict,
+        _ => false,
+    }
+}
+
+/// Why the paid plan is not in force, for a subscription that does not keep
+/// it. `comment` is Stripe's `cancellation_details.comment`, where a refused
+/// trial is labelled.
+pub fn blocked_reason(status: &str, comment: Option<&str>) -> &'static str {
+    match status {
+        "past_due" | "unpaid" | "incomplete" | "incomplete_expired" | "paused" => "payment_failed",
+        "canceled" if comment == Some(TRIAL_REJECTED_COMMENT) => "trial_already_used",
+        "canceled" => "canceled",
+        _ => "none",
+    }
+}
+
+/// Free trial length for a checkout while TRIAL_ENABLED is off.
 ///
 /// Only Solo, and only for an account that has never been a Stripe
 /// customer: an agency cannot judge a full scan from the public check, so
 /// the entry plan lets them run real ones before paying. A card is still
 /// collected up front, which keeps the trial from becoming a way to scan
-/// for free indefinitely with fresh accounts.
+/// for free indefinitely with fresh accounts. The three-day trial replaces
+/// it when the switch is on.
 pub fn trial_days(plan: Plan, has_billing_history: bool) -> Option<u32> {
     (plan == Plan::Solo && !has_billing_history).then_some(14)
+}
+
+/// The three-day trial: every paid plan, monthly or yearly, chosen by the
+/// customer ("Start 3-day free trial" or "Subscribe now"), card required,
+/// charged automatically when it ends, blocked at once if that fails.
+pub const TRIAL_DAYS: u32 = 3;
+
+/// Tighter limits while a three-day trial runs. A trial must not be cheaper
+/// to abuse than the plan is to buy: fewer sites, fewer scans per site, and
+/// no white-label reports, which are what an agency resells.
+pub const TRIAL_MAX_TARGETS: i32 = 3;
+pub const TRIAL_MAX_SCANS_PER_TARGET_PER_DAY: i64 = 2;
+
+/// Subscription metadata that marks a three-day trial checkout, so the
+/// webhook can tell it from the 14-day Solo trial.
+pub const TRIAL_MARKER_KEY: &str = "glarion_trial";
+pub const TRIAL_MARKER_VALUE: &str = "3d";
+/// Written to `cancellation_details.comment` when a trial is refused.
+pub const TRIAL_REJECTED_COMMENT: &str = "trial_already_used";
+
+/// The switch. Off unless TRIAL_ENABLED is `true` or `1`; only the owner
+/// turns it on.
+pub fn trial_enabled() -> bool {
+    std::env::var("TRIAL_ENABLED")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
+        .unwrap_or(false)
+}
+
+/// One mailbox, however it is written: lower case, no spaces, no
+/// `+label`, and for Gmail no dots and one domain.
+pub fn normalize_email(email: &str) -> String {
+    let email: String = email
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    let Some((local, domain)) = email.rsplit_once('@') else {
+        return email;
+    };
+    let local = local.split('+').next().unwrap_or(local);
+    match domain {
+        "gmail.com" | "googlemail.com" => format!("{}@gmail.com", local.replace('.', "")),
+        _ => format!("{local}@{domain}"),
+    }
+}
+
+/// What `trial_claims` keeps instead of the address.
+pub fn email_hash(email: &str) -> String {
+    use sha2::Digest;
+    Sha256::digest(normalize_email(email).as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// What an account may do right now: its plan, and whether that plan is a
+/// three-day trial, which carries the tighter limits above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Access {
+    pub plan: Plan,
+    pub trial: bool,
+}
+
+impl Access {
+    pub fn max_targets(&self) -> i32 {
+        if self.trial {
+            self.plan.max_targets().min(TRIAL_MAX_TARGETS)
+        } else {
+            self.plan.max_targets()
+        }
+    }
+
+    pub fn scans_per_target_per_day(&self) -> i64 {
+        if self.trial {
+            TRIAL_MAX_SCANS_PER_TARGET_PER_DAY
+        } else {
+            orchestrator::policy::MAX_SCANS_PER_TARGET_PER_DAY
+        }
+    }
+
+    pub fn allows_branding(&self) -> bool {
+        self.plan.allows_branding() && !self.trial
+    }
+}
+
+/// The plan and the trial flag, read the way `current_plan` reads the plan.
+/// A trial is a three-day one only if it was claimed: the 14-day Solo trial
+/// keeps the full plan, as it always has.
+pub async fn current_access(pool: &PgPool, user_id: Uuid) -> Result<Access, sqlx::Error> {
+    let row: Option<(String, bool)> = sqlx::query_as(
+        "select e.plan,
+                coalesce(e.subscription_status = 'trialing', false)
+                and exists (select 1 from trial_claims c
+                             where c.subscription_id = e.stripe_subscription_id)
+           from entitlements e
+          where e.user_id = $1 and e.product = 'glarion'",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(match row {
+        Some((plan, trial)) => Access {
+            plan: Plan::from_db_str(&plan),
+            trial,
+        },
+        None => Access {
+            plan: Plan::Free,
+            trial: false,
+        },
+    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -481,6 +619,98 @@ mod tests {
         assert_eq!(trial_days(Plan::Solo, true), None);
         assert_eq!(trial_days(Plan::Studio, false), None);
         assert_eq!(trial_days(Plan::Agency, false), None);
+    }
+
+    #[test]
+    fn a_failed_payment_blocks_at_once_only_under_the_trial_rule() {
+        // Unchanged for existing subscribers while the switch is off.
+        assert!(status_keeps_plan("past_due", false));
+        // A subscription born from a three-day trial, or any while it is on.
+        assert!(!status_keeps_plan("past_due", true));
+        for strict in [false, true] {
+            assert!(status_keeps_plan("active", strict));
+            assert!(status_keeps_plan("trialing", strict));
+            for status in [
+                "unpaid",
+                "canceled",
+                "incomplete",
+                "incomplete_expired",
+                "paused",
+                "",
+            ] {
+                assert!(!status_keeps_plan(status, strict), "{status}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_blocked_subscription_says_why() {
+        assert_eq!(blocked_reason("past_due", None), "payment_failed");
+        assert_eq!(blocked_reason("unpaid", None), "payment_failed");
+        assert_eq!(blocked_reason("incomplete_expired", None), "payment_failed");
+        assert_eq!(blocked_reason("canceled", None), "canceled");
+        assert_eq!(
+            blocked_reason("canceled", Some(TRIAL_REJECTED_COMMENT)),
+            "trial_already_used"
+        );
+        assert_eq!(blocked_reason("active", None), "none");
+    }
+
+    #[test]
+    fn one_mailbox_however_it_is_written() {
+        let alpha = email_hash("Ada.Lovelace+trial@Gmail.com");
+        assert_eq!(alpha, email_hash("adalovelace@googlemail.com"));
+        assert_eq!(alpha, email_hash(" ada.love.lace@gmail.com "));
+        assert_eq!(
+            normalize_email("Ops+x@Agency.example"),
+            "ops@agency.example"
+        );
+        // Dots matter outside Gmail.
+        assert_ne!(
+            email_hash("a.b@agency.example"),
+            email_hash("ab@agency.example")
+        );
+        assert_eq!(alpha.len(), 64);
+        assert!(!alpha.contains('@'));
+    }
+
+    #[test]
+    fn a_trial_runs_on_tighter_limits_than_the_plan() {
+        for plan in PAID_PLANS {
+            let trial = Access { plan, trial: true };
+            let paid = Access { plan, trial: false };
+            assert!(trial.max_targets() <= TRIAL_MAX_TARGETS);
+            assert!(trial.max_targets() <= paid.max_targets());
+            assert!(trial.scans_per_target_per_day() < paid.scans_per_target_per_day());
+            assert!(!trial.allows_branding());
+            assert!(paid.allows_branding());
+        }
+        // The free plan is not made larger by the trial rule.
+        let free = Access {
+            plan: Plan::Free,
+            trial: true,
+        };
+        assert_eq!(free.max_targets(), 1);
+    }
+
+    #[test]
+    fn the_switch_is_off_unless_set_on() {
+        // Read at call time, so the owner's variable is the only input.
+        std::env::remove_var("TRIAL_ENABLED");
+        assert!(!trial_enabled());
+        for (value, on) in [
+            ("true", true),
+            ("1", true),
+            ("TRUE", true),
+            ("false", false),
+            ("0", false),
+            ("yes", false),
+            ("", false),
+        ] {
+            std::env::set_var("TRIAL_ENABLED", value);
+            assert_eq!(trial_enabled(), on, "{value:?}");
+        }
+        std::env::remove_var("TRIAL_ENABLED");
     }
 
     #[test]
