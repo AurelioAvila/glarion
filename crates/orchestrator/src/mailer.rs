@@ -202,15 +202,11 @@ fn escape(input: &str) -> String {
     out
 }
 
-/// The shared chrome every message wears.
-///
-/// The bodies used to be bare `<div>`s with a blue button — a blue that
-/// appears nowhere in the product, whose accent is green. No doctype, no
-/// preheader, no header, no footer. For something sold to agencies as
-/// security work, a message that looks like a script's output undercuts the
-/// thing being sold, so the frame is decided once, here.
-///
-/// Tables and inline styles because Outlook drops most of everything else.
+/// The shared frame every message wears: the email design kit's layout
+/// (my-apps/email-design-kit/_base/layout.html) in the prism identity of
+/// glarion.app. Tables and inline styles because Outlook drops most of
+/// everything else; the style block carries only the phone layout and the dark
+/// variant.
 struct Chrome<'a> {
     /// The line shown next to the subject in an inbox list. Left to chance,
     /// clients scrape the first words of the body instead, which on a report
@@ -220,47 +216,38 @@ struct Chrome<'a> {
     heading: &'a str,
     body: &'a str,
     cta: Option<(&'a str, &'a str)>,
+    /// What follows the button in the kit's order: link fallback, steps, notes.
+    after: &'a str,
+    /// Why the reader got this message, under the card.
     footer: &'a str,
+    /// The question the reader may have, and what to send, at the foot of the card.
+    help: (&'a str, &'a str),
 }
 
-// The prism identity of glarion.app (web/landing.css, web/prism.css): lavender
-// paper, deep violet ink, crimson for the one action, violet for labels.
-// Contrast on the white card: ink 15.6:1, body 10.1:1, muted 7.6:1, alarm
-// 7.1:1, white on the crimson button 5.7:1. Dark mail apps get the night
-// variant through the classes in `chrome`'s style block.
+// The prism identity of glarion.app (web/prism.css, web/landing.css): lavender
+// paper, deep violet ink, violet for the one action, the three prism colours as
+// the rule over the card. Contrast on the white card: ink 15.6:1, muted 7.6:1,
+// violet 6.3:1, white on the violet button 6.3:1, alarm 7.1:1. Dark mail apps get
+// the kit's shared dark neutrals through the classes in the style block.
 const BG: &str = "#faf7fb";
 const RAISE: &str = "#ffffff";
 const SINK: &str = "#f2edf8";
 const RULE: &str = "#dcd2e5";
 const INK: &str = "#2d103a";
-const INK_2: &str = "#4f3a5c";
 const INK_3: &str = "#695174";
 const ALARM: &str = "#a33428";
-const ACCENT: &str = "#bc294a";
 const VIOLET: &str = "#7345b2";
+const CRIMSON: &str = "#bc294a";
 const CORAL: &str = "#e74767";
-const FONT: &str =
-    "Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const FONT: &str = "Manrope,'Segoe UI',Arial,sans-serif";
+const MONO: &str = "ui-monospace,Menlo,Consolas,monospace";
 
-/// A tinted panel for steps, limits and notices; dark mail apps get the night variant.
-fn panel(inner: &str) -> String {
-    format!(
-        r#"<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="gl-sink" bgcolor="{SINK}" style="margin:22px 0;background:{SINK};border:1px solid {RULE};border-radius:10px"><tr><td class="gl-ink2" style="padding:18px 20px;color:{INK_2};font-size:14px;line-height:1.8">{inner}</td></tr></table>"#
-    )
-}
 /// Where the chrome's own links point: the wordmark, the mark, and the three
 /// in the footer.
 ///
 /// Read from the same PUBLIC_URL the action links are built from, not written
-/// down a second time. It was a constant, which was fine only for as long as
-/// the product never moved: the day a real domain is pointed at this app and
-/// PUBLIC_URL is updated, the button in an email would lead to the new host
-/// while the logo above it and every link below it still advertised
-/// glarion.app. Two answers to "where does this product live", in one
-/// message, is the sort of thing a reader notices and a sender does not.
-///
-/// Resolved once. The value cannot change without a restart, and a mail
-/// template is not the place to be reading the environment per render.
+/// down a second time, so the button and the logo above it can never name two
+/// different hosts. Resolved once: the value cannot change without a restart.
 fn site_url() -> &'static str {
     static SITE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     SITE.get_or_init(|| {
@@ -275,10 +262,9 @@ fn site_url() -> &'static str {
 ///
 /// The brand mark sits *on* its own coloured cell rather than replacing it.
 /// Most email clients refuse remote images until the reader asks for them, so
-/// a bare logo is a blank gap on first open — which is every open that
-/// matters. Keeping the cell's background and the alt text's styling means a
-/// blocked image degrades to a green square with a G in it, which is the mark
-/// anyway, rather than to nothing.
+/// a bare logo is a blank gap on first open. Keeping the cell's background and
+/// the alt text's styling means a blocked image degrades to a violet disc with
+/// a G in it, which is the mark anyway, rather than to nothing.
 fn chrome(parts: Chrome<'_>) -> String {
     let Chrome {
         preview,
@@ -286,34 +272,119 @@ fn chrome(parts: Chrome<'_>) -> String {
         heading,
         body,
         cta,
+        after,
         footer,
+        help,
     } = parts;
     let preview = escape(preview);
     let eyebrow = escape(eyebrow);
     let heading = escape(heading);
     let footer = escape(footer);
+    let (help_title, help_text) = (escape(help.0), escape(help.1));
+    // Only messages that invite a reply say "or".
+    let write = if help.1.starts_with("Reply") {
+        "Or write to"
+    } else {
+        "Write to"
+    };
     let site = site_url();
     let button = match cta {
         Some((label, url)) => {
             let (url, label) = (escape(url), escape(label));
             let width = (label.chars().count() * 9 + 64).min(520);
             format!(
-                r#"<table role="presentation" cellspacing="0" cellpadding="0" class="gl-bt" style="margin:26px 0 8px"><tr><td class="gl-btn" align="center" bgcolor="{ACCENT}" style="border-radius:8px;background:{ACCENT}"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:46px;v-text-anchor:middle;width:{width}px" arcsize="17%" stroke="f" fillcolor="{ACCENT}"><w:anchorlock/><center style="color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:700">{label}</center></v:roundrect><![endif]--><!--[if !mso]><!--><a class="gl-btn-a" href="{url}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;text-decoration:none;border-radius:8px">{label} &nbsp;&rarr;</a><!--<![endif]--></td></tr></table>"#
+                r#"<table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn" style="margin:4px 0 24px"><tr><td align="center" bgcolor="{VIOLET}" style="border-radius:10px;background:{VIOLET}"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:48px;v-text-anchor:middle;width:{width}px" arcsize="21%" stroke="f" fillcolor="{VIOLET}"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700">{label}</center></v:roundrect><![endif]--><!--[if !mso]><!--><a href="{url}" style="display:inline-block;padding:14px 28px;font-family:{FONT};font-size:16px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;background:{VIOLET}">{label}</a><!--<![endif]--></td></tr></table>"#
             )
         }
         None => String::new(),
     };
 
     format!(
-        r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>{preview}</title><style>@font-face{{font-family:Manrope;src:url('{site}/fonts/manrope.woff2') format('woff2');font-weight:200 800}}:root{{color-scheme:light dark;supported-color-schemes:light dark}}body{{margin:0;padding:0;-webkit-text-size-adjust:100%}}@media only screen and (max-width:620px){{.gl-wrap{{padding:16px 10px!important}}.gl-pad{{padding-left:22px!important;padding-right:22px!important}}.gl-h1{{font-size:23px!important}}.gl-bt{{width:100%!important}}.gl-bt a{{display:block!important}}}}@media (prefers-color-scheme:dark){{.gl-page{{background:#160a1d!important}}.gl-card{{background:#21122a!important;border-color:#3a2747!important}}.gl-sink{{background:#1a0e22!important;border-color:#3a2747!important}}.gl-rule{{border-color:#3a2747!important}}.gl-ink,.gl-ink a{{color:#f5eefa!important}}.gl-ink2{{color:#d9cce2!important}}.gl-ink3,.gl-ink3 a{{color:#b9a6c6!important}}.gl-pill{{background:#2c1838!important;border-color:#4b3060!important;color:#cdb0f2!important}}.gl-btn{{background:#f07a93!important}}.gl-btn-a{{color:#2d103a!important}}.gl-alarm{{color:#ff8f80!important}}.gl-mark{{background:#f5eefa!important}}}}</style></head><body class="gl-page" style="margin:0;padding:0;background:{BG};font-family:{FONT};color:{INK}"><div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:{BG}">{preview}{pad}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="gl-page" bgcolor="{BG}" style="background:{BG}"><tr><td align="center" class="gl-wrap" style="padding:32px 16px"><!--[if mso]><table role="presentation" width="600" cellspacing="0" cellpadding="0"><tr><td><![endif]--><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px"><tr><td style="padding:0 4px 18px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td class="gl-mark" align="center" valign="middle" style="width:34px;height:34px;border-radius:17px;background:{INK};color:#ffffff;font-size:15px;font-weight:800"><img src="{site}/glarion-mark-64.png" width="30" height="30" alt="G" style="display:block;width:30px;height:30px;margin:2px;border:0;border-radius:15px"></td><td style="padding-left:11px"><a class="gl-ink" href="{site}" style="color:{INK};font-family:{FONT};font-size:21px;font-weight:800;text-decoration:none;letter-spacing:-.6px">Glarion</a></td></tr></table></td></tr><tr><td class="gl-card" bgcolor="{RAISE}" style="background:{RAISE};border:1px solid {RULE};border-radius:16px;overflow:hidden"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="height:4px;line-height:4px;font-size:0;background:{VIOLET}" width="34%">&nbsp;</td><td style="height:4px;line-height:4px;font-size:0;background:{ACCENT}" width="33%">&nbsp;</td><td style="height:4px;line-height:4px;font-size:0;background:{CORAL}" width="33%">&nbsp;</td></tr><tr><td colspan="3" class="gl-pad" style="padding:32px 36px 30px"><table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 16px"><tr><td class="gl-pill" style="padding:6px 11px;border:1px solid #d9c7ee;border-radius:999px;background:#f2eafb;color:{VIOLET};font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase">{eyebrow}</td></tr></table><h1 class="gl-ink gl-h1" style="margin:0 0 16px;color:{INK};font-family:{FONT};font-size:26px;line-height:1.24;font-weight:800;letter-spacing:-.6px">{heading}</h1>{body}{button}</td></tr></table></td></tr><tr><td class="gl-ink3" style="padding:22px 6px 6px;color:{INK_3};font-size:12px;line-height:1.6">{footer}<br>Questions? Reply to this email or write to <a class="gl-ink3" href="mailto:hello@glarion.app" style="color:{VIOLET}">hello@glarion.app</a>.</td></tr><tr><td class="gl-ink3" style="padding:0 6px 26px;color:{INK_3};font-size:12px;line-height:1.6">Glarion &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}" style="color:{VIOLET}">Website</a> &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}/privacy.html" style="color:{VIOLET}">Privacy</a> &nbsp;&middot;&nbsp; <a class="gl-ink3" href="{site}/terms.html" style="color:{VIOLET}">Terms</a></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>"#,
+        r#"<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>{preview}</title><style>@font-face{{font-family:Manrope;src:url('{site}/fonts/manrope.woff2') format('woff2');font-weight:200 800}}body,table,td,p,a{{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}}table,td{{mso-table-lspace:0;mso-table-rspace:0;border-collapse:collapse}}img{{border:0;outline:none;text-decoration:none;display:block}}body{{margin:0;padding:0;width:100%!important}}a[x-apple-data-detectors]{{color:inherit!important;text-decoration:none!important}}@media only screen and (max-width:620px){{.wrap{{padding:16px 10px!important}}.card-pad{{padding:26px 20px 8px!important}}.head{{padding:18px 20px!important}}.help{{padding:18px 20px!important}}.h1{{font-size:24px!important;line-height:30px!important}}.btn,.btn td,.btn a{{width:100%!important;display:block!important;text-align:center!important;box-sizing:border-box!important}}}}@media (prefers-color-scheme:dark){{.bg{{background:#121316!important}}.card{{background:#1b1d21!important;border-color:#30333a!important}}.panel{{background:#24272d!important}}.ink{{color:#eceef2!important}}.muted{{color:#a9afba!important}}.rule{{border-color:#30333a!important}}.link,.eyebrow{{color:#c9a8f5!important}}.alarm{{color:#ff9a8a!important}}.mark{{background:#eceef2!important}}}}[data-ogsc] .bg{{background:#121316!important}}[data-ogsc] .card{{background:#1b1d21!important;border-color:#30333a!important}}[data-ogsc] .panel{{background:#24272d!important}}[data-ogsc] .ink{{color:#eceef2!important}}[data-ogsc] .muted{{color:#a9afba!important}}[data-ogsc] .link,[data-ogsc] .eyebrow{{color:#c9a8f5!important}}</style></head><body class="bg" style="margin:0;padding:0;background:{BG}"><div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:{BG}">{preview}{pad}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" bgcolor="{BG}" style="background:{BG}" lang="en" dir="ltr"><tr><td align="center" class="wrap" style="padding:32px 16px"><!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]--><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center" style="max-width:600px;margin:0 auto"><tr><td class="card" bgcolor="{RAISE}" style="background:{RAISE};border:1px solid {RULE};border-radius:14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34%" style="height:5px;background:{VIOLET};border-radius:14px 0 0 0">&nbsp;</td><td width="33%" style="height:5px;background:{CRIMSON}">&nbsp;</td><td width="33%" style="height:5px;background:{CORAL};border-radius:0 14px 0 0">&nbsp;</td></tr></table></td></tr><tr><td class="head rule" style="padding:20px 32px;border-bottom:1px solid {RULE}"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="mark" width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;border-radius:20px;background:{INK};color:#ffffff;font-family:{FONT};font-size:16px;font-weight:800"><a href="{site}" style="text-decoration:none;color:#ffffff"><img src="{site}/glarion-mark-64.png" width="34" height="34" alt="Glarion" style="display:block;width:34px;height:34px;margin:3px;border:0;border-radius:17px"></a></td><td valign="middle" style="padding-left:12px;font-family:{FONT};font-size:20px;line-height:24px;font-weight:800;letter-spacing:-0.5px"><a href="{site}" class="ink" style="color:{INK};text-decoration:none">Glarion</a></td></tr></table></td></tr><tr><td class="card-pad" style="padding:32px 32px 8px"><p class="eyebrow" style="margin:0 0 10px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:{VIOLET}">{eyebrow}</p><h1 class="h1 ink" style="margin:0 0 14px;font-family:{FONT};font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.5px;color:{INK}">{heading}</h1>{body}{button}{after}</td></tr><tr><td class="panel help" bgcolor="{SINK}" style="background:{SINK};padding:18px 32px;border-radius:0 0 14px 14px"><p class="ink" style="margin:0 0 4px;font-family:{FONT};font-size:14px;line-height:21px;font-weight:700;color:{INK}">{help_title}</p><p class="muted" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK_3}">{help_text} {write} <a href="mailto:hello@glarion.app" class="link" style="color:{VIOLET}">hello@glarion.app</a>. Never send a password by email.</p></td></tr></table></td></tr><tr><td align="center" style="padding:20px 8px 0"><p class="muted" style="margin:0 0 6px;font-family:{FONT};font-size:12px;line-height:18px;color:{INK_3}">{footer}</p><p class="muted" style="margin:0;font-family:{FONT};font-size:12px;line-height:18px;color:{INK_3}">Glarion &middot; <a href="{site}" class="link" style="color:{INK_3}">Website</a> &middot; <a href="{site}/privacy.html" class="link" style="color:{INK_3}">Privacy</a> &middot; <a href="{site}/terms.html" class="link" style="color:{INK_3}">Terms</a></p></td></tr></table><!--[if mso]></td></tr></table><![endif]--></td></tr></table></body></html>"#,
         pad = "&#8199;&#847;".repeat(60)
     )
 }
 
 fn para(text: &str) -> String {
     format!(
-        r#"<p class="gl-ink2" style="margin:0 0 15px;color:{INK_2};font-size:15px;line-height:1.7">{}</p>"#,
+        r#"<p class="ink" style="margin:0 0 18px;font-family:{FONT};font-size:16px;line-height:25px;color:{INK}">{}</p>"#,
         escape(text)
+    )
+}
+
+/// Small print tied to this message: expiry, what Stripe sends, where a setting lives.
+fn note(text: &str) -> String {
+    format!(
+        r#"<p class="muted" style="margin:0 0 20px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">{}</p>"#,
+        escape(text)
+    )
+}
+
+/// The kit's details card: label and value rows on the panel colour.
+fn rows(items: &[(&str, &str)]) -> String {
+    let last = items.len().saturating_sub(1);
+    let body: String = items
+        .iter()
+        .enumerate()
+        .map(|(i, (label, value))| {
+            let rule = if i < last { format!("border-bottom:1px solid {RULE};") } else { String::new() };
+            format!(
+                r#"<tr><td class="muted rule" width="38%" valign="top" style="padding:10px 12px 10px 0;{rule}font-family:{FONT};font-size:13px;line-height:20px;color:{INK_3}">{}</td><td class="ink rule" valign="top" style="padding:10px 0;{rule}font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;color:{INK};word-break:break-word">{}</td></tr>"#,
+                escape(label),
+                escape(value)
+            )
+        })
+        .collect();
+    format!(
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{SINK}" style="background:{SINK};border-radius:10px;margin:0 0 24px"><tr><td style="padding:6px 18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{body}</table></td></tr></table>"#
+    )
+}
+
+/// The kit's numbered steps, under a small heading. Each step is something the
+/// reader can do, with the label it has in the product.
+fn steps(heading: &str, items: &[&str]) -> String {
+    let body: String = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            format!(
+                r#"<tr><td width="24" valign="top" style="padding:1px 12px 12px 0"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" width="24" height="24" bgcolor="{VIOLET}" style="width:24px;height:24px;border-radius:12px;background:{VIOLET};font-family:Arial,sans-serif;font-size:12px;line-height:24px;font-weight:700;color:#ffffff">{}</td></tr></table></td><td class="ink" valign="top" style="padding:0 0 12px;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}">{}</td></tr>"#,
+                i + 1,
+                escape(item)
+            )
+        })
+        .collect();
+    format!(
+        r#"<p class="muted" style="margin:0 0 10px;font-family:{FONT};font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:{INK_3}">{}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px">{body}</table>"#,
+        escape(heading)
+    )
+}
+
+/// A titled panel for the one thing worth reading twice.
+fn panel(title: &str, text: &str) -> String {
+    format!(
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{SINK}" style="background:{SINK};border-radius:10px;margin:0 0 24px"><tr><td style="padding:16px 18px"><p class="ink" style="margin:0 0 6px;font-family:{FONT};font-size:15px;line-height:22px;font-weight:700;color:{INK}">{}</p><p class="ink" style="margin:0;font-family:{FONT};font-size:14px;line-height:21px;color:{INK}">{}</p></td></tr></table>"#,
+        escape(title),
+        escape(text)
+    )
+}
+
+/// Security notices get "if this was you / if it was not" instead of steps.
+fn security(if_you: &str, if_not: &str) -> String {
+    format!(
+        r#"<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{SINK}" style="background:{SINK};border-radius:10px;margin:0 0 24px"><tr><td style="padding:16px 18px"><p class="ink" style="margin:0 0 8px;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}"><strong>If this was you:</strong> {}</p><p class="ink" style="margin:0;font-family:{FONT};font-size:15px;line-height:22px;color:{INK}"><strong>If it was not:</strong> {}</p></td></tr></table>"#,
+        escape(if_you),
+        escape(if_not)
+    )
+}
+
+/// The raw link under a button that carries a token, for clients that strip
+/// buttons. Text rather than a second link, so the address is only clickable
+/// where it is a button.
+fn fallback(link: &str) -> String {
+    format!(
+        r#"<p class="muted" style="margin:-8px 0 24px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3};word-break:break-all">If the button does not open, copy this address into your browser:<br><span class="ink" style="color:{INK}">{}</span></p>"#,
+        escape(link)
     )
 }
 
@@ -335,23 +406,21 @@ fn greeting(first_name: &str) -> String {
 /// an account that can never be confirmed.
 pub fn verification_email(first_name: &str, link: &str) -> Message {
     let hello = greeting(first_name);
-    let safe_link = escape(link);
-    let tail = format!(
-        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link is valid for 24 hours. If you did not create an account, you can ignore this message.</p>"#
-    );
     Message {
         subject: "Confirm your email for Glarion".to_string(),
         html: chrome(Chrome {
-            preview: "Confirm this address to finish setting up your Glarion account",
+            preview: "One step left: confirm this address, then add the first site you look after",
             eyebrow: "Confirm your email",
-            heading: "Confirm your email address.",
+            heading: "Confirm your email address",
             body: &format!(
-                "{}{}{tail}",
+                "{}{}",
                 para(&hello),
-                para("Confirm this address to finish setting up your Glarion account."),
+                para("Confirm this address to finish setting up your Glarion account. You are signed in as soon as you do."),
             ),
             cta: Some(("Confirm my email", link)),
-            footer: "This is a one-off confirmation for a Glarion account created with this address.",
+            after: &(fallback(link) + &note("The link is valid for 24 hours and works once. If you did not create an account, ignore this message: nothing happens without the link.")),
+            footer: "You received this email because this address was used to create a Glarion account.",
+            help: ("Link expired?", "Sign in with your email and password and Glarion offers to send a new one."),
         }),
         text: format!(
             "{hello}\n\nConfirm this address to finish setting up your Glarion account:\n{link}\n\nThe link is valid for 24 hours. If you did not create an account, you can ignore this message."
@@ -361,37 +430,43 @@ pub fn verification_email(first_name: &str, link: &str) -> Message {
 
 /// The message sent once an address is confirmed.
 ///
-/// Nothing was sent here before: an account went from unconfirmed to usable
-/// in silence, so the first thing anyone had to go on was an empty dashboard.
 /// It says what to do first, because a monitoring tool with no targets added
-/// looks broken rather than empty.
-///
-/// Step three names the plan. This is the first message a new account gets,
-/// it arrives before any of the work, and it used to promise a scan the
-/// account it was welcoming could not run — with a DNS edit standing between
-/// the promise and the refusal.
+/// looks broken rather than empty. Step three names the plan: it used to promise
+/// a scan the account it was welcoming could not run.
 pub fn welcome_email(first_name: &str, link: &str) -> Message {
     let hello = greeting(first_name);
-    let steps = panel(&format!(
-        r#"<strong class="gl-ink" style="color:{VIOLET}">1.</strong> &nbsp;Add a site you look after<br><strong class="gl-ink" style="color:{VIOLET}">2.</strong> &nbsp;Prove you are allowed to scan it — one DNS record or one file<br><strong class="gl-ink" style="color:{VIOLET}">3.</strong> &nbsp;Run the full scan, on a plan"#
-    ));
     Message {
         subject: "Your Glarion account is ready".to_string(),
         html: chrome(Chrome {
             preview: "Add your first site and Glarion starts watching it",
             eyebrow: "Account ready",
-            heading: "Your account is ready.",
+            heading: "Your account is ready",
             body: &format!(
-                "{}{}{steps}{}",
+                "{}{}",
                 para(&hello),
-                para("One account covers every site you look after. Add the first one and the free check — everything the site publishes to any visitor — runs in a couple of minutes."),
-                para("We only scan domains whose ownership has been proven, which is why step 2 exists — it is also what makes the report something you can hand to a client. The full scan, the one that goes looking rather than reading, is what a plan pays for."),
+                para("One account covers every site you look after. Add the first one and the free check, everything the site publishes to any visitor, runs in a couple of minutes."),
             ),
             cta: Some(("Add your first site", link)),
-            footer: "You are receiving this because you just confirmed a Glarion account.",
+            after: &format!(
+                "{}{}",
+                steps(
+                    "Three steps to the first report",
+                    &[
+                        "Add a site you look after",
+                        "Prove you are allowed to scan it: one DNS record or one file",
+                        "Run the full scan, on a plan",
+                    ]
+                ),
+                panel(
+                    "Why ownership comes first",
+                    "We only scan domains whose ownership has been proven. That is what keeps the full scan legal to run, and what makes the report something you can hand to a client. The full scan, the one that goes looking rather than reading, is what a plan pays for."
+                ),
+            ),
+            footer: "You received this email because you just confirmed a Glarion account. It is sent once.",
+            help: ("Not sure how to prove ownership?", "Reply with the domain and where its DNS is managed, and we will tell you which record to add."),
         }),
         text: format!(
-            "{hello}\n\nYour Glarion account is ready. One account covers every site you look after.\n\n1. Add a site you look after\n2. Prove you are allowed to scan it - one DNS record or one file\n3. Run the full scan, on a plan\n\nThe free check reads what a site publishes to any visitor and costs nothing. The full scan goes looking instead, and that is what a plan pays for. We only scan domains whose ownership has been proven, which is what makes the report something you can hand to a client.\n\nStart here: {link}"
+            "{hello}\n\nYour Glarion account is ready. One account covers every site you look after.\n\n1. Add a site you look after\n2. Prove you are allowed to scan it: one DNS record or one file\n3. Run the full scan, on a plan\n\nThe free check reads what a site publishes to any visitor and costs nothing. The full scan goes looking instead, and that is what a plan pays for. We only scan domains whose ownership has been proven, which is what makes the report something you can hand to a client.\n\nStart here: {link}"
         ),
     }
 }
@@ -415,15 +490,17 @@ pub fn ownership_lapsing_email(
         html: chrome(Chrome {
             preview: "The ownership record or file is missing, so the next scheduled scan cannot run",
             eyebrow: "Action needed",
-            heading: "Ownership proof is about to lapse.",
+            heading: "Ownership proof is about to lapse",
             body: &format!(
                 "{}{}{}",
                 para(&hello),
-                para(&format!("We checked {domain} again and could not find the DNS record or file that proves you may scan it. Proof lapses on {when}; after that, its scheduled scans stop.")),
-                para("If the record or file was removed by mistake, put it back and nothing else is needed: we check again every hour. If the site has moved, verify it again from Glarion."),
+                para(&format!("We checked {domain} again and could not find the DNS record or file that proves you may scan it. After the date below, its scheduled scans stop.")),
+                rows(&[("Site", domain), ("Proof lapses", &when)]),
             ),
             cta: Some(("Open your sites", link)),
-            footer: "You are receiving this because this site is on a scan schedule in your Glarion account.",
+            after: &note("If the record or file was removed by mistake, put it back and nothing else is needed: we check again every hour. If the site has moved, verify it again from Glarion."),
+            footer: "You received this email because this site is on a scan schedule in your Glarion account.",
+            help: ("Record still in place?", "Reply with the domain and we will check what Glarion sees."),
         }),
         text: format!(
             "{hello}\n\nWe checked {domain} again and could not find the DNS record or file that proves you may scan it. Proof lapses on {when}; after that, its scheduled scans stop.\n\nIf it was removed by mistake, put it back: we check again every hour. If the site has moved, verify it again from Glarion.\n\n{link}"
@@ -433,12 +510,9 @@ pub fn ownership_lapsing_email(
 
 /// The message sent when an account first becomes a paying one.
 ///
-/// Nothing was sent before: someone paid and heard from Stripe's receipt and
-/// from nobody else. A receipt is an accounting document — it does not say
-/// what the plan allows or where to go next, which is the only thing the
-/// person actually wants to know at that moment.
-///
-/// Deliberately states the two limits that change with the plan, because
+/// A receipt is an accounting document: it does not say what the plan allows
+/// or where to go next, which is the only thing the person wants to know at
+/// that moment. The two limits that change with the plan are stated, because
 /// those are what someone compares against what they thought they bought.
 ///
 /// `trial_ends` is set while the subscription is still in its free trial:
@@ -459,16 +533,17 @@ pub fn subscription_email(
     } else {
         "Scans stay manual on this plan."
     };
-    let safe_plan = escape(plan_name);
-    let safe_cadence = escape(cadence);
-    let limits = panel(&format!(
-        r#"Up to <strong class="gl-ink" style="color:{INK}">{max_targets}</strong> sites monitored<br>{safe_cadence}"#
-    ));
+    let sites = format!("Up to {max_targets}");
+    let schedule = if scheduling {
+        "Weekly or monthly, your choice"
+    } else {
+        "Manual"
+    };
     if let Some(ends) = trial_ends {
         let when = ends.format("%-d %B %Y").to_string();
-        let heading = format!("Your {plan_name} trial has started.");
+        let heading = format!("Your {plan_name} trial has started");
         let preview = format!("Everything on the {plan_name} plan is yours until {when}");
-        let charge = format!("Everything on the {safe_plan} plan is unlocked until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.");
+        let charge = format!("Everything on the {plan_name} plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.");
         return Message {
             subject: "Your Glarion trial has started".to_string(),
             html: chrome(Chrome {
@@ -476,28 +551,22 @@ pub fn subscription_email(
                 eyebrow: "Trial started",
                 heading: &heading,
                 body: &format!(
-                    "{}{}{limits}{}",
+                    "{}{}{}",
                     para(&hello),
                     para(&charge),
-                    para("Nothing else needs setting up."),
+                    rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule), ("First payment", &when)]),
                 ),
                 cta: Some(("Open Glarion", link)),
-                footer: "This confirms a free trial of a Glarion plan. Nothing has been charged yet; Stripe sends a receipt when the first payment is taken.",
+                after: &note(&format!("{cadence} Nothing has been charged yet; Stripe sends a receipt when the first payment is taken.")),
+                footer: "You received this email because you started a Glarion trial with this address.",
+                help: ("Billing question?", "Reply to this email from the address on the account."),
             }),
             text: format!(
-                "{hello}
-
-Your Glarion {safe_plan} trial has started. Everything on the plan is unlocked until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.
-
-Up to {max_targets} sites monitored. {cadence}
-
-Open Glarion: {link}
-
-Nothing has been charged yet; Stripe sends a receipt when the first payment is taken."
+                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet; Stripe sends a receipt when the first payment is taken."
             ),
         };
     }
-    let heading = format!("Your {plan_name} plan is active.");
+    let heading = format!("Your {plan_name} plan is active");
     let preview = format!("Your Glarion {plan_name} plan is active");
     Message {
         subject: "Your Glarion plan is active".to_string(),
@@ -506,16 +575,18 @@ Nothing has been charged yet; Stripe sends a receipt when the first payment is t
             eyebrow: "Plan active",
             heading: &heading,
             body: &format!(
-                "{}{}{limits}{}",
+                "{}{}{}",
                 para(&hello),
-                para("Nothing else needs setting up."),
-                para("You can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."),
+                para(&format!("Your {plan_name} plan is active. {cadence} Nothing else needs setting up.")),
+                rows(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)]),
             ),
             cta: Some(("Open Glarion", link)),
-            footer: "This confirms a change to your Glarion subscription. Stripe holds the payment record.",
+            after: &note("You can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."),
+            footer: "You received this email because a Glarion subscription on this address changed.",
+            help: ("Billing question?", "Reply to this email from the address on the account."),
         }),
         text: format!(
-            "{hello}\n\nYour Glarion {safe_plan} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."
+            "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself from your account at any time. Stripe sends the payment receipt separately."
         ),
     }
 }
@@ -527,73 +598,64 @@ Nothing has been charged yet; Stripe sends a receipt when the first payment is t
 /// there, and a link sent anywhere else answers a different question.
 pub fn email_change_confirmation(first_name: &str, link: &str, valid_minutes: i64) -> Message {
     let hello = greeting(first_name);
-    let safe_link = escape(link);
-    let tail = format!(
-        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.</p>"#
-    );
     Message {
         subject: "Confirm your new Glarion address".to_string(),
         html: chrome(Chrome {
             preview: "Confirm this address to finish moving your Glarion account to it",
             eyebrow: "Confirm the change",
-            heading: "Confirm your new address.",
+            heading: "Confirm your new address",
             body: &format!(
-                "{}{}{tail}",
+                "{}{}",
                 para(&hello),
                 para("Someone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out."),
             ),
             cta: Some(("Confirm this address", link)),
-            footer: "If you were not expecting this, ignore it — nothing changes until the link is followed, and whoever asked cannot read this message.",
+            after: &(fallback(link) + &note(&format!("The link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address."))),
+            footer: "If you were not expecting this, ignore it: nothing changes until the link is followed, and whoever asked cannot read this message.",
+            help: ("Not expecting this?", "Ignore it. Nothing moves without the link."),
         }),
         text: format!(
-            "{hello}\n\nSomeone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.\n\nIf you were not expecting this, ignore it - nothing changes until the link is followed."
+            "{hello}\n\nSomeone asked to move a Glarion account to this address. Confirming finishes the move; everywhere the account is currently signed in will be signed out.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. Until it is followed, the account keeps its current address.\n\nIf you were not expecting this, ignore it: nothing changes until the link is followed."
         ),
     }
 }
 
 /// The warning sent to the address being left behind.
 ///
-/// This is the half that makes the flow safe. A stolen session plus a
-/// change of address is a complete account takeover — the thief redirects
-/// every future reset link to themselves — so the address currently on the
-/// account is told the moment a move is requested, while it can still be
-/// stopped, and told again nowhere else.
-///
-/// It carries no link, deliberately. Whoever reads it is the person being
-/// pushed out, at their most alarmed, and a button in this message is the
-/// single most valuable thing an attacker could forge. Getting in touch
-/// cannot be forged.
+/// A stolen session plus a change of address is a complete account takeover,
+/// so the address currently on the account is told the moment a move is
+/// requested, while it can still be stopped. It carries no action link: a
+/// button in this message is the single most valuable thing to forge.
 pub fn email_change_alert(first_name: &str, new_email: &str) -> Message {
     let hello = greeting(first_name);
-    let safe_new = escape(new_email);
     Message {
         subject: "Someone asked to change your Glarion address".to_string(),
         html: chrome(Chrome {
             preview: "A request was made to move your Glarion account to another address",
             eyebrow: "Security notice",
-            heading: "A change of address was requested.",
+            heading: "A change of address was requested",
             body: &format!(
                 "{}{}{}{}",
                 para(&hello),
                 para("Your Glarion account is being moved to another address. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's."),
-                panel(&format!(r#"Requested new address<br><strong class="gl-ink" style="color:{INK}">{safe_new}</strong>"#)),
-                para("If this was you, nothing else is needed. If it was not, change your password now — someone is signed in who should not be — and reply to this message."),
+                rows(&[("Requested new address", new_email)]),
+                security(
+                    "nothing else is needed.",
+                    "change your password now, because someone is signed in who should not be, and reply to this message."
+                ),
             ),
             cta: None,
+            after: "",
             footer: "This security notice is sent to the address currently on the account whenever a change is requested, and cannot be turned off.",
+            help: ("Did not ask for this?", "Reply to this message straight away and we will help you secure the account."),
         }),
         text: format!(
-            "{hello}\n\nYour Glarion account is being moved to {new_email}. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's.\n\nIf this was you, nothing else is needed. If it was not, change your password now - someone is signed in who should not be - and reply to this message."
+            "{hello}\n\nYour Glarion account is being moved to {new_email}. It has not moved yet: the new address has to confirm first, and until it does, this one is still the account's.\n\nIf this was you, nothing else is needed. If it was not, change your password now, because someone is signed in who should not be, and reply to this message."
         ),
     }
 }
 
 /// The message sent when a paid plan stops.
-///
-/// Nothing was sent before. The account dropped to free, scheduled scanning
-/// was switched off, and the first the agency knew of it was noticing that a
-/// client site had not been checked in a fortnight — on a security product,
-/// which is the worst possible thing to discover late.
 ///
 /// The two cases are worded differently on purpose. A failed payment is a
 /// card that expired and is fixed in a minute; a cancellation is a decision
@@ -609,9 +671,9 @@ pub fn subscription_ended_email(
 ) -> Message {
     let hello = greeting(first_name);
     let heading = if payment_problem {
-        "Your payment did not go through."
+        "Your payment did not go through"
     } else {
-        "Your plan has ended."
+        "Your plan has ended"
     };
     let explain = if payment_problem {
         format!("We could not take payment for your Glarion {plan_name} plan, so scheduled scanning is paused and your account is back on the free plan. Updating the card puts it back exactly as it was.")
@@ -639,9 +701,11 @@ pub fn subscription_ended_email(
             },
             eyebrow: if payment_problem { "Payment failed" } else { "Plan ended" },
             heading,
-            body: &format!("{}{}{}", para(&hello), para(&explain), para(kept)),
+            body: &format!("{}{}", para(&hello), para(&explain)),
             cta: Some((action, link)),
-            footer: "This email is sent when a Glarion plan changes state. Stripe holds the payment record.",
+            after: &panel("What you keep", kept),
+            footer: "You received this email because a Glarion plan on this address changed state. Stripe holds the payment record.",
+            help: ("Card updated but still paused?", "Reply to this email from the address on the account."),
         }),
         text: format!(
             "{hello}\n\n{explain}\n\n{kept}\n\n{action}: {link}"
@@ -653,12 +717,11 @@ pub fn subscription_ended_email(
 ///
 /// Deliberately short and specific. This is the only email an agency gets
 /// from us once they are set up, so it has to be worth opening: what
-/// changed, on which site, and a way to see the detail. A digest of
-/// everything that happened would be filtered within a month.
+/// changed, on which site, and a way to see the detail.
 pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> Message {
-    let preview = format!("{summary} — {domain}");
+    let preview = format!("{summary} on {domain}");
     let domain_line = format!(
-        r#"<p class="gl-ink3" style="margin:0 0 20px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>"#,
+        r#"<p class="muted" style="margin:-6px 0 18px;font-family:{MONO};font-size:14px;line-height:20px;color:{INK_3}">{}</p>"#,
         escape(domain)
     );
     Message {
@@ -669,7 +732,9 @@ pub fn change_email(domain: &str, summary: &str, detail: &str, link: &str) -> Me
             heading: summary,
             body: &format!("{domain_line}{}", para(detail)),
             cta: Some(("See what changed", link)),
+            after: "",
             footer: "You are getting this because this site is on a scanning schedule. Turn it off on the site's page.",
+            help: ("Expected change?", "Mark it as reviewed on the site's page, or reply if the result looks wrong."),
         }),
         text: format!(
             "{summary}\n{domain}\n\n{detail}\n\nSee what changed: {link}\n\nYou are getting this because this site is on a scanning schedule. Turn it off on the site's page."
@@ -690,9 +755,7 @@ pub struct ReportLine {
 /// This is the first thing most people will ever see from us, and it has
 /// two jobs that pull against each other: be genuinely useful on its own,
 /// and be honest that it is not the whole picture. It does the second by
-/// naming what it did *not* look at rather than by hedging what it did —
-/// a report that qualifies every line reads as though it is unsure, while
-/// one that states its scope reads as though it knows where its edges are.
+/// naming what it did *not* look at rather than by hedging what it did.
 pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) -> Message {
     let pricing_link = format!("{site_url}/pricing.html");
     let sample_link = format!("{site_url}/sample-report.html");
@@ -703,17 +766,22 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
         n => format!("{n} things worth fixing"),
     };
 
-    let mut rows = String::new();
+    let last = lines.len().saturating_sub(1);
+    let mut rows_html = String::new();
     let mut plain_rows = String::new();
-    for line in lines {
+    for (i, line) in lines.iter().enumerate() {
         let (colour, class) = if line.is_finding {
-            (ALARM, "gl-alarm")
+            (ALARM, "alarm")
         } else {
-            (INK, "gl-ink")
+            (INK, "ink")
         };
-        let weight = if line.is_finding { "700" } else { "500" };
-        rows.push_str(&format!(
-            r#"<tr><td class="gl-ink3 gl-rule" style="padding:10px 16px 10px 0;border-top:1px solid {RULE};color:{INK_3};font-size:13px;white-space:nowrap;vertical-align:top">{}</td><td class="{class} gl-rule" style="padding:10px 0;border-top:1px solid {RULE};color:{colour};font-weight:{weight};font-size:14px">{}</td></tr>"#,
+        let rule = if i < last {
+            format!("border-bottom:1px solid {RULE};")
+        } else {
+            String::new()
+        };
+        rows_html.push_str(&format!(
+            r#"<tr><td class="muted rule" width="38%" valign="top" style="padding:10px 12px 10px 0;{rule}font-family:{FONT};font-size:13px;line-height:20px;color:{INK_3}">{}</td><td class="{class} rule" valign="top" style="padding:10px 0;{rule}font-family:{FONT};font-size:15px;line-height:20px;font-weight:700;color:{colour};word-break:break-word">{}</td></tr>"#,
             escape(&line.label),
             escape(&line.value),
         ));
@@ -726,14 +794,17 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
     }
 
     let scope = format!(
-        "This read only what {domain} publishes to any visitor: its headers, its certificate, its DNS, and the files it offers to automated readers. It did not examine the application itself — outdated components with known vulnerabilities, exposed administrative paths, or misconfigured storage. That is the full scan: it needs the domain's owner to confirm the request, and it needs a plan, from €19 a month."
+        "This read only what {domain} publishes to any visitor: its headers, its certificate, its DNS, and the files it offers to automated readers. It did not examine the application itself: outdated components with known vulnerabilities, exposed administrative paths, or misconfigured storage. That is the full scan: it needs the domain's owner to confirm the request, and it needs a plan, from €19 a month."
     );
     let preview = format!("{headline} on {domain}");
     let body = format!(
-        r#"<p class="gl-ink3" style="margin:0 0 12px;color:{INK_3};font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace">{}</p>{}<table role="presentation" style="border-collapse:collapse;width:100%;margin-bottom:24px">{rows}</table><p class="gl-ink" style="margin:0 0 6px;color:{INK};font-size:15px;font-weight:700">What this did not look at</p>{}<p class="gl-ink3" style="margin:18px 0 0;color:{INK_3};font-size:14px">Want to see the format before choosing a plan? <a class="gl-ink" href="{sample_link}" style="color:{VIOLET};font-weight:700">View a sample full report</a>. The sample uses fictional findings.</p>"#,
+        r#"<p class="muted" style="margin:-6px 0 18px;font-family:{MONO};font-size:14px;line-height:20px;color:{INK_3}">{}</p>{}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="panel" bgcolor="{SINK}" style="background:{SINK};border-radius:10px;margin:0 0 24px"><tr><td style="padding:6px 18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{rows_html}</table></td></tr></table>"#,
         escape(domain),
         para("This is your requested partial public check. It is useful on its own, but it is not a full security scan."),
-        para(&scope),
+    );
+    let after = format!(
+        r#"{}<p class="muted" style="margin:0 0 20px;font-family:{FONT};font-size:13px;line-height:19px;color:{INK_3}">Want to see the format before choosing a plan? <a class="link" href="{sample_link}" style="color:{VIOLET};font-weight:700">View a sample full report</a>. The sample uses fictional findings.</p>"#,
+        panel("What this did not look at", &scope),
     );
 
     Message {
@@ -745,7 +816,9 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
             body: &body,
             // The button opens pricing, where the paid full scan is explained.
             cta: Some(("Compare paid plans for the full scan", &pricing_link)),
+            after: &after,
             footer: "You received this because this report was requested from your address. We do not add you to anything by sending it.",
+            help: ("Questions about a result?", "Reply with the line that puzzles you and we will explain what it means for the site."),
         }),
         text: format!(
             "{headline}\n{domain}\n\nThis is your requested partial public check. It is useful on its own, but it is not a full security scan.\n\n{plain_rows}\nWhat this did not look at\n{scope}\n\nCompare paid plans for the full scan: {pricing_link}\nView a sample full report (fictional findings): {sample_link}\n\nYou received this because this report was requested from your address. We do not add you to anything by sending it."
@@ -756,43 +829,38 @@ pub fn preview_report_email(domain: &str, lines: &[ReportLine], site_url: &str) 
 /// The password-recovery link.
 ///
 /// Short and free of anything else on purpose. This message is the single
-/// most valuable one to forge — it is the one people are trained to click
-/// while already anxious about being locked out — so it says only what it is,
-/// names how long it lasts, and offers nothing else to click.
+/// most valuable one to forge, so it says only what it is, names how long it
+/// lasts, and offers nothing else to click.
 pub fn password_reset_email(first_name: &str, link: &str, valid_minutes: i64) -> Message {
     let hello = greeting(first_name);
-    let safe_link = escape(link);
-    let tail = format!(
-        r#"<p class="gl-ink3" style="margin:22px 0 0;color:{INK_3};font-size:13px;line-height:1.6">Or paste this into your browser:<br><span class="gl-ink2" style="word-break:break-all;color:{INK_2}">{safe_link}</span></p><p class="gl-ink3" style="margin:12px 0 0;color:{INK_3};font-size:13px">The link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it — your password stays unchanged, and nobody was told whether this address has an account.</p>"#
-    );
     Message {
         subject: "Reset your Glarion password".to_string(),
         html: chrome(Chrome {
             preview: "Choose a new password for your Glarion account",
             eyebrow: "Account recovery",
-            heading: "Reset your password.",
+            heading: "Reset your password",
             body: &format!(
-                "{}{}{tail}",
+                "{}{}",
                 para(&hello),
-                para("Use the link below to choose a new password. Signing in everywhere else stops working as soon as you do."),
+                para("Use the button to choose a new password. Signing in everywhere else stops working as soon as you do."),
             ),
             cta: Some(("Choose a new password", link)),
+            after: &(fallback(link) + &note(&format!("The link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it: your password stays unchanged, and nobody was told whether this address has an account."))),
             footer: "We will never ask you for your password by email, and we will never ask you to send it back to us.",
+            help: ("Link expired?", "Ask for a new one from Forgot password on the sign-in page."),
         }),
         text: format!(
-            "{hello}\n\nUse the link below to choose a new password for your Glarion account. Signing in everywhere else stops working as soon as you do.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it - your password stays unchanged.\n\nWe will never ask you for your password by email."
+            "{hello}\n\nUse the link below to choose a new password for your Glarion account. Signing in everywhere else stops working as soon as you do.\n\n{link}\n\nThe link works once and expires in {valid_minutes} minutes. If you did not ask for this, ignore it: your password stays unchanged.\n\nWe will never ask you for your password by email."
         ),
     }
 }
 
 /// The notice sent once a password has actually changed.
 ///
-/// Carries no link and no token, deliberately. Whoever reads this is not
-/// necessarily the person who changed it — that is the entire reason it
-/// exists — but by the time it arrives the new password is already set, so a
-/// "this wasn't me" button here would be the exact shape an attacker would
-/// forge, on the one message a worried reader is most likely to click.
-/// Getting in touch is a thing that cannot be phished out of an inbox.
+/// Carries no link and no token, deliberately: whoever reads this is not
+/// necessarily the person who changed it, and a "this wasn't me" button here
+/// would be the exact shape an attacker would forge. Getting in touch is a
+/// thing that cannot be phished out of an inbox.
 pub fn password_changed_email(first_name: &str) -> Message {
     let hello = greeting(first_name);
     Message {
@@ -800,19 +868,24 @@ pub fn password_changed_email(first_name: &str) -> Message {
         html: chrome(Chrome {
             preview: "The password on your Glarion account was changed",
             eyebrow: "Security notice",
-            heading: "Your password was changed.",
+            heading: "Your password was changed",
             body: &format!(
                 "{}{}{}{}",
                 para(&hello),
                 para("The password on your Glarion account was changed, and every device that was signed in has been signed out."),
-                panel("If this was you, nothing else is needed.<br>If it was not, reply to this message straight away — someone else set that password."),
-                para("We will never ask you for your password by email."),
+                security(
+                    "nothing else is needed. Sign in again with the new password.",
+                    "reply to this message straight away. Someone else set that password."
+                ),
+                note("We will never ask you for your password by email."),
             ),
             cta: None,
+            after: "",
             footer: "This security notice is sent every time the password changes and cannot be turned off.",
+            help: ("Did not change it?", "Reply to this message straight away from this address."),
         }),
         text: format!(
-            "{hello}\n\nThe password on your Glarion account was changed, and every device that was signed in has been signed out.\n\nIf this was you, nothing else is needed. If it was not, reply to this message straight away - someone else set that password.\n\nWe will never ask you for your password by email."
+            "{hello}\n\nThe password on your Glarion account was changed, and every device that was signed in has been signed out.\n\nIf this was you, nothing else is needed. If it was not, reply to this message straight away: someone else set that password.\n\nWe will never ask you for your password by email."
         ),
     }
 }
@@ -1085,10 +1158,14 @@ mod tests {
         let html = verification_email("Ada", "https://glarion.example/app#/verify/x").html;
 
         assert!(html.contains("/glarion-mark-64.png"));
-        assert!(html.contains("width=\"30\""));
+        assert!(html.contains("width=\"34\""));
         assert!(
-            html.contains("background:#2d103a;color:#ffffff;font-size:15px;font-weight:800\"><img"),
+            html.contains("border-radius:20px;background:#2d103a;color:#ffffff;"),
             "the mark must sit on its own coloured cell, or a blocked image shows nothing"
+        );
+        assert!(
+            html.contains("alt=\"Glarion\""),
+            "a blocked image still names the product"
         );
     }
 
