@@ -67,7 +67,7 @@ document.querySelectorAll('.purchase-options').forEach((options) => {
 
 // Every paid card gets the trial badge, its own action label and the line
 // "Free for 3 days, then €39/month from 17 October 2026", in place of the
-// Solo-only 14-day trial the static page carries.
+// Solo-only trial badge the static page carries.
 function paintTrial(card, interval, promo) {
   if (!trial) return;
   const price = priceFor(trial.list, card.dataset.plan, interval);
