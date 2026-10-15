@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { api, apiBase, session } from "./api.js";
+import { api, apiBase, ApiError, session } from "./api.js";
 
 test("API requests remain on the serving origin unless explicitly configured", () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -55,4 +55,10 @@ test("an expired session returns to sign-in without redirecting bad credentials"
       else Reflect.deleteProperty(globalThis, key);
     }
   }
+});
+
+test("API refusals read as sentences", () => {
+  assert.equal(new ApiError(400, "bad_request", "the passwords do not match").message, "The passwords do not match.");
+  assert.equal(new ApiError(400, "bad_request", "We could not reach a.example.").message, "We could not reach a.example.");
+  assert.equal(new ApiError(500, "internal", "").message, "");
 });

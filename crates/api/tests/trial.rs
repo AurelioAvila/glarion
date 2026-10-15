@@ -759,6 +759,88 @@ async fn a_site_gets_one_free_trial() {
 }
 
 #[tokio::test]
+async fn neither_www_nor_a_schedule_gets_a_site_a_second_free_trial() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(true);
+    let app = app(pool.clone());
+
+    let (first_token, first) = signup(&app, &pool, "first@agency.example").await;
+    start_trial(&app, &stripe, "sub_first", first, SOLO_MONTHLY, "fp_first").await;
+    let (_, site) = add_site(&app, &first_token, "client-site.example").await;
+    let site = site["id"].as_str().unwrap().to_string();
+    verify(&pool, &site).await;
+    assert_eq!(scan(&app, &first_token, &site).await.0, StatusCode::OK);
+
+    let (second_token, second) = signup(&app, &pool, "second@elsewhere.example").await;
+    start_trial(
+        &app,
+        &stripe,
+        "sub_second",
+        second,
+        SOLO_MONTHLY,
+        "fp_second",
+    )
+    .await;
+    let mut ids = Vec::new();
+    for domain in ["www.client-site.example", "second-own.example"] {
+        let (_, body) = add_site(&app, &second_token, domain).await;
+        let id = body["id"].as_str().unwrap().to_string();
+        verify(&pool, &id).await;
+        let (status, body) = send(
+            &app,
+            request(
+                "PUT",
+                &format!("/api/targets/{id}/cadence"),
+                Some(&second_token),
+                Some(json!({ "cadence": "weekly" })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        ids.push(id);
+    }
+
+    // The www name is the same site.
+    let (status, body) = scan(&app, &second_token, &ids[0]).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("another account's free trial"));
+
+    // The scheduler applies the same rule: the trial's own site is queued,
+    // the other trial's site is not.
+    orchestrator::scheduler::tick(&pool).await.unwrap();
+    let jobs = |id: &str| {
+        sqlx::query_scalar::<_, i64>("select count(*) from scan_jobs where target_id = $1")
+            .bind(Uuid::parse_str(id).unwrap())
+            .fetch_one(&pool)
+    };
+    assert_eq!(
+        jobs(&ids[0]).await.unwrap(),
+        0,
+        "a schedule must not scan it either"
+    );
+    assert!(
+        jobs(&ids[1]).await.unwrap() > 0,
+        "its own site is scheduled"
+    );
+
+    // And the trial's daily budget holds for schedules: the run above used it.
+    sqlx::query("update targets set last_scheduled_at = null where id = $1")
+        .bind(Uuid::parse_str(&ids[1]).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before = jobs(&ids[1]).await.unwrap();
+    orchestrator::scheduler::tick(&pool).await.unwrap();
+    assert_eq!(jobs(&ids[1]).await.unwrap(), before);
+}
+
+#[tokio::test]
 async fn public_prices_come_from_stripe_and_a_mismatch_is_left_out() {
     let Some(pool) = test_pool().await else {
         return;

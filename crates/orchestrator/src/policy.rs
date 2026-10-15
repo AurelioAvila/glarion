@@ -17,6 +17,37 @@ pub const ALLOWED_TOOLS: &[&str] = &["nuclei", "tls"];
 /// Maximum scans per target per rolling 24 hours.
 pub const MAX_SCANS_PER_TARGET_PER_DAY: i64 = 6;
 
+/// The same cap during a three-day trial.
+pub const TRIAL_MAX_SCANS_PER_TARGET_PER_DAY: i64 = 2;
+
+/// One free trial per site: whether this target's site was already scanned
+/// during another account's three-day trial. `www.example.com` and
+/// `example.com` count as one site. Read from the authorization trail, which
+/// outlives accounts. Shared by the scan endpoint and the scheduler, so a
+/// schedule is not a way around it.
+pub async fn site_used_in_another_trial(
+    pool: &sqlx::PgPool,
+    target_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        r"select exists (
+             select 1 from scan_authorizations a
+             join targets other on other.id = a.target_id
+             join trial_claims c on c.user_id = a.user_id
+             where regexp_replace(other.domain, '^www\.', '')
+                   = (select regexp_replace(domain, '^www\.', '') from targets where id = $1)
+               and a.user_id <> $2
+               and a.accepted_terms_at >= c.created_at
+               and a.accepted_terms_at < c.trial_ends_at
+         )",
+    )
+    .bind(target_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+}
+
 pub fn is_allowed_tool(tool: &str) -> bool {
     ALLOWED_TOOLS.contains(&tool)
 }
