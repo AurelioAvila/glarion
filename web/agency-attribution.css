@@ -1,0 +1,11 @@
+.agency-note { max-width: 70ch; color: var(--muted); font-size: .9rem; line-height: 1.65; }
+.attribution-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-block: 1.5rem; }
+.glarion-attribution { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; padding: .55rem .9rem; border: 1px solid var(--rule); border-radius: 8px; text-decoration: none; background: var(--raise); }
+.attribution-preview > span { color: var(--muted); font-size: .85rem; max-width: 30ch; }
+.attribution-code { overflow: auto; max-width: 100%; padding: 1.25rem; background: var(--raise); border: 1px solid var(--rule); border-radius: 8px; font: .85rem/1.7 var(--mono); }
+#copy-attribution { cursor: pointer; font: inherit; min-height: 44px; }
+#copy-attribution:focus-visible { outline: 3px solid var(--clear); outline-offset: 3px; }
+#copy-status { min-height: 1.5em; }
+.source-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.source-actions a { display: inline-flex; align-items: center; min-height: 44px; padding: .5rem .85rem; border: 1px solid var(--rule); border-radius: 8px; font-size: .85rem; text-decoration: none; }
+.source-actions a:hover { border-color: var(--clear); }
