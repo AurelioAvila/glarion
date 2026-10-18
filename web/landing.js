@@ -133,7 +133,7 @@ function render(payload) {
   if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
 
   const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Compare full-scan plans');
+  const signup = el('a', 'primary', 'Continue to full scans');
   // Carries the domain across. The account form asks for seven fields and
   // an email round-trip, and until it knew this it ended by asking for the
   // domain the reader had typed here a minute earlier — the one part of the
