@@ -1,8 +1,14 @@
+# Glarion — Website Security Monitoring for Digital Agencies
+
+For agencies monitoring verified client websites. Turn scan findings into prioritized actions and agency-branded HTML/PDF reports. Full scans require a plan and current ownership proof; the public check reads publicly available information.
+
+[Open Glarion](https://glarion.app/) · [View the fictional sample report](https://glarion.app/sample-report.html) · [Deployment signing](scripts/deploy-signed.ps1)
+
+**Report workflow:** a verified website → findings with evidence and corrective guidance → an agency-branded HTML report or printable PDF. The linked sample uses fictional findings and an example client; it is not a customer case study or a measured security outcome.
+
 <p align="center">
   <img src="web/glarion-mark.png" width="112" height="112" alt="Glarion verification aperture mark">
 </p>
-
-<h1 align="center">Glarion</h1>
 
 <p align="center">
   <strong>Website security monitoring and client-ready reporting for digital agencies.</strong><br>
