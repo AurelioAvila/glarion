@@ -133,7 +133,7 @@ function render(payload) {
   if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
 
   const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Monitor it free for 14 days');
+  const signup = el('a', 'primary', 'Compare full-scan plans');
   // Carries the domain across. The account form asks for seven fields and
   // an email round-trip, and until it knew this it ended by asking for the
   // domain the reader had typed here a minute earlier — the one part of the
@@ -155,16 +155,16 @@ function render(payload) {
   // edit a client's DNS: finding out about the price after that work is done
   // is not a pricing objection, it is a grievance.
   const footNote = el('span', 'foot-note',
-    'A full scan checks far more. Solo is free for 14 days, then €19 a month excl. VAT; you add a card at checkout and can cancel before day 14. Full scans also need proof the domain is yours.');
+    'A full scan checks far more and requires a paid plan or an eligible trial. Review the trial length, any current offer, first charge and renewal price at checkout. Full scans also need proof the domain is yours.');
   cta.append(footNote);
   result.append(cta);
-  // With the three-day trial on, the offer here is the one every plan has,
-  // priced from Stripe. Until the server says so, the page keeps today's.
+  // Trial duration and regular price come from the server. Without them,
+  // keep a neutral plan link rather than promising a stale trial.
   void trialPrices.then((list) => {
     const solo = list?.trialEnabled ? priceFor(list, 'solo', 'monthly') : null;
     if (!solo) return;
     signup.textContent = `Try full scans free for ${list.trialDays} days`;
-    footNote.textContent = `A full scan checks far more. Every plan starts with a ${list.trialDays}-day free trial: you add a card at checkout and nothing is charged for ${list.trialDays} days. Solo is then ${euro(solo.amount)} a month excl. VAT. Full scans also need proof the domain is yours.`;
+    footNote.textContent = `A full scan checks far more. Every plan starts with a ${list.trialDays}-day free trial: you add a card at checkout and nothing is charged for ${list.trialDays} days. The regular Solo price is ${euro(solo.amount)} a month excl. VAT. Any current introductory offer, first charge and renewal terms are shown at checkout. Full scans also need proof the domain is yours.`;
   });
 
   if (payload.domain) result.append(shareRow(payload.domain));
