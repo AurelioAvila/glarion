@@ -52,3 +52,15 @@ code { font: .88em var(--mono); background: var(--sink); padding: .1em .35em; bo
   .spec div { flex-direction: column; gap: .2rem; }
   .spec dt { width: auto; }
 }
+
+/* The free check, on the guide pages it answers. It submits to /check, which
+   runs the same check as the home page and is never indexed. */
+.tool-check { margin: 2rem 0 0; padding: 1.25rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--raise); max-width: 40rem; }
+.tool-check-title { margin: 0 0 .75rem; font-weight: 700; color: var(--ink); }
+.tool-check-row { display: flex; gap: .6rem; }
+.tool-check input { flex: 1; min-width: 0; min-height: 44px; padding: .55rem .8rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.tool-check input:focus-visible { outline: 3px solid var(--clear); outline-offset: 2px; }
+.tool-check .button { border: 0; cursor: pointer; font: inherit; font-weight: 650; padding: 0 1.2rem; }
+.tool-check-note { margin: .7rem 0 0; font-size: .85rem; color: var(--quiet); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 30rem) { .tool-check-row { flex-direction: column; } .tool-check .button { min-height: 44px; } }
