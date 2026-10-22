@@ -27,7 +27,7 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"SPF and DMARC: published is not the same as enforcing","description":"What each SPF qualifier and each DMARC policy instructs a receiving mail server to do, and how to read a client domain's records.","author":{"@type":"Person","name":"Aurelio Avila"},"publisher":{"@type":"Organization","name":"Glarion","url":"https://glarion.app/","logo":"https://glarion.app/glarion-mark-512.png"},"mainEntityOfPage":"https://glarion.app/email-spoofing-spf-dmarc.html","image":"https://glarion.app/og-glarion-e0cd07a8dc.png"}</script>
 <link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/prism.css">
-<link rel="stylesheet" href="/seo.css?v=20261002annual">
+<link rel="stylesheet" href="/seo.css?v=20261022tool">
 <link rel="stylesheet" href="/halloween.css?v=20261011halloween"><script type="module" src="/dist/halloween-strip.js?v=20261011halloween"></script>
 </head>
 <body>
@@ -36,6 +36,11 @@
 <main class="wrap" id="main">
 <h1>Understand your domain’s email policies</h1>
 <p class="lede">SPF and DMARC help receiving mail systems assess messages using your domain. Glarion reads the published policies so you can see what needs a closer review.</p>
+<form class="tool-check" action="/check" method="get" aria-labelledby="tool-check-title">
+<p class="tool-check-title" id="tool-check-title">Check a domain’s SPF and DMARC now</p>
+<div class="tool-check-row"><label class="sr-only" for="tool-domain">Website domain</label><input id="tool-domain" name="d" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.com" maxlength="253" required><button class="button" type="submit">Check</button></div>
+<p class="tool-check-note">Free and without an account. The result opens on the next page: certificate expiry, security headers, SPF and DMARC records and public files.</p>
+</form>
 <div class="summary"><div><strong>SPF checks senders</strong><span>For the envelope domain used during delivery.</span></div><div><strong>DMARC checks alignment</strong><span>With the domain shown in the message’s From field.</span></div><div><strong>Public DNS check</strong><span>No account needed; no test email is sent.</span></div></div>
 <article><section><h2>SPF: what the policy means</h2><p>SPF lists permitted sending sources for an envelope domain. An unmatched sender can produce a fail, soft fail or neutral result:</p><dl class="spec"><div><dt><code>-all</code></dt><dd>Unlisted senders fail SPF. The receiver decides how to handle that result.</dd></div><div><dt><code>~all</code></dt><dd>Unlisted senders produce a soft fail; this does not require delivery or rejection.</dd></div><div><dt><code>?all</code></dt><dd>Neutral: no assertion about whether the sender is authorised.</dd></div></dl><p>Glarion summarises the published policy. It does not fully evaluate a message’s SPF result or validate every included sending service.</p></section>
 <section><h2>DMARC: the requested response</h2><p>A message passes DMARC when SPF or DKIM passes with alignment to the visible From domain. For messages that fail DMARC, the policy requests:</p><dl class="spec"><div><dt><code>p=reject</code></dt><dd>Rejection.</dd></div><div><dt><code>p=quarantine</code></dt><dd>Suspicious handling, such as a spam folder.</dd></div><div><dt><code>p=none</code></dt><dd>No DMARC-specific delivery action. Reports may be requested separately.</dd></div></dl><p>Receivers can apply their own policies. These records do not guarantee an inbox outcome or stop every kind of phishing, including lookalike domains.</p></section>
