@@ -48,7 +48,7 @@ import {
 import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { accountDestination, cleanPlanChoice, readPlanChoice, rememberPlanChoice } from "./plan-choice.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
-import { firstChargeDate, loadPrices, longDate, priceFor, subscribeNowLine, timeLeft, trialLine, trialProgress, type PriceList } from "./trial.js";
+import { firstChargeDate, loadPrices, longDate, priceFor, subscribeNowLine, timeLeft, trialLine, trialProgress, type PriceList, planStanding, trialBand } from "./trial.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
 import { siteProfile } from "./profile.js";
@@ -2435,6 +2435,25 @@ async function renderPlan(): Promise<void> {
     container.append(notice("info", "This account has already used its free trial, so a plan you choose starts straight away."));
   }
 
+  // The free trial, one click from the top of the page: its button takes the
+  // reader to the plans, where each paid plan has its own trial checkout.
+  const band = trialBand(subscription, trial !== null);
+  if (band === "offer" && trial) {
+    const start = el("button", { class: "primary", type: "button", text: `Start your ${trial.prices.trialDays}-day free trial` });
+    on(start, "click", () => {
+      const first = document.querySelector<HTMLButtonElement>(".plan-list .plan-actions button.primary");
+      first?.scrollIntoView({ block: "center", behavior: "smooth" });
+      first?.focus({ preventScroll: true });
+    });
+    container.append(el("section", { class: "trial-offer", "aria-label": "Free trial" }, [
+      el("div", {}, [
+        el("strong", { text: `Try any paid plan free for ${trial.prices.trialDays} days` }),
+        el("p", { text: `Full scans, scheduled checks and reports, with a card or another payment method Stripe accepts. Cancel in Manage billing before the ${trial.prices.trialDays} days are up and nothing is charged. One free trial per account.` }),
+      ]),
+      start,
+    ]));
+  }
+
   if (pendingPlan) {
     container.append(chosenPlanNotice(true)!);
     // The choice has reached billing review. Do not keep routing future logins here.
@@ -2614,18 +2633,19 @@ function planRow(
   const right = el("div", { class: "entry-right" });
   const price = el("div", { class: "plan-row-price" });
 
+  const standing = planStanding(offer.plan, subscription.plan);
   if (current) {
     // Achromatic, and the spine below stays grey with it. Green here
     // would read as "this site is fine" — colour in this interface means
     // security state and nothing else, and spending it on "you are on
     // this plan" is exactly how a reserved palette stops being read.
-    right.append(el("span", { class: "mono-note", text: "Current plan" }));
-  } else if (offer.monthly === 0) {
-    // Free is not something to buy, and moving down to it is done by
-    // cancelling in Stripe's portal — where it is clear what happens at
-    // the end of the period — rather than by a button here that would
-    // have to decide the fate of the sites over the smaller allowance.
-    right.append(el("span", { class: "mono-note", text: "Cancel to return" }));
+    const trialing = subscription.state === "trialing" && subscription.trial_ends_at;
+    right.append(el("span", { class: "mono-note", text: trialing ? `Trial — ${timeLeft(subscription.trial_ends_at!)}` : "Current plan" }));
+  } else if (standing === "included") {
+    // Everything a lower plan does, the held one does too. Moving down is
+    // done by cancelling or changing plan in Stripe's portal, where it is
+    // clear what happens to the sites over the smaller allowance.
+    right.append(el("span", { class: "mono-note", text: "Included in your plan" }));
   } else {
     if (promo) {
       // The struck price is the lowest of the previous 30 days, never an
@@ -2700,7 +2720,7 @@ function planRow(
       // decides; this only says so before checkout.
       const legacyTrial = subscription.trial_enabled !== true && offer.plan === "solo" && !subscription.manageable;
       if (legacyTrial) state.append(el("span", { class: "plan-discount", text: "14-day free trial" }));
-      right.append(price, go(el("button", { class: "primary", type: "button", text: subscription.manageable ? "Change plan in Stripe" : legacyTrial ? "Start 14-day free trial" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` })));
+      right.append(price, go(el("button", { class: "primary", type: "button", text: subscription.manageable ? `Upgrade to ${offer.name}` : legacyTrial ? "Start 14-day free trial" : selected ? "Continue to secure checkout" : `Choose ${offer.name}` })));
     }
   }
 
