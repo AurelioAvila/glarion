@@ -49,6 +49,9 @@ import { append, byId, clear, copyableValue, el, on } from "./dom.js";
 import { accountDestination, cleanPlanChoice, readPlanChoice, rememberPlanChoice } from "./plan-choice.js";
 import { countOf, relativeTime, shortDate } from "./format.js";
 import { firstChargeDate, loadPrices, longDate, priceFor, subscribeNowLine, timeLeft, trialLine, trialProgress, type PriceList, planStanding, trialBand } from "./trial.js";
+// A file of its own: browsers keep /dist modules for hours behind Cloudflare, and a new
+// export in trial.js could meet yesterday's cached copy of it. A new URL never can.
+import { trialEntry } from "./trial-entry.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
 import { siteProfile } from "./profile.js";
@@ -719,6 +722,7 @@ async function renderTargets(): Promise<void> {
     ]);
     rows = buildRows(targets, scans);
     subscription = plan;
+    noteSubscription(plan);
   } catch (error) {
     if (routeId !== currentRouteId) return;
     clear(container);
@@ -847,7 +851,7 @@ function standingStatement(rows: SiteRow[], subscription: Subscription | null): 
     if (subscription?.allows_full_scan) {
       line.append("Everything is set up. Run your first scan.");
     } else if (subscription) {
-      line.append("Domains confirmed. ", el("a", { class: "inline", href: "#/plan", text: "Choose a plan for full scans" }), ".");
+      line.append("Domains confirmed. ", el("a", { class: "inline", href: "#/plan", text: trialCta() ?? "Choose a plan for full scans" }), ".");
     } else {
       line.append("Domains confirmed. Refresh to load your plan status.");
     }
@@ -1025,7 +1029,7 @@ function firstRun(): HTMLElement {
     el("p", { class: "hint", style: "margin-top:1rem" }, [
       el("a", { class: "inline", href: "/sample-report.html", text: "Explore a sample client report" }),
       " · ",
-      el("a", { class: "inline", href: "#/plan", text: "Compare plans" }),
+      el("a", { class: "inline", href: "#/plan", text: trialCta() ?? "Compare plans" }),
     ]),
     el("div", { style: "margin-top:2.5rem" }, [addTargetForm()]),
   ]);
@@ -1104,6 +1108,7 @@ async function renderTarget(targetId: string): Promise<void> {
     target = targets.find((candidate) => candidate.id === targetId);
     scans = scanList;
     plan = subscription;
+    noteSubscription(subscription);
     if (routeId !== currentRouteId) return;
 
     // The most recent finished scan carries everything the profile and the
@@ -1348,7 +1353,7 @@ function unlockSection(start: HTMLButtonElement | null): HTMLElement {
   }
 
   const foot = el("div", { class: "unlock-foot" }, [
-    el("a", { class: "primary", href: "#/plan", text: "See the plans" }),
+    el("a", { class: "primary", href: "#/plan", text: trialCta() ?? "See the plans" }),
   ]);
 
   if (start) {
@@ -1813,7 +1818,7 @@ function planAwareNotice(error: unknown): HTMLElement {
 
   return el("p", { class: "notice notice-info", role: "status" }, [
     `${error.message} `,
-    el("a", { class: "inline", href: "#/plan", text: "See the plans" }),
+    el("a", { class: "inline", href: "#/plan", text: trialCta() ?? "See the plans" }),
     ".",
   ]);
 }
@@ -2374,6 +2379,7 @@ async function renderPlan(): Promise<void> {
   const pricesAsked = performance.now();
   try {
     subscription = await api.subscription();
+    noteSubscription(subscription);
   } catch (error) {
     if (routeId !== currentRouteId) return;
     clear(container);
@@ -2738,6 +2744,33 @@ function planRow(
 
 // --- routing ---------------------------------------------------------------
 
+// The free trial in the navigation and at every locked point (owner, 23 Oct
+// 2026): offered while this account may start one, counted down while it
+// runs, nothing for a paying account. It follows the subscription the pages
+// last read; the first page that reads none asks once.
+let knownSubscription: Subscription | null = null;
+
+function noteSubscription(subscription: Subscription | null): void {
+  if (!subscription) return;
+  knownSubscription = subscription;
+  paintNavTrial();
+}
+
+/** A locked point's link text while the trial is on offer; null keeps its own words. */
+function trialCta(): string | null {
+  const entry = trialEntry(knownSubscription);
+  return entry?.kind === "offer" ? `Start your ${entry.days}-day free trial` : null;
+}
+
+function paintNavTrial(): void {
+  const slot = document.getElementById("nav-trial");
+  if (!slot) return;
+  const entry = trialEntry(knownSubscription);
+  slot.hidden = entry === null;
+  slot.classList.toggle("running", entry?.kind === "running");
+  slot.textContent = entry === null ? "" : entry.kind === "offer" ? `Start your ${entry.days}-day free trial` : `Trial — ${timeLeft(entry.endsAt)}`;
+}
+
 function renderNav(): void {
   const nav = byId<HTMLElement>("nav-links");
   clear(nav);
@@ -2760,12 +2793,16 @@ function renderNav(): void {
     link("#/targets", "Sites", ["targets", "scans", ""]),
     link("#/plan", "Pricing", ["plan"]),
     link("#/settings", "Settings", ["settings"]),
+    el("a", { id: "nav-trial", class: "nav-trial", href: "#/plan", hidden: true }),
   );
+  paintNavTrial();
+  if (!knownSubscription) void api.subscription().then(noteSubscription, () => {});
 
   const signOut = el("button", { type: "button", text: "Sign out" });
   on(signOut, "click", () => {
     void api.logout().finally(() => {
       session.clear();
+      knownSubscription = null;
       pendingPlan = null;
       rememberPlanChoice(null);
       window.location.hash = "#/signin";
