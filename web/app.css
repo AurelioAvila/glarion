@@ -929,6 +929,15 @@ body[data-shell='workspace'] main { margin-left: 224px; }
 .trial-status .trial-limits { margin-top: .5rem; font-size: .86rem; color: var(--ink-2); }
 @media (max-width: 46rem) { .plan-actions { min-width: 0; width: 100%; } }
 
+/* The free trial in the navigation (23 October 2026): the violet call to
+   action while it can be started, an outlined countdown while it runs. */
+#nav-links a.nav-trial[hidden] { display: none; }
+#nav-links a.nav-trial, body[data-shell='workspace'] #nav-links a.nav-trial { justify-content: center; margin-top: .35rem; text-align: center; line-height: 1.35; color: #fff; background: var(--violet); font-weight: 700; border-radius: 8px; text-wrap: pretty; }
+#nav-links a.nav-trial:hover, body[data-shell='workspace'] #nav-links a.nav-trial:hover { color: #fff; background: #5a2a8f; }
+#nav-links a.nav-trial.running, body[data-shell='workspace'] #nav-links a.nav-trial.running { color: #59357e; background: transparent; box-shadow: inset 0 0 0 1px var(--violet); font-weight: 650; }
+#nav-links a.nav-trial.running:hover, body[data-shell='workspace'] #nav-links a.nav-trial.running:hover { background: #eee4ff; }
+@media (max-width: 900px) { body[data-shell='workspace'] #nav-links a.nav-trial { margin-top: 0; } }
+
 /* The free trial offered at the top of Pricing (23 October 2026). */
 .trial-offer { display: flex; align-items: center; flex-wrap: wrap; gap: 0.9rem 1.4rem; max-width: 52rem; margin: 0 0 1.5rem; padding: 1.1rem 1.35rem; background: var(--raise); border: 1px solid var(--rule); border-left: 4px solid var(--violet); border-radius: 0 14px 14px 0; }
 .trial-offer > div { flex: 1; min-width: 15rem; }
