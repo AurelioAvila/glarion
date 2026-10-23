@@ -107,3 +107,24 @@ export function loadPrices(): Promise<PriceList | null> {
   })();
   return pending;
 }
+
+const TIERS = ["free", "solo", "studio", "agency"];
+
+/** Where a plan stands against the one held: the held one is current, every
+ *  plan below it is included in it, the ones above are upgrades. */
+export function planStanding(plan: string, held: string): "current" | "included" | "upgrade" {
+  if (plan === held) return "current";
+  const rank = TIERS.indexOf(plan), mine = TIERS.indexOf(held);
+  return rank >= 0 && mine >= 0 && rank < mine ? "included" : "upgrade";
+}
+
+/** The trial band above the plans: offered to an account the server lets
+ *  start one, reported while it runs, explained once used; never shown to a
+ *  paying account. */
+export function trialBand(s: { trial_enabled?: boolean; state?: string; trial_ends_at?: string | null; can_start_trial?: boolean; manageable: boolean; blocked_reason?: string }, offered: boolean): "offer" | "running" | "used" | null {
+  if (s.trial_enabled !== true) return null;
+  if (s.state === "trialing" && s.trial_ends_at) return "running";
+  if (offered) return "offer";
+  if (s.blocked_reason === "trial_already_used" || (!s.manageable && s.can_start_trial === false && s.state !== "active")) return "used";
+  return null;
+}

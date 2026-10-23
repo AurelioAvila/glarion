@@ -928,3 +928,8 @@ body[data-shell='workspace'] main { margin-left: 224px; }
 .trial-status p { margin: 0; line-height: 1.6; color: var(--ink); }
 .trial-status .trial-limits { margin-top: .5rem; font-size: .86rem; color: var(--ink-2); }
 @media (max-width: 46rem) { .plan-actions { min-width: 0; width: 100%; } }
+
+/* The free trial offered at the top of Pricing (23 October 2026). */
+.trial-offer { display: flex; align-items: center; flex-wrap: wrap; gap: 0.9rem 1.4rem; max-width: 52rem; margin: 0 0 1.5rem; padding: 1.1rem 1.35rem; background: var(--raise); border: 1px solid var(--rule); border-left: 4px solid var(--violet); border-radius: 0 14px 14px 0; }
+.trial-offer > div { flex: 1; min-width: 15rem; }
+.trial-offer p { margin: 0.35rem 0 0; color: var(--ink-2); line-height: 1.55; }
