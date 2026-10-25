@@ -192,11 +192,13 @@ Check the run for the commit you are evaluating rather than relying on a
 previously successful build. One advisory is deliberately ignored by the
 local audit — see [`.cargo/audit.toml`](.cargo/audit.toml).
 
-Production runs on Fly.io (app `glarion-api`, see `fly.toml`). Since 2026-10-05
-it is deployed by hand from `master` with
-`flyctl deploy --app glarion-api --remote-only --ha=false`. The GitHub Actions
-Fly deploy job and `scripts/deploy-fly.sh` remain disabled, so a CI run does
-not deploy by itself.
+Since 2026-10-21 production is self-hosted behind a Cloudflare Tunnel and
+deployed by hand from `master`: a clean clone, the release build from the
+`Dockerfile`, a health check, and an automatic switch back to the previous
+build if the new one does not come up. Production runs
+`DATABASE_MIGRATIONS=verify`, so a new migration is applied by hand before
+the deploy. `fly.toml` and `scripts/deploy-fly.sh` are no longer used, and a
+CI run does not deploy by itself.
 
 ### The development database
 
@@ -336,9 +338,11 @@ avoids both the shell dependency and duplicating what Nuclei's own
 
 ### Known limits
 
-- Production rate limits share PostgreSQL counters. Client attribution still
-  depends on a trusted proxy overwriting `Fly-Client-IP`; a chain of proxies
-  needs an operational check to avoid grouping unrelated visitors together.
+- Production rate limits share PostgreSQL counters. Client attribution
+  depends on a trusted proxy rewriting the client-address header
+  (`TRUST_PROXY_CLIENT_IP=cloudflare` reads `CF-Connecting-IP`, `1` reads
+  `Fly-Client-IP`); a chain of proxies needs an operational check to avoid
+  grouping unrelated visitors together.
 - Own HTTP requests pin validated addresses. Nuclei resolves independently and
   is launched with its local-network restriction; worker egress isolation is
   an additional operational boundary to verify.
