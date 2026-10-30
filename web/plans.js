@@ -4,11 +4,14 @@ import { firstChargeDate, loadPrices, priceFor, trialLine } from './dist/trial.j
 
 // Without JavaScript every offer still links to the monthly selection and
 // shows the regular prices; a running offer replaces them only once the
-// server has confirmed it, and they come back the moment it ends. The same
-// goes for the three-day trial: the static page describes things as they are
-// with the trial switched off, and the trial copy appears only when the
-// server says it is on, with the Stripe price and the charge date in it.
-const TRIAL_NOTE = (days) => `Prices exclude VAT. Choose a plan, create your account and confirm your email, then start a ${days}-day free trial or subscribe straight away. The trial needs a card or another payment method Stripe accepts, charges nothing for ${days} days and renews automatically unless you cancel before it ends. One trial per account, card and site; during the trial a plan covers up to 3 sites and its reports carry no branding.`;
+// server has confirmed it, and they come back the moment it ends. The
+// three-day trial is the other way round: the static page states its terms
+// beside every paid button (the switch is on), the server's answer replaces
+// them with the Stripe price and the charge date, and if the server says the
+// switch is off the trial copy is removed.
+const TRIAL_NOTE = (days) => `Prices exclude VAT; any VAT is added at checkout. Choose a plan, create your account and confirm your email, then start a ${days}-day free trial or subscribe straight away. No payment is taken during registration. The trial needs a card or another payment method Stripe accepts, charges nothing for ${days} days, then charges the plan’s price and renews monthly or yearly until you cancel. One trial per account, card and site; during the trial a plan covers up to 3 sites and its reports carry no branding. The first charge and its date are shown before you pay.`;
+
+const NO_TRIAL_NOTE = 'Prices exclude VAT. Choose a plan, create your account and confirm your email. Review your selection before paying through Stripe. No payment is taken during registration.';
 
 let trial = null;
 
@@ -59,15 +62,26 @@ document.querySelectorAll('.purchase-options').forEach((options) => {
   });
 
   void loadPrices().then((list) => {
-    if (!list?.trialEnabled) return;
+    if (list && !list.trialEnabled) {
+      options.querySelectorAll('.purchase-trial, .purchase-trial-line').forEach((node) => node.remove());
+      options.querySelectorAll('[data-plan]').forEach((card) => {
+        const action = card.querySelector('.purchase-action');
+        const name = card.querySelector('h3')?.textContent ?? '';
+        if (action?.firstChild?.nodeType === Node.TEXT_NODE) action.firstChild.textContent = `Choose ${name} `;
+      });
+      const note = options.parentElement?.querySelector('.purchase-note');
+      if (note) note.textContent = NO_TRIAL_NOTE;
+      return;
+    }
+    if (!list) return;
     trial = { list, at: performance.now() };
     paint();
   });
 });
 
 // Every paid card gets the trial badge, its own action label and the line
-// "Free for 3 days, then €39/month from 17 October 2026", in place of the
-// Solo-only trial badge the static page carries.
+// "... then €39/month excl. VAT from 17 October 2026 ...", in place of the
+// generic terms the static page carries.
 function paintTrial(card, interval, promo) {
   if (!trial) return;
   const price = priceFor(trial.list, card.dataset.plan, interval);

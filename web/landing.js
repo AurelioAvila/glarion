@@ -1,6 +1,6 @@
 import { acquisitionHeaders, recordPage } from "/dist/acquisition.js";
-import { loadPrices, priceFor } from "/dist/trial.js";
-import { euro } from "/dist/promo.js";
+import { firstChargeDate, loadPrices, priceFor, trialLine } from "/dist/trial.js";
+import { watchPromo } from "/dist/promo.js";
 recordPage("landing_view");
 
 /*
@@ -18,6 +18,9 @@ const result = document.getElementById('result');
 
 // Read once per visit, for the free check's call to action.
 const trialPrices = loadPrices();
+// The running offer, if any, so the trial line quotes the real first charge.
+let promoView = null;
+watchPromo((view) => { promoView = view; });
 
 const DEFAULT_NOTE =
   'No account, no email. This reads only what the site already publishes to every visitor.';
@@ -132,13 +135,27 @@ function render(payload) {
   }
   if (payload.caveat) result.append(el('p', 'caveat', payload.caveat));
 
+  // What just happened, and the one step that unlocks the rest. The reader
+  // has seen a partial check; they should leave knowing what it covered,
+  // what a full scan adds, the gate in front of it and what the result looks
+  // like, before any price.
+  const next = el('section', 'next-step');
+  next.setAttribute('aria-label', 'Next step');
+  next.append(el('h3', null, 'What this free check covered'));
+  next.append(el('p', null, 'Only what the site publishes to every visitor: its TLS certificate, security headers, SPF and DMARC records, cookie flags and public policy files. It did not test for vulnerabilities.'));
+  next.append(el('h3', null, 'Next: verify domain control to run a full scan'));
+  next.append(el('p', null, 'A full scan actively checks for known vulnerabilities, so it runs only on domains you prove you control, with a DNS TXT record or a hosted file. Proof lasts 30 days and is checked again before every scan.'));
+  const sample = el('a', 'text-link', 'See a full report: the fictional sample report');
+  sample.href = '/sample-report.html';
+  next.append(sample);
+  result.append(next);
+
   const cta = el('div', 'cta-row');
-  const signup = el('a', 'primary', 'Continue to full scans');
+  const signup = el('a', 'primary', 'Verify a domain and run a full scan');
   // Carries the domain across. The account form asks for seven fields and
   // an email round-trip, and until it knew this it ended by asking for the
   // domain the reader had typed here a minute earlier — the one part of the
   // setup they had already done.
-  // The Solo trial is the offer at this moment, so the signup starts with it.
   signup.href = payload.domain
     ? `/app/#/signup?d=${encodeURIComponent(payload.domain)}&plan=solo&interval=monthly`
     : '/app/#/signup?plan=solo&interval=monthly';
@@ -147,24 +164,20 @@ function render(payload) {
   const plans = el('a', 'secondary', 'Compare paid plans');
   plans.href = '/pricing.html';
   cta.append(plans);
-  // Both gates named, and the price with them.
-  //
-  // This line used to say proof of ownership was the only thing in the way,
-  // which stopped being true when the scanner moved behind a plan. It is the
-  // warmest moment on the site and the last one before somebody goes off to
-  // edit a client's DNS: finding out about the price after that work is done
-  // is not a pricing objection, it is a grievance.
+  // Both gates named, and the price with them: it is the last moment before
+  // somebody goes off to edit a client's DNS, and finding out about the price
+  // after that work is done is not a pricing objection, it is a grievance.
   const footNote = el('span', 'foot-note',
-    'A full scan checks far more and requires a paid plan or an eligible trial. Review the trial length, any current offer, first charge and renewal price at checkout. Full scans also need proof the domain is yours.');
+    'Full scans need a paid plan or the free trial, and proof the domain is yours. Prices exclude VAT; the trial length, first charge and renewal price are shown before you pay.');
   cta.append(footNote);
   result.append(cta);
-  // Trial duration and regular price come from the server. Without them,
-  // keep a neutral plan link rather than promising a stale trial.
+  // Trial terms and the Solo price come from the server. Without them, keep
+  // the neutral line rather than promising a stale trial.
   void trialPrices.then((list) => {
     const solo = list?.trialEnabled ? priceFor(list, 'solo', 'monthly') : null;
     if (!solo) return;
-    signup.textContent = `Try full scans free for ${list.trialDays} days`;
-    footNote.textContent = `A full scan checks far more. Every plan starts with a ${list.trialDays}-day free trial: you add a card at checkout and nothing is charged for ${list.trialDays} days. The regular Solo price is ${euro(solo.amount)} a month excl. VAT. Any current introductory offer, first charge and renewal terms are shown at checkout. Full scans also need proof the domain is yours.`;
+    signup.textContent = `Start a ${list.trialDays}-day free trial of full scans`;
+    footNote.textContent = `Solo: ${trialLine(list.trialDays, solo, firstChargeDate(list), promoView?.offer('solo', 'monthly') ?? null)} Full scans also need proof the domain is yours.`;
   });
 
   if (payload.domain) result.append(shareRow(payload.domain));

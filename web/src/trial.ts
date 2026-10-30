@@ -52,15 +52,18 @@ export function longDate(date: Date | string): string {
 
 const per = (interval: Interval) => (interval === "yearly" ? "year" : "month");
 
-/** The line under "Start 3-day free trial": what happens, when, and for how much. */
+/** The line under "Start 3-day free trial": what is needed, what happens,
+ *  when, for how much (excluding VAT, as the Stripe Prices are) and how it
+ *  renews. */
 export function trialLine(days: number, price: PlanPrice, chargeOn: Date, promo: PromoOffer | null = null): string {
   const unit = per(price.interval);
-  const regular = `${euro(price.amount)}/${unit}`;
+  const regular = `${euro(price.amount)}/${unit} excl. VAT`;
+  const need = "Card or other payment method required.";
   const stop = "Cancel before then and nothing is charged.";
   if (promo && promo.price < price.amount) {
-    return `Free for ${days} days, then ${euro(promo.price)} for the first ${unit}, charged on ${longDate(chargeOn)}, and ${regular} after that. ${stop}`;
+    return `${need} Free for ${days} days, then ${euro(promo.price)} excl. VAT for the first ${unit}, charged on ${longDate(chargeOn)}, and ${regular} after that, renewing until you cancel. ${stop}`;
   }
-  return `Free for ${days} days, then ${regular} from ${longDate(chargeOn)}. ${stop}`;
+  return `${need} Free for ${days} days, then ${regular} from ${longDate(chargeOn)}, renewing every ${unit} until you cancel. ${stop}`;
 }
 
 /** The line under "Subscribe now". */
