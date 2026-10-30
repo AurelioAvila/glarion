@@ -36,15 +36,15 @@ test("the trial line says what happens, when, and for how much", () => {
   const list = parsePrices(answer)!;
   const monthly = priceFor(list, "studio", "monthly")!;
   const on = firstChargeDate(list);
-  assert.equal(trialLine(3, monthly, on), "Free for 3 days, then €39/month from 17 October 2026. Cancel before then and nothing is charged.");
+  assert.equal(trialLine(3, monthly, on), "Card or other payment method required. Free for 3 days, then €39/month excl. VAT from 17 October 2026, renewing every month until you cancel. Cancel before then and nothing is charged.");
   assert.equal(subscribeNowLine(monthly), "Or subscribe now: €39 charged today, no trial.");
   const promo = { plan: "studio", interval: "monthly" as const, regular: 3900, reference: 3900, price: 1900 };
-  assert.equal(trialLine(3, monthly, on, promo), "Free for 3 days, then €19 for the first month, charged on 17 October 2026, and €39/month after that. Cancel before then and nothing is charged.");
+  assert.equal(trialLine(3, monthly, on, promo), "Card or other payment method required. Free for 3 days, then €19 excl. VAT for the first month, charged on 17 October 2026, and €39/month excl. VAT after that, renewing until you cancel. Cancel before then and nothing is charged.");
   assert.equal(subscribeNowLine(monthly, promo), "Or subscribe now: €19 charged today for the first month, no trial.");
   // An "offer" that is not below the Stripe price is ignored.
   assert.equal(trialLine(3, monthly, on, { ...promo, price: 3900 }), trialLine(3, monthly, on));
   const yearly = priceFor(list, "studio", "yearly")!;
-  assert.match(trialLine(3, yearly, on), /€350\/year from 17 October 2026/);
+  assert.match(trialLine(3, yearly, on), /€350\/year excl\. VAT from 17 October 2026, renewing every year/);
 });
 
 test("time left and progress read plainly", () => {

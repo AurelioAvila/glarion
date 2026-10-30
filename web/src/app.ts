@@ -2454,7 +2454,7 @@ async function renderPlan(): Promise<void> {
     container.append(el("section", { class: "trial-offer", "aria-label": "Free trial" }, [
       el("div", {}, [
         el("strong", { text: `Try any paid plan free for ${trial.prices.trialDays} days` }),
-        el("p", { text: `Full scans, scheduled checks and reports, with a card or another payment method Stripe accepts. Cancel in Manage billing before the ${trial.prices.trialDays} days are up and nothing is charged. One free trial per account.` }),
+        el("p", { text: `Full scans, scheduled checks and reports. You add a card or another payment method Stripe accepts at checkout; nothing is charged for ${trial.prices.trialDays} days, then the plan's price plus any VAT is charged and it renews monthly or yearly until you cancel. Cancel in Manage billing before the ${trial.prices.trialDays} days are up and nothing is charged. One free trial per account.` }),
       ]),
       start,
     ]));
