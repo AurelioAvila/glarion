@@ -56,6 +56,9 @@ jobs:
           npx tsc --noEmit
           npm test
 
+      - name: llms.txt matches the pricing page and billing.rs
+        run: node scripts/build-llms.mjs --check
+
       - name: Format
         run: cargo fmt --all -- --check
 
