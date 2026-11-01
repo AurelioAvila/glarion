@@ -12,6 +12,7 @@
 .purchase-card:hover { border-color:#7345b2; background:#f6f0fc; }
 .purchase-card:focus-visible { outline:3px solid #7345b2; outline-offset:4px; }
 .purchase-free { background:#f2edf8; }
+.purchase-free:hover { background:#ebe2f6; }
 .purchase-studio { border-color:#bc294a; background:#fff7f9; }
 .purchase-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; min-height:2.5rem; margin-bottom:.65rem; }
 .purchase-recommendation { position:absolute; top:-1rem; left:50%; transform:translateX(-50%); gap:.4rem; white-space:nowrap; max-width:calc(100% - 1rem); display:inline-flex; align-items:center; padding:.35rem .6rem; border:1px solid #e0a6b5; border-radius:999px; color:white; background:#bc294a; font-size:.75rem; font-weight:750; line-height:1.4; }
