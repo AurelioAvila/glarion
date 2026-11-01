@@ -708,12 +708,456 @@ async fn read_prices() -> Vec<PlanPrice> {
     prices.into_iter().map(|(_, price)| price).collect()
 }
 
+// --- Manage subscription ----------------------------------------------------
+//
+// The account menu's panel: what this account pays for, and cancelling or
+// resuming it without leaving the dashboard. Cancelling is always at the end
+// of the period already paid for, never immediate and never a refund. Every
+// call acts on the caller's own subscription only: the request never names
+// one, it is read from the caller's entitlement and checked against the
+// caller's Stripe customer.
+
+/// The reasons a customer can give, as Stripe records them
+/// (`cancellation_details.feedback`), with the label they saw.
+pub const CANCEL_REASONS: [(&str, &str); 8] = [
+    ("too_expensive", "Too expensive"),
+    ("unused", "I don't use it enough"),
+    ("missing_features", "Missing a feature I need"),
+    ("switched_service", "Switching to another tool"),
+    ("low_quality", "Technical problems / bugs"),
+    ("too_complex", "Too complicated to use"),
+    ("customer_service", "Problems with support"),
+    ("other", "Other"),
+];
+
+/// The longest comment kept, in characters.
+pub const CANCEL_COMMENT_MAX: usize = 500;
+
+/// Where the cancellation notice goes: the inbox the owner reads for every
+/// product's sales.
+const OWNER_NOTICE_TO: &str = "support@pctweaker.app";
+
+/// Per account, per quarter of an hour.
+const MANAGE_WINDOW: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+const MANAGE_READS_PER_WINDOW: u32 = 120;
+const MANAGE_WRITES_PER_WINDOW: u32 = 20;
+
+#[derive(Serialize)]
+pub struct Card {
+    pub brand: String,
+    pub last4: String,
+}
+
+/// What the Manage subscription panel shows.
+#[derive(Serialize)]
+pub struct ManagedSubscription {
+    pub product: &'static str,
+    /// `free`, `solo`, `studio` or `agency`.
+    pub plan: String,
+    pub plan_name: String,
+    /// `month` or `year`; null without a subscription.
+    pub interval: Option<String>,
+    /// The plan's list price per interval in minor units, before tax and
+    /// discounts.
+    pub amount: Option<i64>,
+    pub currency: Option<String>,
+    /// Stripe's status (`active`, `trialing`, `past_due`, `unpaid`,
+    /// `paused`), or `none`.
+    pub status: String,
+    pub trial_end: Option<DateTime<Utc>>,
+    /// The renewal date, or the last day of access once it is set to end.
+    pub current_period_end: Option<DateTime<Utc>>,
+    pub cancel_at_period_end: bool,
+    pub cancel_at: Option<DateTime<Utc>>,
+    /// Card only; null for Link, wallets or when unknown.
+    pub payment_method: Option<Card>,
+    /// Glarion sells no lifetime plan. Kept for the shared contract.
+    pub lifetime: bool,
+    pub can_cancel: bool,
+    pub can_resume: bool,
+    pub sites_used: i64,
+    pub max_sites: i32,
+    /// Whether Stripe's portal (card, invoices) has anything to show.
+    pub portal: bool,
+}
+
+#[derive(Deserialize, Default)]
+pub struct CancelRequest {
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+/// The reason, checked against Stripe's own list, and the comment with
+/// control characters and runs of whitespace folded to single spaces.
+pub fn clean_cancel_feedback(
+    reason: Option<&str>,
+    comment: Option<&str>,
+) -> ApiResult<(Option<&'static str>, Option<String>)> {
+    let reason = match reason.map(str::trim).filter(|value| !value.is_empty()) {
+        None => None,
+        Some(value) => Some(
+            CANCEL_REASONS
+                .iter()
+                .map(|(code, _)| *code)
+                .find(|code| *code == value)
+                .ok_or_else(|| ApiError::BadRequest("unknown cancellation reason".into()))?,
+        ),
+    };
+    let comment = comment
+        .unwrap_or("")
+        .split(|c: char| c.is_whitespace() || c.is_control())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if comment.chars().count() > CANCEL_COMMENT_MAX {
+        return Err(ApiError::BadRequest(format!(
+            "the comment is longer than {CANCEL_COMMENT_MAX} characters"
+        )));
+    }
+    Ok((reason, (!comment.is_empty()).then_some(comment)))
+}
+
+/// The caller's billing records.
+struct Owned {
+    email: String,
+    customer: Option<String>,
+    subscription: Option<String>,
+    sites_used: i64,
+}
+
+async fn owned(state: &AppState, user_id: Uuid) -> ApiResult<Owned> {
+    let row: (String, Option<String>, Option<String>, i64) = sqlx::query_as(
+        "select u.email, e.stripe_customer_id, e.stripe_subscription_id,
+                (select count(*) from targets t where t.user_id = u.id)
+           from users u
+           left join entitlements e on e.user_id = u.id and e.product = 'glarion'
+          where u.id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    Ok(Owned {
+        email: row.0,
+        customer: row.1,
+        subscription: row.2,
+        sites_used: row.3,
+    })
+}
+
+async fn manage_rate_limit(
+    state: &AppState,
+    user_id: Uuid,
+    scope: &str,
+    limit: u32,
+) -> ApiResult<()> {
+    let allowed = crate::rate_limit::RateLimiter::new(limit, MANAGE_WINDOW)
+        .check_shared_key(&state.pool, scope, &user_id.to_string())
+        .await;
+    if allowed {
+        Ok(())
+    } else {
+        Err(ApiError::TooManyRequests)
+    }
+}
+
+/// The caller's subscription as Stripe has it now, when one has not ended
+/// and it belongs to the caller's own customer.
+async fn live_subscription(owned: &Owned) -> ApiResult<Option<serde_json::Value>> {
+    let (Some(customer), Some(id)) = (owned.customer.as_deref(), owned.subscription.as_deref())
+    else {
+        return Ok(None);
+    };
+    let secret = stripe_secret().map_err(|_| ApiError::BillingUnavailable)?;
+    let subscription = stripe_get(
+        &secret,
+        &stripe_url(&format!("/v1/subscriptions/{id}")),
+        &[("expand[]", "default_payment_method")],
+    )
+    .await
+    .map_err(|_| ApiError::BillingUnavailable)?;
+    let ours = subscription["customer"].as_str() == Some(customer);
+    let live = matches!(
+        subscription["status"].as_str(),
+        Some("active" | "trialing" | "past_due" | "unpaid" | "paused")
+    );
+    Ok((ours && live).then_some(subscription))
+}
+
+fn timestamp(value: &serde_json::Value) -> Option<DateTime<Utc>> {
+    value
+        .as_i64()
+        .and_then(|seconds| Utc.timestamp_opt(seconds, 0).single())
+}
+
+/// The panel's view of the caller's subscription, or of the free plan.
+fn managed_view(
+    subscription: Option<&serde_json::Value>,
+    access: crate::billing::Access,
+    owned: &Owned,
+) -> ManagedSubscription {
+    let mut view = ManagedSubscription {
+        product: "glarion",
+        plan: access.plan.as_db_str().to_string(),
+        plan_name: access.plan.display_name().to_string(),
+        interval: None,
+        amount: None,
+        currency: None,
+        status: "none".into(),
+        trial_end: None,
+        current_period_end: None,
+        cancel_at_period_end: false,
+        cancel_at: None,
+        payment_method: None,
+        lifetime: false,
+        can_cancel: false,
+        can_resume: false,
+        sites_used: owned.sites_used,
+        max_sites: access.max_targets(),
+        portal: owned.customer.is_some(),
+    };
+    let Some(subscription) = subscription else {
+        return view;
+    };
+
+    let item = &subscription["items"]["data"][0];
+    let price = &item["price"];
+    if let Some(plan) = price["id"].as_str().and_then(plan_for_price) {
+        view.plan = plan.as_db_str().to_string();
+        view.plan_name = plan.display_name().to_string();
+    }
+    view.interval = price["recurring"]["interval"].as_str().map(str::to_string);
+    view.amount = price["unit_amount"]
+        .as_i64()
+        .map(|amount| amount * item["quantity"].as_i64().unwrap_or(1));
+    view.currency = price["currency"].as_str().map(str::to_string);
+    view.status = subscription["status"]
+        .as_str()
+        .unwrap_or("none")
+        .to_string();
+    view.trial_end = (view.status == "trialing")
+        .then(|| timestamp(&subscription["trial_end"]))
+        .flatten();
+    view.current_period_end = timestamp(&item["current_period_end"])
+        .or_else(|| timestamp(&subscription["current_period_end"]));
+    view.cancel_at_period_end = subscription["cancel_at_period_end"].as_bool() == Some(true);
+    view.cancel_at = timestamp(&subscription["cancel_at"]);
+    let card = &subscription["default_payment_method"]["card"];
+    view.payment_method = match (card["brand"].as_str(), card["last4"].as_str()) {
+        (Some(brand), Some(last4)) => Some(Card {
+            brand: brand.to_string(),
+            last4: last4.to_string(),
+        }),
+        _ => None,
+    };
+    let running = matches!(view.status.as_str(), "active" | "trialing" | "past_due");
+    let ending = view.cancel_at_period_end || view.cancel_at.is_some();
+    view.can_cancel = running && !ending;
+    view.can_resume = running && ending;
+    view
+}
+
+/// GET /api/billing/subscription: the caller's subscription, read live from
+/// Stripe.
+pub async fn manage_subscription(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> ApiResult<Json<ManagedSubscription>> {
+    manage_rate_limit(&state, user.id, "billing_read", MANAGE_READS_PER_WINDOW).await?;
+    let owned = owned(&state, user.id).await?;
+    let subscription = live_subscription(&owned).await?;
+    let access = current_access(&state.pool, user.id).await?;
+    Ok(Json(managed_view(subscription.as_ref(), access, &owned)))
+}
+
+/// POST /api/billing/subscription/cancel: ends the caller's subscription at
+/// the end of the period already paid for, with the optional reason and
+/// comment stored on Stripe's own cancellation details. Asking again changes
+/// nothing and sends nothing.
+pub async fn schedule_cancellation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CancelRequest>,
+) -> ApiResult<Json<ManagedSubscription>> {
+    let (reason, comment) = clean_cancel_feedback(body.reason.as_deref(), body.comment.as_deref())?;
+    manage_rate_limit(&state, user.id, "billing_write", MANAGE_WRITES_PER_WINDOW).await?;
+    let owned = owned(&state, user.id).await?;
+    let current = live_subscription(&owned).await?.ok_or(ApiError::NotFound)?;
+    let access = current_access(&state.pool, user.id).await?;
+    let view = managed_view(Some(&current), access, &owned);
+    if view.can_resume {
+        return Ok(Json(view));
+    }
+    if !view.can_cancel {
+        return Err(ApiError::Conflict(
+            "this subscription can only be changed in the billing portal".into(),
+        ));
+    }
+
+    let id = current["id"].as_str().unwrap_or_default().to_string();
+    let mut form: Vec<(String, String)> = vec![
+        ("cancel_at_period_end".into(), "true".into()),
+        ("expand[]".into(), "default_payment_method".into()),
+    ];
+    if let Some(reason) = reason {
+        form.push(("cancellation_details[feedback]".into(), reason.into()));
+    }
+    if let Some(comment) = &comment {
+        form.push(("cancellation_details[comment]".into(), comment.clone()));
+    }
+    let secret = stripe_secret().map_err(|_| ApiError::BillingUnavailable)?;
+    let updated = stripe_post(
+        &secret,
+        &stripe_url(&format!("/v1/subscriptions/{id}")),
+        &form,
+    )
+    .await
+    .map_err(|_| ApiError::BillingUnavailable)?;
+    let view = managed_view(Some(&updated), access, &owned);
+    record_cancel_flag(&state, user.id, view.can_resume).await?;
+    tracing::info!(
+        audit = "subscription_cancel_scheduled",
+        user_id = %user.id,
+        subscription = %id,
+        reason = reason.unwrap_or("none"),
+        ends = ?view.cancel_at.or(view.current_period_end),
+        "subscription set to cancel at period end"
+    );
+    notify_owner_of_cancellation(&state, &owned, &view, &id, reason, comment.as_deref()).await;
+    Ok(Json(view))
+}
+
+/// POST /api/billing/subscription/resume: undoes a scheduled cancellation.
+/// Asking again changes nothing.
+pub async fn resume_subscription(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> ApiResult<Json<ManagedSubscription>> {
+    manage_rate_limit(&state, user.id, "billing_write", MANAGE_WRITES_PER_WINDOW).await?;
+    let owned = owned(&state, user.id).await?;
+    let current = live_subscription(&owned).await?.ok_or(ApiError::NotFound)?;
+    let access = current_access(&state.pool, user.id).await?;
+    let view = managed_view(Some(&current), access, &owned);
+    if !view.can_resume {
+        return Ok(Json(view));
+    }
+
+    let id = current["id"].as_str().unwrap_or_default().to_string();
+    // Stripe takes one or the other: the flag, or a date set elsewhere.
+    let clear = if view.cancel_at_period_end {
+        ("cancel_at_period_end", "false")
+    } else {
+        ("cancel_at", "")
+    };
+    let form: Vec<(String, String)> = vec![
+        (clear.0.into(), clear.1.into()),
+        ("expand[]".into(), "default_payment_method".into()),
+    ];
+    let secret = stripe_secret().map_err(|_| ApiError::BillingUnavailable)?;
+    let updated = stripe_post(
+        &secret,
+        &stripe_url(&format!("/v1/subscriptions/{id}")),
+        &form,
+    )
+    .await
+    .map_err(|_| ApiError::BillingUnavailable)?;
+    let view = managed_view(Some(&updated), access, &owned);
+    record_cancel_flag(&state, user.id, view.can_resume).await?;
+    tracing::info!(
+        audit = "subscription_resumed",
+        user_id = %user.id,
+        subscription = %id,
+        "subscription resumed"
+    );
+    Ok(Json(view))
+}
+
+/// Mirrors the change at once, so the Pricing page agrees before Stripe's
+/// webhook arrives (which writes the same value).
+async fn record_cancel_flag(state: &AppState, user_id: Uuid, ending: bool) -> ApiResult<()> {
+    sqlx::query(
+        "update entitlements set cancel_at_period_end = $2
+          where user_id = $1 and product = 'glarion'",
+    )
+    .bind(user_id)
+    .bind(ending)
+    .execute(&state.pool)
+    .await?;
+    Ok(())
+}
+
+/// One email to the owner per cancellation: claimed per subscription and
+/// end date before sending, so a retry or a resume-and-cancel within the
+/// same period cannot send a second. Best effort: the cancellation stands
+/// whatever happens to the email.
+async fn notify_owner_of_cancellation(
+    state: &AppState,
+    owned: &Owned,
+    view: &ManagedSubscription,
+    subscription_id: &str,
+    reason: Option<&str>,
+    comment: Option<&str>,
+) {
+    let Some(ends) = view.cancel_at.or(view.current_period_end) else {
+        return;
+    };
+    let claimed: Result<Option<(i64,)>, _> = sqlx::query_as(
+        "insert into rate_limit_buckets (scope, client_key, window_started_at, attempt_count)
+         values ('cancel_notice', $1, now(), 1)
+         on conflict (scope, client_key) do nothing
+         returning attempt_count",
+    )
+    .bind(format!("{subscription_id}:{}", ends.timestamp()))
+    .fetch_optional(&state.pool)
+    .await;
+    if !matches!(claimed, Ok(Some(_))) {
+        return;
+    }
+    let interval = match view.interval.as_deref() {
+        Some("year") => "Yearly",
+        Some("month") => "Monthly",
+        _ => "Subscription",
+    };
+    let plan = format!("{} — {interval}", view.plan_name);
+    let country = customer_country(owned.customer.as_deref()).await;
+    let message = orchestrator::mailer::cancellation_notice_email(
+        &orchestrator::mailer::CancellationNotice {
+            plan: &plan,
+            email: &owned.email,
+            country: country.as_deref(),
+            ends,
+            reason: reason.and_then(|code| {
+                CANCEL_REASONS
+                    .iter()
+                    .find(|(known, _)| *known == code)
+                    .map(|(_, label)| *label)
+            }),
+            comment,
+            reference: subscription_id,
+        },
+    );
+    if let Err(error) = state.mailer.send(OWNER_NOTICE_TO, &message).await {
+        tracing::warn!(%error, "could not send the cancellation notice; not retried");
+    }
+}
+
+/// The billing country Stripe holds for the customer, when it can say.
+async fn customer_country(customer: Option<&str>) -> Option<String> {
+    let secret = stripe_secret().ok()?;
+    let found = stripe_get(
+        &secret,
+        &stripe_url(&format!("/v1/customers/{}", customer?)),
+        &[],
+    )
+    .await
+    .ok()?;
+    found["address"]["country"].as_str().map(str::to_string)
+}
+
 /// Sends an existing subscriber to Stripe's own portal to change card,
-/// switch plan, or cancel.
-///
-/// Cancelling is deliberately not something we implement: a subscription
-/// somebody can only end by emailing support is a dark pattern, and the
-/// portal already does it properly.
+/// see invoices, switch plan, or cancel there too.
 pub async fn open_portal(
     State(state): State<AppState>,
     user: AuthUser,
@@ -1806,6 +2250,32 @@ mod tests {
         assert_eq!(invoice_subscription(&old).as_deref(), Some("sub_old"));
         assert_eq!(invoice_subscription(&basil).as_deref(), Some("sub_new"));
         assert_eq!(invoice_subscription(&serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn cancellation_feedback_takes_stripes_eight_reasons_and_a_clean_comment() {
+        for (code, _) in CANCEL_REASONS {
+            assert_eq!(
+                clean_cancel_feedback(Some(code), None).unwrap().0,
+                Some(code)
+            );
+        }
+        assert_eq!(clean_cancel_feedback(None, None).unwrap(), (None, None));
+        assert_eq!(
+            clean_cancel_feedback(Some("  "), Some(" \n ")).unwrap(),
+            (None, None)
+        );
+        assert!(clean_cancel_feedback(Some("because"), None).is_err());
+        assert_eq!(
+            clean_cancel_feedback(Some("other"), Some("\u{1b}[31m too\tslow \r\n"))
+                .unwrap()
+                .1
+                .as_deref(),
+            Some("[31m too slow")
+        );
+        let limit = "é".repeat(CANCEL_COMMENT_MAX);
+        assert!(clean_cancel_feedback(None, Some(&limit)).is_ok());
+        assert!(clean_cancel_feedback(None, Some(&format!("{limit}x"))).is_err());
     }
 
     #[test]

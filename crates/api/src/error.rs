@@ -45,6 +45,11 @@ pub enum ApiError {
     #[error("too many requests — try again later")]
     TooManyRequests,
 
+    /// Stripe could not be reached or refused, on a request a person is
+    /// waiting on. Its own code so the dashboard can offer a retry.
+    #[error("couldn't reach billing — try again")]
+    BillingUnavailable,
+
     /// The password was right but the address has never been confirmed.
     /// Its own variant so the dashboard can offer to resend the link
     /// instead of showing a dead end.
@@ -85,6 +90,11 @@ impl IntoResponse for ApiError {
             ApiError::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",
+                self.to_string(),
+            ),
+            ApiError::BillingUnavailable => (
+                StatusCode::BAD_GATEWAY,
+                "billing_unavailable",
                 self.to_string(),
             ),
             ApiError::EmailNotVerified => (
