@@ -39,3 +39,7 @@ input { caret-color: var(--violet); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Selection: controls are not text, and images take no highlight wash. Prices and copy stay selectable. */
+img::selection, svg::selection, picture::selection, video::selection { background: transparent; }
+button, summary, .purchase-switch, .purchase-action, .primary, .secondary, .nav-cta, .button, .source-actions a, .hw-strip-cta, .hw-card-cta { -webkit-user-select: none; user-select: none; }
