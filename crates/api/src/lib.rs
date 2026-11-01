@@ -238,6 +238,18 @@ pub fn router(state: AppState) -> Router {
             post(routes::billing::start_checkout),
         )
         .route("/api/billing/portal", post(routes::billing::open_portal))
+        .route(
+            "/api/billing/subscription",
+            get(routes::billing::manage_subscription),
+        )
+        .route(
+            "/api/billing/subscription/cancel",
+            post(routes::billing::schedule_cancellation),
+        )
+        .route(
+            "/api/billing/subscription/resume",
+            post(routes::billing::resume_subscription),
+        )
         // Public: the "then €39/month" line next to the trial button comes
         // from the Stripe Prices, never from numbers written in a page.
         .route("/api/billing/prices", get(routes::billing::public_prices))

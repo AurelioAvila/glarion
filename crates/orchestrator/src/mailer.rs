@@ -1053,6 +1053,68 @@ pub fn subscription_ended_email(
     }
 }
 
+/// What the owner is told when a customer schedules a cancellation from the
+/// dashboard.
+pub struct CancellationNotice<'a> {
+    /// "Studio — Monthly".
+    pub plan: &'a str,
+    pub email: &'a str,
+    pub country: Option<&'a str>,
+    /// The last day of access: nothing is charged after it.
+    pub ends: chrono::DateTime<chrono::Utc>,
+    /// The reason's label, as the customer saw it.
+    pub reason: Option<&'a str>,
+    pub comment: Option<&'a str>,
+    /// The Stripe subscription, to find it in the dashboard.
+    pub reference: &'a str,
+}
+
+/// One notice per cancellation to the owner: plain rows, nothing to market.
+/// Every value is escaped: the comment and the address are the customer's.
+pub fn cancellation_notice_email(notice: &CancellationNotice<'_>) -> Message {
+    let ends = notice.ends.format("%-d %b %Y").to_string();
+    let rows = [
+        ("Product", "Glarion".to_string()),
+        ("Plan", notice.plan.to_string()),
+        ("Customer", notice.email.to_string()),
+        ("Country", notice.country.unwrap_or("Unknown").to_string()),
+        ("Access until", ends.clone()),
+        (
+            "Reason",
+            notice.reason.unwrap_or("No reason given").to_string(),
+        ),
+        ("Comment", notice.comment.unwrap_or("None").to_string()),
+        ("Subscription", notice.reference.to_string()),
+    ];
+    let html_rows: String = rows
+        .iter()
+        .map(|(label, value)| {
+            format!(
+                r#"<tr><td style="padding:4px 16px 4px 0;font-family:{FONT};font-size:14px;color:#63656f;vertical-align:top">{}</td><td style="padding:4px 0;font-family:{FONT};font-size:14px;color:#1d1e24">{}</td></tr>"#,
+                escape(label),
+                escape(value)
+            )
+        })
+        .collect();
+    Message {
+        subject: format!(
+            "Cancellation scheduled · Glarion {} · ends {ends} · {}",
+            notice.plan, notice.reference
+        ),
+        html: format!(
+            r#"<!doctype html><html lang="en"><body style="margin:0;padding:24px;background:#ffffff"><p style="margin:0 0 16px;font-family:{FONT};font-size:16px;font-weight:700;color:#1d1e24">A customer scheduled a cancellation. Access continues until {}; nothing is charged after it.</p><table role="presentation" cellpadding="0" cellspacing="0" border="0">{html_rows}</table></body></html>"#,
+            escape(&ends)
+        ),
+        text: format!(
+            "A customer scheduled a cancellation. Access continues until {ends}; nothing is charged after it.\n\n{}",
+            rows.iter()
+                .map(|(label, value)| format!("{label}: {value}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+    }
+}
+
 /// The message sent when a monitored site changes.
 ///
 /// Deliberately short and specific. This is the only email an agency gets

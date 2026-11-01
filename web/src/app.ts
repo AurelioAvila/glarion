@@ -55,6 +55,7 @@ import { trialEntry } from "./trial-entry.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
 import { siteProfile } from "./profile.js";
+import { openManageSubscription } from "./manage-subscription.js";
 
 const root = () => byId<HTMLElement>("view");
 
@@ -807,6 +808,12 @@ function standardCommands(): palette.Command[] {
       run: () => {
         window.location.hash = "#/settings";
       },
+    },
+    {
+      group: "Account",
+      label: "Manage subscription",
+      keywords: "billing cancel resume card invoice renew",
+      run: () => openManageSubscription({ changed: billingChanged }),
     },
     {
       group: "Account",
@@ -2805,17 +2812,101 @@ function renderNav(): void {
   paintNavTrial();
   if (!knownSubscription) void api.subscription().then(noteSubscription, () => {});
 
-  const signOut = el("button", { type: "button", text: "Sign out" });
-  on(signOut, "click", () => {
-    void api.logout().finally(() => {
-      session.clear();
-      knownSubscription = null;
-      pendingPlan = null;
-      rememberPlanChoice(null);
-      window.location.hash = "#/signin";
+  nav.append(accountMenu());
+}
+
+/// After a cancel or resume in Manage subscription: the plan is read again,
+/// and the Pricing page redrawn if it is the one behind the panel.
+function billingChanged(): void {
+  knownSubscription = null;
+  if ((window.location.hash.split("/")[1] ?? "").startsWith("plan")) route();
+  else void api.subscription().then(noteSubscription, () => {});
+}
+
+/// The account menu (owner, 1 November 2026): Manage subscription lives
+/// here in every app, with Settings and Sign out. A disclosure button and a
+/// menu: arrow keys move, Escape closes and returns focus to the button.
+function accountMenu(): HTMLElement {
+  const button = el("button", { class: "account-button", type: "button", "aria-haspopup": "menu", "aria-expanded": "false", "aria-controls": "account-menu" }, [
+    el("span", { class: "account-label", text: "Account" }),
+    el("span", { class: "account-chevron", "aria-hidden": "true" }),
+  ]);
+  const who = el("p", { class: "account-who", role: "presentation" });
+  const menu = el("div", { id: "account-menu", class: "account-menu", role: "menu", "aria-label": "Account", hidden: true });
+  const wrap = el("div", { class: "account" }, [button, menu]);
+
+  const items = (): HTMLButtonElement[] => Array.from(menu.querySelectorAll<HTMLButtonElement>("[role=menuitem]"));
+  const outside = (event: PointerEvent) => {
+    if (!wrap.contains(event.target as Node)) close(false);
+  };
+  const close = (refocus: boolean) => {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside);
+    if (refocus) button.focus();
+  };
+  const open = (focus: "first" | "last" | null) => {
+    if (menu.hidden) {
+      menu.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      document.addEventListener("pointerdown", outside);
+      if (!who.textContent) void api.profile().then((profile) => { who.textContent = profile.email ?? ""; }, () => {});
+    }
+    const list = items();
+    if (focus) list[focus === "first" ? 0 : list.length - 1]?.focus();
+  };
+  const item = (text: string, run: () => void): HTMLButtonElement => {
+    const entry = el("button", { class: "account-item", type: "button", role: "menuitem", tabindex: "-1", text });
+    on(entry, "click", () => {
+      close(false);
+      run();
     });
+    return entry;
+  };
+
+  menu.append(
+    who,
+    item("Manage subscription", () => openManageSubscription({ changed: billingChanged })),
+    item("Settings", () => {
+      window.location.hash = "#/settings";
+    }),
+    el("div", { class: "account-rule", role: "separator" }),
+    item("Sign out", () => {
+      void api.logout().finally(() => {
+        session.clear();
+        knownSubscription = null;
+        pendingPlan = null;
+        rememberPlanChoice(null);
+        window.location.hash = "#/signin";
+      });
+    }),
+  );
+
+  on(button, "click", () => (menu.hidden ? open(null) : close(false)));
+  on(button, "keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      open(event.key === "ArrowDown" ? "first" : "last");
+    }
   });
-  nav.append(signOut);
+  on(menu, "keydown", (event) => {
+    const list = items();
+    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const move = (to: number) => {
+      event.preventDefault();
+      list[(to + list.length) % list.length]?.focus();
+    };
+    if (event.key === "ArrowDown") move(at + 1);
+    else if (event.key === "ArrowUp") move(at - 1);
+    else if (event.key === "Home") move(0);
+    else if (event.key === "End") move(list.length - 1);
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      close(true);
+    } else if (event.key === "Tab") close(false);
+  });
+  return wrap;
 }
 
 function routeInner(): void {

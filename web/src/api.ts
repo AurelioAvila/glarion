@@ -65,6 +65,35 @@ export interface Subscription {
   first_charge?: { amount: number; currency: string } | null;
 }
 
+/** Stripe's own cancellation feedback codes. */
+export type CancelReason =
+  | "too_expensive" | "unused" | "missing_features" | "switched_service"
+  | "low_quality" | "too_complex" | "customer_service" | "other";
+
+/** GET /api/billing/subscription: mirrors ManagedSubscription in crates/api. */
+export interface ManagedSubscription {
+  product: "glarion";
+  plan: string;
+  plan_name: string;
+  interval: "month" | "year" | null;
+  /** List price per interval in cents, before VAT and discounts. */
+  amount: number | null;
+  currency: string | null;
+  /** active | trialing | past_due | unpaid | paused | none */
+  status: string;
+  trial_end: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  cancel_at: string | null;
+  payment_method: { brand: string; last4: string } | null;
+  lifetime: boolean;
+  can_cancel: boolean;
+  can_resume: boolean;
+  sites_used: number;
+  max_sites: number;
+  portal: boolean;
+}
+
 export type Cadence = "manual" | "weekly" | "monthly";
 
 export interface Target {
@@ -419,6 +448,23 @@ export const api = {
       interval,
       ...(startTrial === undefined ? {} : { start_trial: startTrial }),
     });
+  },
+
+  /// Manage subscription: the caller's own subscription, read live.
+  manageSubscription() {
+    return request<ManagedSubscription>("GET", "/api/billing/subscription");
+  },
+
+  /// Ends at the end of the paid period; reason and comment are optional.
+  cancelSubscription(reason: CancelReason | null, comment: string) {
+    return request<ManagedSubscription>("POST", "/api/billing/subscription/cancel", {
+      ...(reason ? { reason } : {}),
+      ...(comment.trim() ? { comment: comment.trim() } : {}),
+    });
+  },
+
+  resumeSubscription() {
+    return request<ManagedSubscription>("POST", "/api/billing/subscription/resume", {});
   },
 
   billingPortal() {

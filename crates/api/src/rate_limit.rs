@@ -177,7 +177,14 @@ impl RateLimiter {
     /// Database errors fail closed: an unavailable limiter must never turn
     /// an authentication endpoint into an unlimited password oracle.
     pub async fn check_shared(&self, pool: &PgPool, scope: &str, client: IpAddr) -> bool {
-        let client_key = format!("{:x}", Sha256::digest(client.to_string().as_bytes()));
+        self.check_shared_key(pool, scope, &client.to_string())
+            .await
+    }
+
+    /// The same shared budget keyed by anything, such as an account id for
+    /// limits that follow the account rather than the address.
+    pub async fn check_shared_key(&self, pool: &PgPool, scope: &str, key: &str) -> bool {
+        let client_key = format!("{:x}", Sha256::digest(key.as_bytes()));
         let window_secs = self.window.as_secs().min(i32::MAX as u64) as i32;
         let limit = i64::from(self.limit);
 
