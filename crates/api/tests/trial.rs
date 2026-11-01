@@ -40,6 +40,10 @@ struct Stripe {
     prices: HashMap<String, Value>,
     checkouts: Vec<HashMap<String, String>>,
     cancelled: Vec<(String, String)>,
+    /// Played back by the Events API (`payment_intent.payment_failed`).
+    events: Vec<Value>,
+    /// Checkout Sessions as listed by customer, each with its one price.
+    sessions: Vec<(Value, String)>,
 }
 
 type Shared = Arc<Mutex<Stripe>>;
@@ -54,6 +58,38 @@ async fn stub_checkout(
         .checkouts
         .push(form.into_iter().collect());
     Json(json!({ "url": "https://checkout.stripe.test/session" }))
+}
+
+async fn stub_events(State(stripe): State<Shared>) -> Json<Value> {
+    Json(json!({ "data": stripe.lock().unwrap().events }))
+}
+
+/// Newest first, as Stripe lists them.
+async fn stub_sessions(
+    State(stripe): State<Shared>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let mut found: Vec<Value> = stripe
+        .lock()
+        .unwrap()
+        .sessions
+        .iter()
+        .map(|(session, _)| session.clone())
+        .filter(|session| query.get("customer").map(String::as_str) == session["customer"].as_str())
+        .collect();
+    found.sort_by_key(|session| std::cmp::Reverse(session["created"].as_i64()));
+    Json(json!({ "data": found }))
+}
+
+async fn stub_line_items(State(stripe): State<Shared>, Path(id): Path<String>) -> Json<Value> {
+    let stripe = stripe.lock().unwrap();
+    let price = stripe
+        .sessions
+        .iter()
+        .find(|(session, _)| session["id"] == id)
+        .map(|(_, price)| price.clone())
+        .unwrap_or_default();
+    Json(json!({ "data": [{ "price": { "id": price } }] }))
 }
 
 async fn stub_subscription(
@@ -101,7 +137,12 @@ async fn stub_price(
 async fn start_stripe() -> Shared {
     let shared: Shared = Arc::default();
     let router = Router::new()
-        .route("/v1/checkout/sessions", post(stub_checkout))
+        .route(
+            "/v1/checkout/sessions",
+            post(stub_checkout).get(stub_sessions),
+        )
+        .route("/v1/checkout/sessions/:id/line_items", get(stub_line_items))
+        .route("/v1/events", get(stub_events))
         .route(
             "/v1/subscriptions/:id",
             get(stub_subscription).delete(stub_cancel),
@@ -482,6 +523,8 @@ async fn the_customer_chooses_between_the_trial_and_subscribing_now() {
         "cancel"
     );
     assert_eq!(form["subscription_data[metadata][glarion_trial]"], "3d");
+    // More for Stripe's fraud screening to match against the card.
+    assert_eq!(form["billing_address_collection"], "required");
 
     // "Subscribe now", and a dashboard that sends no choice: no trial at all,
     // not even the old Solo one.
@@ -944,6 +987,120 @@ async fn the_reminder_goes_once_a_day_before_the_end_and_not_after_cancelling() 
     assert_eq!(sent.len(), 1, "one reminder, for the trial still running");
     let text = std::fs::read_to_string(sent[0].path()).unwrap();
     assert!(text.contains("€47.58 is taken"), "{text}");
+
+    std::fs::remove_dir_all(&sink).ok();
+    for unset in ["EMAIL_SINK", "EMAIL_SINK_DIR", "MAIL_FROM"] {
+        std::env::remove_var(unset);
+    }
+}
+
+/// A failed or blocked first payment in Checkout, as Stripe records it: a
+/// PaymentIntent for "Subscription creation" on the session's customer.
+fn failed_start(stripe: &Shared, n: &str, user: Uuid, price: &str, description: &str) {
+    let customer = format!("cus_failed_{n}");
+    let failed_at = (Utc::now() - Duration::hours(2)).timestamp();
+    let mut stripe = stripe.lock().unwrap();
+    stripe.events.push(json!({
+        "type": "payment_intent.payment_failed",
+        "data": { "object": {
+            "id": format!("pi_{n}"), "customer": customer, "created": failed_at,
+            "description": description, "metadata": {}
+        } }
+    }));
+    stripe.sessions.push((
+        json!({
+            "id": format!("cs_{n}"), "customer": customer, "created": failed_at - 60,
+            "status": "open", "client_reference_id": user.to_string()
+        }),
+        price.to_string(),
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_first_payment_gets_one_email_back_to_the_same_plan() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(true);
+    let app = app(pool.clone());
+    let (_, blocked) = signup(&app, &pool, "blocked@agency.example").await;
+    let (_, paid_later) = signup(&app, &pool, "paid-later@agency.example").await;
+    let (_, elsewhere) = signup(&app, &pool, "elsewhere@agency.example").await;
+
+    failed_start(
+        &stripe,
+        "blocked",
+        blocked,
+        STUDIO_YEARLY,
+        "Subscription creation",
+    );
+    // Paid with another card afterwards: the plan is in force, no email.
+    failed_start(
+        &stripe,
+        "paid",
+        paid_later,
+        SOLO_MONTHLY,
+        "Subscription creation",
+    );
+    start_trial(
+        &app,
+        &stripe,
+        "sub_paid",
+        paid_later,
+        SOLO_MONTHLY,
+        "fp_paid",
+    )
+    .await;
+    // Another product's price on the same Stripe account, and a renewal.
+    failed_start(
+        &stripe,
+        "other",
+        elsewhere,
+        "price_other_product",
+        "Subscription creation",
+    );
+    failed_start(
+        &stripe,
+        "renewal",
+        elsewhere,
+        SOLO_MONTHLY,
+        "Subscription update",
+    );
+
+    let sink = std::env::temp_dir().join(format!("glarion-recovery-sink-{}", Uuid::new_v4()));
+    std::env::set_var("EMAIL_SINK", "1");
+    std::env::set_var("EMAIL_SINK_DIR", &sink);
+    std::env::set_var("MAIL_FROM", "Glarion <noreply@glarion.app>");
+    let state = AppState::new(pool.clone(), JWT_SECRET.to_string());
+
+    let first = api::routes::billing::recover_failed_checkouts(&state, Utc::now())
+        .await
+        .unwrap();
+    let again = api::routes::billing::recover_failed_checkouts(&state, Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(
+        (first, again),
+        (1, 0),
+        "one email, never a second within a day"
+    );
+
+    let sent: Vec<_> = std::fs::read_dir(&sink)
+        .map(|dir| {
+            dir.flatten()
+                .filter(|f| f.path().extension().is_some_and(|e| e == "txt"))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(sent.len(), 1);
+    let text = std::fs::read_to_string(sent[0].path()).unwrap();
+    assert!(text.contains("nothing was charged"), "{text}");
+    assert!(text.contains("Glarion Studio plan"), "{text}");
+    assert!(
+        text.contains("#/plan?plan=studio&interval=yearly"),
+        "{text}"
+    );
 
     std::fs::remove_dir_all(&sink).ok();
     for unset in ["EMAIL_SINK", "EMAIL_SINK_DIR", "MAIL_FROM"] {

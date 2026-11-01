@@ -83,6 +83,10 @@ pub async fn run() -> Result<()> {
     // Ready before the first customer opens billing, and checkable in Stripe
     // right after a deploy. A no-op without STRIPE_SECRET_KEY.
     tokio::spawn(routes::billing::portal_configuration());
+    // A no-op pass without STRIPE_SECRET_KEY.
+    tokio::spawn(routes::billing::recover_failed_checkouts_forever(
+        state.clone(),
+    ));
 
     // Said out loud at boot rather than left to be discovered by waiting
     // for a message that will never arrive. Logging instead of sending is

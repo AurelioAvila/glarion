@@ -36,6 +36,7 @@
 .purchase-studio .purchase-action { background:#bc294a; }
 .purchase-studio:hover .purchase-action { background:#a5203e; }
 .purchase-note { font-size:.9375rem; color:var(--offer-muted); line-height:1.65; margin:1.5rem 0 0; max-width:75ch; }
+.purchase-pay { font-size:.875rem; color:var(--offer-muted); margin:.5rem 0 0; }
 .purchase-next { display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap; margin-top:1rem; }
 body[data-page="pricing"] .wrap { width:min(100% - 3rem,76rem); }
 body[data-page="pricing"] article { max-width:none; }

@@ -888,6 +888,43 @@ pub fn trial_rejected_email(first_name: &str, plan_name: &str, link: &str) -> Me
     }
 }
 
+/// Sent once when a first payment at Stripe Checkout was declined or blocked
+/// by Stripe's fraud screening. Nothing was charged and no subscription
+/// exists, so it says that first, then offers the way back to the same plan.
+pub fn checkout_failed_email(first_name: &str, plan_name: &str, link: &str) -> Message {
+    let hello = greeting(first_name);
+    let explain = format!("Your payment for the Glarion {plan_name} plan didn't go through, so nothing was charged and no subscription was started.");
+    let instead = "This usually comes from the card issuer or an automatic security check, not from anything you did. Try another card, Apple Pay, Google Pay or Link: most payments then go through straight away.";
+    let how = format!("The button opens Pricing in Glarion with {plan_name} selected. Sign in if asked, then choose Continue to secure checkout.");
+    Message {
+        subject: "Your Glarion payment didn't go through".to_string(),
+        html: chrome(Chrome {
+            preview: "Nothing was charged. Try another card, Apple Pay, Google Pay or Link.",
+            eyebrow: "Payment not completed",
+            heading: "Your payment didn't go through",
+            body: &format!("{}{}{}", para(&hello), para(&explain), para(instead)),
+            cta: Some(("Resume checkout", link)),
+            after: &note(&how),
+            footer: "You received this email because a Glarion checkout with this address did not complete. We send it once.",
+            help: (
+                "Still not going through?",
+                "Reply to this email from the address on the account.",
+            ),
+            moment: None,
+            tone: Tone::Brand,
+        }),
+        text: format!("{hello}
+
+{explain}
+
+{instead}
+
+Resume checkout: {link}
+
+{how}"),
+    }
+}
+
 /// The link that moves an account to a new address.
 ///
 /// Sent to the new address, never to the old one: the whole question this
@@ -1814,6 +1851,20 @@ mod tests {
         assert!(message.text.contains("subscribe to Solo directly"));
         assert!(message.html.contains("one free trial per person"));
         // No refund language anywhere: nothing was taken.
+        assert!(!message.text.to_lowercase().contains("refund"));
+    }
+
+    #[test]
+    fn a_failed_checkout_says_nothing_was_charged_and_offers_other_methods() {
+        let link = "https://glarion.app/app#/plan?plan=studio&interval=yearly";
+        let message = checkout_failed_email("Ada", "Studio", link);
+        assert_eq!(message.subject, "Your Glarion payment didn't go through");
+        for body in [&message.text, &message.html] {
+            assert!(body.contains("nothing was charged"));
+            assert!(body.contains("Apple Pay, Google Pay or Link"));
+            assert!(body.contains("Resume checkout"));
+        }
+        assert!(message.text.contains(link));
         assert!(!message.text.to_lowercase().contains("refund"));
     }
 

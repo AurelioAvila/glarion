@@ -324,6 +324,10 @@ pub async fn start_checkout(
         // Charging European customers means charging VAT, and getting the
         // rate right per country is not something to hand-roll.
         ("automatic_tax[enabled]".into(), "true".into()),
+        // The full billing address, not only the country Managed Payments
+        // asks for outside the US: more for Stripe's fraud screening to match
+        // against the card, so fewer genuine buyers are blocked.
+        ("billing_address_collection".into(), "required".into()),
     ];
 
     if let Some(days) = trial {
@@ -389,6 +393,181 @@ pub async fn start_checkout(
         trial: trial.is_some(),
         trial_days: trial,
     }))
+}
+
+/// A first payment at Checkout that was declined or blocked (Stripe's
+/// network-level fraud screening cannot be switched off) gets one email
+/// offering the same plan again with another card, Apple Pay, Google Pay or
+/// Link.
+///
+/// Our webhook does not receive `payment_intent.payment_failed`, so the
+/// Events API is read instead. A failed subscription start is a PaymentIntent
+/// described "Subscription creation" with no metadata; its customer is the
+/// Checkout Session's, which carries the account (`client_reference_id`) and
+/// the price. Only failures between 30 minutes and a day old, so someone
+/// still retrying on Stripe's page is not interrupted and the same failure is
+/// never seen after its claim has lapsed. Skipped once the account has a
+/// plan in force (they paid after all), and at most one per account and plan
+/// a day, claimed before sending. A failed send is not retried: missing one
+/// beats sending two.
+pub async fn recover_failed_checkouts(state: &AppState, now: DateTime<Utc>) -> ApiResult<usize> {
+    let Some(secret) = std::env::var("STRIPE_SECRET_KEY")
+        .ok()
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(0);
+    };
+    let from = (now - chrono::Duration::hours(24)).timestamp().to_string();
+    let to = (now - chrono::Duration::minutes(30))
+        .timestamp()
+        .to_string();
+    // ponytail: one page of 100 failures a day; paginate if that ever fills.
+    let events = stripe_get(
+        &secret,
+        &stripe_url("/v1/events"),
+        &[
+            ("type", "payment_intent.payment_failed"),
+            ("created[gte]", &from),
+            ("created[lte]", &to),
+            ("limit", "100"),
+        ],
+    )
+    .await?;
+    let mut sent = 0;
+    for event in events["data"].as_array().into_iter().flatten() {
+        let intent = &event["data"]["object"];
+        // Renewals are "Subscription cycle"/"update" and have their own notice.
+        if intent["description"].as_str() != Some("Subscription creation") {
+            continue;
+        }
+        let (Some(customer), Some(failed_at)) =
+            (intent["customer"].as_str(), intent["created"].as_i64())
+        else {
+            continue;
+        };
+        // One unreadable record must not stall every other recovery.
+        let Ok(sessions) = stripe_get(
+            &secret,
+            &stripe_url("/v1/checkout/sessions"),
+            &[("customer", customer), ("limit", "10")],
+        )
+        .await
+        else {
+            continue;
+        };
+        // Newest first: the session the failed attempt was made in.
+        let Some(session) = sessions["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|session| {
+                session["created"]
+                    .as_i64()
+                    .is_some_and(|at| at <= failed_at)
+            })
+        else {
+            continue;
+        };
+        if session["status"].as_str() == Some("complete") {
+            continue;
+        }
+        let (Some(session_id), Some(user_id)) = (
+            session["id"].as_str(),
+            session["client_reference_id"]
+                .as_str()
+                .and_then(|value| Uuid::parse_str(value).ok()),
+        ) else {
+            continue;
+        };
+        let Ok(items) = stripe_get(
+            &secret,
+            &stripe_url(&format!("/v1/checkout/sessions/{session_id}/line_items")),
+            &[],
+        )
+        .await
+        else {
+            continue;
+        };
+        // Another product on the same Stripe account matches no Glarion price.
+        let Some((plan, interval)) = items["data"][0]["price"]["id"]
+            .as_str()
+            .and_then(plan_and_interval_for_price)
+        else {
+            continue;
+        };
+        let account: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
+            "select u.email, u.first_name, e.subscription_status from users u
+             left join entitlements e on e.user_id = u.id and e.product = 'glarion'
+             where u.id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(&state.pool)
+        .await?;
+        let Some((email, first_name, status)) = account else {
+            continue;
+        };
+        if status.as_deref().is_some_and(status_grants_access) {
+            continue;
+        }
+        let claimed: Option<(i64,)> = sqlx::query_as(
+            "insert into rate_limit_buckets (scope, client_key, window_started_at, attempt_count)
+             values ('checkout_recovery', $1, now(), 1)
+             on conflict (scope, client_key) do update set window_started_at = now()
+               where rate_limit_buckets.window_started_at <= now() - interval '24 hours'
+             returning attempt_count",
+        )
+        .bind(format!("{user_id}:{}", plan.as_db_str()))
+        .fetch_optional(&state.pool)
+        .await?;
+        if claimed.is_none() {
+            continue;
+        }
+        let interval = match interval {
+            Interval::Monthly => "monthly",
+            Interval::Yearly => "yearly",
+        };
+        let message = orchestrator::mailer::checkout_failed_email(
+            first_name.as_deref().unwrap_or(""),
+            plan.display_name(),
+            &state.mailer.app_link(&format!(
+                "/plan?plan={}&interval={interval}",
+                plan.as_db_str()
+            )),
+        );
+        match state.mailer.send(&email, &message).await {
+            Ok(()) => sent += 1,
+            Err(error) => {
+                tracing::warn!(%error, %user_id, "could not send the checkout recovery email; not retried")
+            }
+        }
+    }
+    Ok(sent)
+}
+
+/// Every quarter of an hour, for as long as the API runs.
+pub async fn recover_failed_checkouts_forever(state: AppState) {
+    loop {
+        if let Err(error) = recover_failed_checkouts(&state, Utc::now()).await {
+            tracing::warn!(
+                ?error,
+                "checkout recovery pass failed; the next pass retries"
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+    }
+}
+
+fn plan_and_interval_for_price(price_id: &str) -> Option<(Plan, Interval)> {
+    PAID_PLANS.into_iter().find_map(|plan| {
+        [Interval::Monthly, Interval::Yearly]
+            .into_iter()
+            .find(|&interval| {
+                price_env_var(plan, interval)
+                    .and_then(|var| std::env::var(var).ok())
+                    .is_some_and(|configured| !configured.is_empty() && configured == price_id)
+            })
+            .map(|interval| (plan, interval))
+    })
 }
 
 #[derive(Serialize, Clone)]

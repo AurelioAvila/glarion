@@ -2551,7 +2551,13 @@ async function renderPlan(): Promise<void> {
   on(yearlyTab, "click", () => selectInterval("yearly"));
 
   paintList();
-  container.append(promoSlot, el("div", { style: "margin-top:1.75rem" }, [toggleRow]), list);
+  container.append(
+    promoSlot,
+    el("div", { style: "margin-top:1.75rem" }, [toggleRow]),
+    list,
+    // What Stripe really offers at checkout today (Managed Payments): nothing more.
+    el("p", { class: "muted", style: "margin-top:1rem", text: "Pay with card, Apple Pay, Google Pay or Link." }),
+  );
 
   container.append(
     el("p", { class: "muted", style: "margin-top:1.5rem" }, trialOn
