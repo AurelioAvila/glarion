@@ -215,3 +215,6 @@
 .purchase-cost s { font-size:1.25rem; }
 .plan-row-was { font-size:.85rem; margin-right:.35rem; }
 .plan-row-off { margin-left:.4rem; }
+
+/* The real percentage as a bold ember badge (owner, 1 November 2026): white on #B4400E is ~8.5:1. */
+.purchase-cost .promo-off, .plan-row-off { padding:.3rem .7rem; border:0; border-radius:999px; color:#fff; background:#b4400e; font-size:1rem; font-weight:800; letter-spacing:.01em; box-shadow:0 8px 16px -10px rgba(180,64,14,.85); }
