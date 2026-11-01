@@ -1,6 +1,6 @@
 import { recordPage } from "./acquisition.js";
 import { annualOffer } from "./annual-offer.js";
-import { createPromoBanner, euro, promoPercent, promoThen, watchPromo, type PromoBanner, type PromoOffer, type PromoView } from "./promo.js";
+import { createPromoBanner, euro, promoEndLabel, promoPercent, promoThen, watchPromo, type PromoBanner, type PromoOffer, type PromoView } from "./promo.js";
 let growthSignupSeen = false;
 function countSignupView(): void {
   if (!growthSignupSeen && window.location.hash.split("?")[0] === "#/signup") {
@@ -2661,6 +2661,7 @@ function planRow(
         el("span", { class: "plan-row-amount", text: euro(promo.price) }),
         el("span", { class: "plan-row-unit", text: interval === "yearly" ? "/year" : "/month" }),
         el("span", { class: "plan-row-off", text: `\u2212${promoPercent(promo)}%` }),
+        ...(promoView?.promo ? [el("span", { class: "plan-row-tag", text: `Halloween offer · ends ${promoEndLabel(promoView.promo)}` })] : []),
       );
       state.append(el("span", { text: promoThen(promo) }));
     } else if (interval === "yearly") {

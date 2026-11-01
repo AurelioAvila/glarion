@@ -1,5 +1,5 @@
 import { annualOffer } from './dist/annual-offer.js';
-import { euro, mountPromo, promoPercent, promoThen } from './dist/promo.js';
+import { euro, mountPromo, promoEndLabel, promoPercent, promoThen } from './dist/promo.js';
 import { firstChargeDate, loadPrices, priceFor, trialLine } from './dist/trial.js';
 
 // Without JavaScript every offer still links to the monthly selection and
@@ -25,15 +25,18 @@ document.querySelectorAll('.purchase-options').forEach((options) => {
       const offer = annualOffer(Number(card.dataset.monthly), Number(card.dataset.yearly));
       const promo = view?.offer(card.dataset.plan, yearly ? 'yearly' : 'monthly') ?? null;
       const cost = card.querySelector('.purchase-cost');
-      cost.querySelectorAll('[data-promo]').forEach((node) => node.remove());
+      card.querySelectorAll('[data-promo]').forEach((node) => node.remove());
       card.querySelector('[data-price]').textContent = promo ? euro(promo.price) : `€${yearly ? card.dataset.yearly : card.dataset.monthly}`;
       card.querySelector('[data-unit]').textContent = yearly ? '/ year' : '/ month';
       if (promo) {
         const was = Object.assign(document.createElement('s'), { textContent: euro(promo.reference) });
         const off = Object.assign(document.createElement('span'), { className: 'promo-off', textContent: `−${promoPercent(promo)}%` });
-        was.dataset.promo = off.dataset.promo = '';
+        // The offer's name and deadline under the price it changes, not only in the banner above.
+        const tag = Object.assign(document.createElement('p'), { className: 'purchase-promo-tag', textContent: `Halloween offer · ends ${promoEndLabel(view.promo)}` });
+        was.dataset.promo = off.dataset.promo = tag.dataset.promo = '';
         cost.prepend(was);
         cost.append(off);
+        cost.after(tag);
       }
       // One struck price at a time: during the offer the twelve-payments comparison steps aside.
       card.querySelector('[data-comparison]').hidden = !yearly || Boolean(promo);

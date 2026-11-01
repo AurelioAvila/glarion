@@ -49,3 +49,19 @@ body[data-page="pricing"] .nav { align-items:center; }
 @media(max-width:42rem) { .purchase-grid { grid-template-columns:1fr; } .purchase-audience { min-height:0; } .purchase-saving { min-height:0; } body[data-page="pricing"] .wrap { width:calc(100% - 2rem); } body[data-page="pricing"] .top .wrap { height:auto; min-height:80px; padding-block:1rem; flex-wrap:wrap; gap:.5rem 1rem; } body[data-page="pricing"] .nav { width:100%; margin:0; gap:.2rem 1rem; } body[data-page="pricing"] .nav a { font-size:.875rem; } }
 @media(prefers-reduced-motion:reduce) { .purchase-card { transition:none; } }
 .purchase-card .purchase-trial-line { color:var(--offer-muted); font-size:.875rem; line-height:1.55; margin:-.3rem 0 1.1rem; }
+/* Prices and the real discount as the hero (owner, 1 November 2026). During an offer the price
+   block reads in two rows: the struck lawful reference with the percentage, then today's price;
+   the offer's name and deadline follow under it. The recommended plan is lifted, not just tinted. */
+.purchase-cost strong { font-size:2.75rem; font-weight:800; }
+.purchase-cost span { color:var(--offer-ink); }
+.purchase-cost:has(> s) { align-items:baseline; gap:.35rem .55rem; padding-top:1.4rem; }
+.purchase-cost:has(> s) > s { order:-2; }
+.purchase-cost:has(> s) > .promo-off { order:-1; align-self:center; }
+.purchase-cost:has(> s)::before { content:""; order:0; flex-basis:100%; height:0; }
+.purchase-cost:has(> s) > strong, .purchase-cost:has(> s) > span:not(.promo-off) { order:1; }
+.purchase-promo-tag { margin:.35rem 0 0 !important; color:#a3360b; font-size:.875rem; font-weight:750; line-height:1.45; }
+.purchase-saving { padding-bottom:.85rem; }
+.purchase-card .purchase-trial { margin:.1rem 0 .55rem; }
+.purchase-card .purchase-trial-line { margin:0 0 1.1rem; }
+.purchase-studio { border-width:2px; box-shadow:0 26px 50px -30px rgba(188,41,74,.6), 0 2px 6px rgba(188,41,74,.08); }
+@media(min-width:70.01rem) { .purchase-studio { transform:translateY(-.6rem); } .purchase-grid { padding-top:.6rem; } }
