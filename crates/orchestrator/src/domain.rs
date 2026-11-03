@@ -36,7 +36,9 @@ impl std::fmt::Display for DomainError {
                 "target must be a domain name, not an IP address — ownership is verified via DNS"
             }
             DomainError::NotPublic => "target must be a public internet domain",
-            DomainError::Malformed => "domain is not a valid hostname",
+            DomainError::Malformed => {
+                "Enter a domain like example.com, using only letters, numbers, hyphens and dots."
+            }
         };
         write!(f, "{msg}")
     }

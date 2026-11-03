@@ -453,7 +453,7 @@ fn dns_detail(domain: &str, records: &[String]) -> String {
 
     if records.is_empty() {
         return format!(
-            "Nothing is published at {name} yet. Add the TXT record at your DNS provider and check again — most publish within a few minutes, a few take up to an hour."
+            "Nothing is published at {name} yet. Add the TXT record at your DNS provider and check again — most publish within a few minutes, a few take up to an hour. Many DNS panels, GoDaddy and Namecheap among them, add your domain to the name by themselves: there, type the name without your domain at the end (for example.com, just _glarion-verify), or the record ends up at _glarion-verify.example.com.example.com."
         );
     }
 

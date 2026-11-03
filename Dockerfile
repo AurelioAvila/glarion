@@ -1,7 +1,7 @@
 # Two binaries share this image: `api` serves requests, `runner` executes
-# queued scan jobs. They are deployed as separate Fly processes (see
-# fly.toml) from the same build so there is only one artifact to keep in
-# sync between them.
+# queued scan jobs. They run as separate processes from the same build so
+# there is only one artifact to keep in sync between them. Production runs
+# the same build steps outside Docker (see README).
 
 FROM rust:1-slim-bookworm AS build
 
@@ -102,6 +102,5 @@ RUN chown -R glarion:glarion /app
 USER glarion
 ENV HOME=/home/glarion
 
-# Overridden by fly.toml's per-process start_command; kept as a sane
-# default for `docker run` outside Fly.
+# Run the scan runner with `docker run ... /usr/local/bin/runner`.
 CMD ["/usr/local/bin/api"]
