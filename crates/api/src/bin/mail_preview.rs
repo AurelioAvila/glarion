@@ -64,7 +64,7 @@ fn samples(site: &str) -> Vec<(&'static str, Message)> {
                 true,
                 &format!("{app}/targets"),
                 Some(Utc::now() + Duration::days(14)),
-                false,
+                true,
             ),
         ),
         (
@@ -78,6 +78,7 @@ fn samples(site: &str) -> Vec<(&'static str, Message)> {
                 TrialTerms {
                     sites: 3,
                     scans_per_site_per_day: 2,
+                    consented: true,
                 },
                 &format!("{app}/targets"),
             ),

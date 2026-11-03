@@ -623,7 +623,7 @@ pub fn ownership_lapsing_email(
 /// first payment is taken instead.
 ///
 /// `consented` is set when the checkout recorded the tick box before Stripe;
-/// the paid version then repeats what the buyer agreed to.
+/// both versions then repeat what the buyer agreed to.
 pub fn subscription_email(
     first_name: &str,
     plan_name: &str,
@@ -645,6 +645,11 @@ pub fn subscription_email(
     } else {
         "Manual"
     };
+    let consent = if consented {
+        format!(" {CONSENT_LINE}")
+    } else {
+        String::new()
+    };
     if let Some(ends) = trial_ends {
         let when = ends.format("%-d %B %Y").to_string();
         let heading = format!("Your {plan_name} trial has started");
@@ -663,24 +668,19 @@ pub fn subscription_email(
                     rows_card(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)], Some(("First payment", &when))),
                 ),
                 cta: Some(("Open Glarion", link)),
-                after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.")),
+                after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.{consent}")),
                 footer: "You received this email because you started a Glarion trial with this address.",
                 help: ("Billing question?", "Reply to this email from the address on the account."),
                 moment: Some((format!("{plan_name} trial"), format!("Up to {max_targets} sites"), format!("Everything on the plan until {when}. {cadence}"))),
                 tone: Tone::Brand,
             }),
             text: format!(
-                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing."
+                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.{consent}"
             ),
         };
     }
     let heading = format!("Your {plan_name} plan is active");
     let preview = "Nothing else needs setting up. Here is what the plan covers.".to_string();
-    let consent = if consented {
-        format!(" {CONSENT_LINE}")
-    } else {
-        String::new()
-    };
     Message {
         subject: "Your Glarion plan is active".to_string(),
         html: chrome(Chrome {
@@ -707,8 +707,9 @@ pub fn subscription_email(
 }
 
 /// What the buyer agreed to at the tick box before Stripe, repeated in the
-/// mail that confirms the first payment.
-pub const CONSENT_LINE: &str = "Before paying, you agreed to the Terms and asked for immediate access to this digital content, accepting that your 14-day right of withdrawal ends once access starts.";
+/// mails that confirm the subscription (the trial welcome and the first
+/// payment), so the buyer has it on a durable medium.
+pub const CONSENT_LINE: &str = "At checkout, you agreed to the Terms and asked for immediate access to this digital content, ending your 14-day right of withdrawal.";
 
 /// "€47.58", or "€39" for whole euros: an amount Stripe gave in minor units,
 /// written the way the site writes prices.
@@ -730,6 +731,9 @@ pub fn money(amount: i64, currency: &str) -> String {
 pub struct TrialTerms {
     pub sites: i32,
     pub scans_per_site_per_day: i64,
+    /// The checkout recorded the tick box before Stripe, which the mail
+    /// then repeats.
+    pub consented: bool,
 }
 
 /// "17 October 2026 at 14:05 UTC": the exact moment, because the charge
@@ -782,7 +786,12 @@ pub fn trial_started_email(
         ),
         None => format!("Then {plan_name} renews every {every} until you cancel."),
     };
-    let later = format!("Branded reports, the plan's full site allowance and up to {} full scans per site a day start with the first payment. To cancel, open Pricing in Glarion and choose Manage billing: cancel before the trial ends and nothing is charged.", crate::policy::MAX_SCANS_PER_TARGET_PER_DAY);
+    let consent = if terms.consented {
+        format!(" {CONSENT_LINE}")
+    } else {
+        String::new()
+    };
+    let later = format!("Branded reports, the plan's full site allowance and up to {} full scans per site a day start with the first payment. To cancel, open Pricing in Glarion and choose Manage billing: cancel before the trial ends and nothing is charged.{consent}", crate::policy::MAX_SCANS_PER_TARGET_PER_DAY);
     Message {
         subject: "Your 3-day Glarion trial has started".to_string(),
         html: chrome(Chrome {
@@ -1412,27 +1421,36 @@ mod tests {
     }
 
     #[test]
-    fn the_paid_welcome_repeats_the_consent_only_when_it_was_recorded() {
+    fn the_welcomes_repeat_the_consent_only_when_it_was_recorded() {
         let link = "https://glarion.app/app";
-        let with = subscription_email("Ada", "Studio", 10, true, link, None, true);
-        assert!(with.text.contains(CONSENT_LINE));
-        assert!(with
-            .html
-            .contains("14-day right of withdrawal ends once access starts"));
-        let without = subscription_email("Ada", "Studio", 10, true, link, None, false);
-        assert!(!without.text.contains("right of withdrawal"));
-        assert!(!without.html.contains("right of withdrawal"));
-        // A trial has charged nothing, so it is not where the payment is confirmed.
-        let trial = subscription_email(
-            "Ada",
-            "Studio",
-            10,
-            true,
-            link,
-            Some(chrono::Utc::now()),
-            true,
-        );
-        assert!(!trial.text.contains("right of withdrawal"));
+        let trial = Some(chrono::Utc::now());
+        for consented in [true, false] {
+            let messages = [
+                subscription_email("Ada", "Studio", 10, true, link, None, consented),
+                subscription_email("Ada", "Studio", 10, true, link, trial, consented),
+                trial_started_email(
+                    "Ada",
+                    "Studio",
+                    trial_end(),
+                    None,
+                    "month",
+                    TrialTerms {
+                        consented,
+                        ..terms()
+                    },
+                    link,
+                ),
+            ];
+            for message in messages {
+                assert_eq!(message.text.contains(CONSENT_LINE), consented);
+                assert_eq!(
+                    message
+                        .html
+                        .contains("ending your 14-day right of withdrawal"),
+                    consented
+                );
+            }
+        }
     }
 
     #[test]
@@ -1948,6 +1966,7 @@ mod tests {
         TrialTerms {
             sites: 3,
             scans_per_site_per_day: 2,
+            consented: false,
         }
     }
 

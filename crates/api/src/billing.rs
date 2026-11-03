@@ -256,10 +256,11 @@ pub fn trial_enabled() -> bool {
 }
 
 /// The version of the box before Stripe that a consent row records.
-/// 2026-11-04 is "I agree to the Terms." alone (owner decision, 4 November
-/// 2026), for the Terms last updated 3 November 2026. The plan page reads it
-/// from `GET /api/billing` and sends it back, so a page opened before a
-/// change cannot accept the new text.
+/// 2026-11-04 is "I agree to the Terms and want access now, ending my 14-day
+/// right of withdrawal." (owner decision, 4 November 2026), for the Terms
+/// last updated 3 November 2026. The plan page reads it from
+/// `GET /api/billing` and sends it back, so a page opened before a change
+/// cannot accept the new text.
 pub const TERMS_VERSION: &str = "2026-11-04";
 
 /// Subscription and session metadata naming the consent row behind a
