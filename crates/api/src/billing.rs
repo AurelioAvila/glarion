@@ -255,6 +255,64 @@ pub fn trial_enabled() -> bool {
         .unwrap_or(false)
 }
 
+/// The version of the box before Stripe that a consent row records.
+/// 2026-11-04 is "I agree to the Terms and want access now, ending my 14-day
+/// right of withdrawal." (owner decision, 4 November 2026), for the Terms
+/// last updated 3 November 2026. The plan page reads it from
+/// `GET /api/billing` and sends it back, so a page opened before a change
+/// cannot accept the new text.
+pub const TERMS_VERSION: &str = "2026-11-04";
+
+/// Subscription and session metadata naming the consent row behind a
+/// checkout, and the subscription mark of an open dispute (its charge).
+pub const CONSENT_KEY: &str = "consent_id";
+pub const DISPUTE_MARK: &str = "glarion_dispute";
+
+/// The consent switch (CHECKOUT_CONSENT_REQUIRED, owner decision 3 November
+/// 2026). Off: a ticked box is recorded, a checkout without one still opens.
+/// On: no Checkout Session without it. Only the owner turns it on, after the
+/// privacy notice that describes the record is live.
+pub fn consent_required() -> bool {
+    std::env::var("CHECKOUT_CONSENT_REQUIRED")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
+        .unwrap_or(false)
+}
+
+/// "Firefox on Windows": the browser and system families only, never the
+/// full string, which is close to a fingerprint.
+pub fn user_agent_family(user_agent: &str) -> String {
+    let has = |needle: &str| user_agent.contains(needle);
+    let browser = if has("Edg/") || has("EdgA/") || has("EdgiOS/") {
+        "Edge"
+    } else if has("OPR/") || has("Opera") {
+        "Opera"
+    } else if has("Firefox/") || has("FxiOS/") {
+        "Firefox"
+    } else if has("Chrome/") || has("CriOS/") {
+        "Chrome"
+    } else if has("Safari/") {
+        "Safari"
+    } else {
+        return "Other".into();
+    };
+    let system = if has("Windows") {
+        "Windows"
+    } else if has("iPhone") || has("iPad") {
+        "iOS"
+    } else if has("Android") {
+        "Android"
+    } else if has("Mac OS X") {
+        "macOS"
+    } else if has("CrOS") {
+        "ChromeOS"
+    } else if has("Linux") {
+        "Linux"
+    } else {
+        return browser.into();
+    };
+    format!("{browser} on {system}")
+}
+
 /// One mailbox, however it is written: lower case, no spaces, no
 /// `+label`, and for Gmail no dots and one domain.
 pub fn normalize_email(email: &str) -> String {
@@ -733,5 +791,22 @@ mod tests {
         assert_eq!(Interval::from_str_or_monthly("yearly"), Interval::Yearly);
         assert_eq!(Interval::from_str_or_monthly("ANNUAL"), Interval::Yearly);
         assert_eq!(Interval::from_str_or_monthly("nonsense"), Interval::Monthly);
+    }
+
+    #[test]
+    fn the_user_agent_is_kept_as_two_families_only() {
+        let family = user_agent_family;
+        assert_eq!(
+            family(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0"
+            ),
+            "Firefox on Windows"
+        );
+        assert_eq!(family("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"), "Edge on Windows");
+        assert_eq!(family("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"), "Safari on iOS");
+        assert_eq!(family("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"), "Chrome on Android");
+        assert_eq!(family("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"), "Safari on macOS");
+        assert_eq!(family("curl/8.9.1"), "Other");
+        assert_eq!(family(""), "Other");
     }
 }

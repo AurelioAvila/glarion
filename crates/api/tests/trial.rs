@@ -46,6 +46,14 @@ struct Stripe {
     sessions: Vec<(Value, String)>,
     /// Every subscription read back by id, in order.
     reads: Vec<String>,
+    /// Every subscription update, in order.
+    updates: Vec<(String, HashMap<String, String>)>,
+    /// Invoices by id; `payment_intent` says which payment paid them.
+    invoices: HashMap<String, Value>,
+    /// As `GET /v1/disputes?charge=` lists them.
+    disputes: Vec<Value>,
+    /// A restricted key without read access to disputes.
+    disputes_forbidden: bool,
 }
 
 type Shared = Arc<Mutex<Stripe>>;
@@ -54,12 +62,10 @@ async fn stub_checkout(
     State(stripe): State<Shared>,
     Form(form): Form<Vec<(String, String)>>,
 ) -> Json<Value> {
-    stripe
-        .lock()
-        .unwrap()
-        .checkouts
-        .push(form.into_iter().collect());
-    Json(json!({ "url": "https://checkout.stripe.test/session" }))
+    let mut stripe = stripe.lock().unwrap();
+    stripe.checkouts.push(form.into_iter().collect());
+    let id = format!("cs_test_{}", stripe.checkouts.len());
+    Json(json!({ "id": id, "url": "https://checkout.stripe.test/session" }))
 }
 
 async fn stub_events(State(stripe): State<Shared>) -> Json<Value> {
@@ -168,6 +174,86 @@ async fn stub_price(
     }
 }
 
+/// `POST /v1/subscriptions/:id`, for the fields the dispute hold sets.
+async fn stub_update(
+    State(stripe): State<Shared>,
+    Path(id): Path<String>,
+    Form(form): Form<Vec<(String, String)>>,
+) -> (StatusCode, Json<Value>) {
+    let mut stripe = stripe.lock().unwrap();
+    stripe
+        .updates
+        .push((id.clone(), form.iter().cloned().collect()));
+    let Some(subscription) = stripe.subscriptions.get_mut(&id) else {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": {} })));
+    };
+    for (key, value) in form {
+        if key == "pause_collection[behavior]" {
+            subscription["pause_collection"] = json!({ "behavior": value });
+        } else if key == "pause_collection" && value.is_empty() {
+            subscription["pause_collection"] = Value::Null;
+        } else if let Some(name) = key
+            .strip_prefix("metadata[")
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            let metadata = subscription["metadata"].as_object_mut().unwrap();
+            if value.is_empty() {
+                metadata.remove(name);
+            } else {
+                metadata.insert(name.to_string(), json!(value));
+            }
+        }
+    }
+    (StatusCode::OK, Json(subscription.clone()))
+}
+
+async fn stub_invoice_payments(
+    State(stripe): State<Shared>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let intent = query.get("payment[payment_intent]").map(String::as_str);
+    let found: Vec<Value> = stripe
+        .lock()
+        .unwrap()
+        .invoices
+        .values()
+        .filter(|invoice| invoice["payment_intent"].as_str() == intent)
+        .map(|invoice| json!({ "invoice": invoice["id"] }))
+        .collect();
+    Json(json!({ "data": found }))
+}
+
+async fn stub_invoice(
+    State(stripe): State<Shared>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<Value>) {
+    match stripe.lock().unwrap().invoices.get(&id) {
+        Some(found) => (StatusCode::OK, Json(found.clone())),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": {} }))),
+    }
+}
+
+async fn stub_disputes(
+    State(stripe): State<Shared>,
+    Query(query): Query<HashMap<String, String>>,
+) -> (StatusCode, Json<Value>) {
+    let stripe = stripe.lock().unwrap();
+    if stripe.disputes_forbidden {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": { "type": "permission_error" } })),
+        );
+    }
+    let charge = query.get("charge").map(String::as_str);
+    let found: Vec<Value> = stripe
+        .disputes
+        .iter()
+        .filter(|dispute| dispute["charge"].as_str() == charge)
+        .cloned()
+        .collect();
+    (StatusCode::OK, Json(json!({ "data": found })))
+}
+
 async fn start_stripe() -> Shared {
     let shared: Shared = Arc::default();
     let router = Router::new()
@@ -180,9 +266,12 @@ async fn start_stripe() -> Shared {
         .route("/v1/subscriptions", get(stub_subscription_list))
         .route(
             "/v1/subscriptions/:id",
-            get(stub_subscription).delete(stub_cancel),
+            get(stub_subscription).delete(stub_cancel).post(stub_update),
         )
-        .route("/v1/invoices/create_preview", post(stub_preview))
+        // `create_preview` is the one invoice path posted to.
+        .route("/v1/invoices/:id", get(stub_invoice).post(stub_preview))
+        .route("/v1/invoice_payments", get(stub_invoice_payments))
+        .route("/v1/disputes", get(stub_disputes))
         .route("/v1/prices/:id", get(stub_price))
         .with_state(shared.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -204,6 +293,7 @@ async fn start_stripe() -> Shared {
         "SMTP2GO_API_KEY",
         "MAILJET_API_KEY",
         "EMAIL_SINK",
+        "CHECKOUT_CONSENT_REQUIRED",
     ] {
         std::env::remove_var(unset);
     }
@@ -271,7 +361,7 @@ async fn test_pool() -> Option<PgPool> {
         .run(&pool)
         .await
         .expect("migrations failed");
-    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements, rate_limit_buckets, stripe_events, trial_claims cascade")
+    sqlx::query("truncate users, targets, target_verifications, scan_authorizations, scan_jobs, entitlements, rate_limit_buckets, stripe_events, trial_claims, checkout_consents cascade")
         .execute(&pool)
         .await
         .expect("truncate failed");
@@ -1372,4 +1462,334 @@ async fn a_payment_still_being_confirmed_is_never_paid_twice() {
     for unset in ["EMAIL_SINK", "EMAIL_SINK_DIR", "MAIL_FROM"] {
         std::env::remove_var(unset);
     }
+}
+
+// --- the tick box before Stripe and disputes (3 November 2026) --------------
+
+async fn checkout_from_firefox(app: &Router, token: &str, body: Value) -> (StatusCode, Value) {
+    let mut request = request("POST", "/api/billing/checkout", Some(token), Some(body));
+    request.headers_mut().insert(
+        "user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0"
+            .parse()
+            .unwrap(),
+    );
+    send(app, request).await
+}
+
+async fn consents(pool: &PgPool) -> i64 {
+    sqlx::query_scalar("select count(*) from checkout_consents")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn the_tick_box_is_recorded_and_only_required_with_the_switch_on() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(true);
+    let app = app(pool.clone());
+    let (token, user) = signup(&app, &pool, "consent@agency.example").await;
+    let terms = billing(&app, &token).await["terms_version"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(terms, "2026-11-04");
+
+    // Off: a page without the box still reaches Stripe, and nothing is recorded.
+    let (status, body) = checkout(&app, &token, json!({ "plan": "studio" })).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let form = stripe.lock().unwrap().checkouts.last().cloned().unwrap();
+    assert!(!form.contains_key("metadata[consent_id]"));
+    assert_eq!(consents(&pool).await, 0);
+
+    // Off: a ticked box is recorded first, then named on the session and on
+    // the subscription it creates.
+    let (status, body) = checkout_from_firefox(
+        &app,
+        &token,
+        json!({ "plan": "studio", "interval": "yearly",
+                "consent": { "accepted": true, "terms_version": terms } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let form = stripe.lock().unwrap().checkouts.last().cloned().unwrap();
+    let id = form["metadata[consent_id]"].clone();
+    assert_eq!(form["subscription_data[metadata][consent_id]"], id);
+    assert_eq!(form["metadata[terms_version]"], terms);
+    assert_eq!(form["subscription_data[metadata][terms_version]"], terms);
+    let row: (Uuid, String, String, String, String, String) = sqlx::query_as(
+        "select user_id, plan, terms_version, ip, user_agent_family, checkout_session_id
+           from checkout_consents where id = $1::uuid",
+    )
+    .bind(id.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        row,
+        (
+            user,
+            "studio_yearly".to_string(),
+            terms.clone(),
+            "203.0.113.20".to_string(),
+            "Firefox on Windows".to_string(),
+            "cs_test_2".to_string(),
+        )
+    );
+
+    // On: no box, an unticked one or older Terms never reach Stripe.
+    std::env::set_var("CHECKOUT_CONSENT_REQUIRED", "true");
+    let sent = stripe.lock().unwrap().checkouts.len();
+    let (status, _) = checkout(&app, &token, json!({ "plan": "studio" })).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = checkout(
+        &app,
+        &token,
+        json!({ "plan": "studio", "consent": { "accepted": false, "terms_version": terms } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, body) = checkout(
+        &app,
+        &token,
+        json!({ "plan": "studio", "consent": { "accepted": true, "terms_version": "2026-01-01" } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["message"].as_str().unwrap().contains("Reload"),
+        "{body}"
+    );
+    assert_eq!(stripe.lock().unwrap().checkouts.len(), sent);
+    assert_eq!(consents(&pool).await, 1);
+
+    // On, with the current Terms ticked: through, and recorded.
+    let (status, body) = checkout(
+        &app,
+        &token,
+        json!({ "plan": "studio", "consent": { "accepted": true, "terms_version": terms } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(consents(&pool).await, 2);
+    std::env::remove_var("CHECKOUT_CONSENT_REQUIRED");
+}
+
+fn dispute(id: &str, charge: &str, intent: &str, status: &str) -> Value {
+    json!({ "id": id, "object": "dispute", "charge": charge, "payment_intent": intent, "status": status })
+}
+
+/// A paying Studio account, its subscription and the invoice `intent` paid.
+async fn paying_account(
+    app: &Router,
+    pool: &PgPool,
+    stripe: &Shared,
+    name: &str,
+) -> (String, String) {
+    let (token, user) = signup(app, pool, &format!("{name}@agency.example")).await;
+    let id = format!("sub_{name}");
+    set_subscription(
+        stripe,
+        subscription(
+            &id,
+            &format!("cus_{name}"),
+            user,
+            "active",
+            STUDIO_MONTHLY,
+            false,
+            &format!("fp_{name}"),
+        ),
+    );
+    stripe.lock().unwrap().invoices.insert(
+        format!("in_{name}"),
+        json!({ "id": format!("in_{name}"), "customer": format!("cus_{name}"),
+                "subscription": id, "payment_intent": format!("pi_{name}") }),
+    );
+    assert_eq!(
+        deliver(app, "customer.subscription.created", json!({ "id": id })).await,
+        StatusCode::OK
+    );
+    assert_eq!(billing(app, &token).await["plan"], "studio");
+    (token, id)
+}
+
+async fn cadence(pool: &PgPool, site: &str) -> String {
+    sqlx::query_scalar("select scan_cadence from targets where id = $1")
+        .bind(Uuid::parse_str(site).unwrap())
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+fn subscription_now(stripe: &Shared, id: &str) -> Value {
+    stripe.lock().unwrap().subscriptions[id].clone()
+}
+
+#[tokio::test]
+async fn a_disputed_payment_holds_the_plan_until_it_stands() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(false);
+    let app = app(pool.clone());
+    let (token, sub) = paying_account(&app, &pool, &stripe, "held").await;
+    let (_, site) = add_site(&app, &token, "held.example").await;
+    let site = site["id"].as_str().unwrap().to_string();
+    verify(&pool, &site).await;
+    let (status, body) = send(
+        &app,
+        request(
+            "PUT",
+            &format!("/api/targets/{site}/cadence"),
+            Some(&token),
+            Some(json!({ "cadence": "weekly" })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Not listed by Stripe yet: refused, so Stripe delivers it again.
+    let opened = dispute("dp_held", "ch_held", "pi_held", "needs_response");
+    assert_ne!(
+        deliver(&app, "charge.dispute.created", opened.clone()).await,
+        StatusCode::OK
+    );
+    assert_eq!(billing(&app, &token).await["plan"], "studio");
+
+    // Listed: the plan is held and collection paused; sites and schedules stay.
+    stripe.lock().unwrap().disputes.push(opened.clone());
+    assert_eq!(
+        deliver(&app, "charge.dispute.created", opened.clone()).await,
+        StatusCode::OK
+    );
+    let account = billing(&app, &token).await;
+    assert_eq!(account["plan"], "free");
+    assert_eq!(account["state"], "blocked");
+    assert_eq!(account["blocked_reason"], "disputed");
+    let held = subscription_now(&stripe, &sub);
+    assert_eq!(held["pause_collection"]["behavior"], "void");
+    assert_eq!(held["metadata"]["glarion_dispute"], "ch_held");
+    assert_eq!(cadence(&pool, &site).await, "weekly");
+
+    // Every other event keeps it held while the mark is on, and the same
+    // dispute delivered again asks Stripe for nothing more.
+    assert_eq!(
+        deliver(&app, "customer.subscription.updated", json!({ "id": sub })).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        deliver(&app, "invoice.paid", json!({ "subscription": sub })).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        deliver(&app, "charge.dispute.created", opened.clone()).await,
+        StatusCode::OK
+    );
+    assert_eq!(stripe.lock().unwrap().updates.len(), 1);
+    assert_eq!(billing(&app, &token).await["blocked_reason"], "disputed");
+
+    // Won: everything comes back.
+    stripe.lock().unwrap().disputes[0]["status"] = json!("won");
+    assert_eq!(
+        deliver(
+            &app,
+            "charge.dispute.closed",
+            dispute("dp_held", "ch_held", "pi_held", "won")
+        )
+        .await,
+        StatusCode::OK
+    );
+    let account = billing(&app, &token).await;
+    assert_eq!(account["plan"], "studio");
+    assert_eq!(account["state"], "active");
+    let back = subscription_now(&stripe, &sub);
+    assert!(back["pause_collection"].is_null());
+    assert!(back["metadata"].get("glarion_dispute").is_none());
+    assert_eq!(cadence(&pool, &site).await, "weekly");
+}
+
+#[tokio::test]
+async fn a_lost_dispute_ends_the_subscription_whatever_order_events_arrive_in() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(false);
+    let app = app(pool.clone());
+
+    // Closed as won before the created event: nothing to hold, either way round.
+    let (token, _) = paying_account(&app, &pool, &stripe, "early").await;
+    stripe
+        .lock()
+        .unwrap()
+        .disputes
+        .push(dispute("dp_early", "ch_early", "pi_early", "won"));
+    for (event, status) in [
+        ("charge.dispute.closed", "won"),
+        ("charge.dispute.created", "needs_response"),
+    ] {
+        assert_eq!(
+            deliver(
+                &app,
+                event,
+                dispute("dp_early", "ch_early", "pi_early", status)
+            )
+            .await,
+            StatusCode::OK
+        );
+    }
+    assert_eq!(billing(&app, &token).await["plan"], "studio");
+    assert!(stripe.lock().unwrap().updates.is_empty());
+
+    // Lost: ended at once, and a late created event does not end it twice.
+    let (token, sub) = paying_account(&app, &pool, &stripe, "lost").await;
+    stripe
+        .lock()
+        .unwrap()
+        .disputes
+        .push(dispute("dp_lost", "ch_lost", "pi_lost", "lost"));
+    for (event, status) in [
+        ("charge.dispute.closed", "lost"),
+        ("charge.dispute.created", "needs_response"),
+    ] {
+        assert_eq!(
+            deliver(
+                &app,
+                event,
+                dispute("dp_lost", "ch_lost", "pi_lost", status)
+            )
+            .await,
+            StatusCode::OK
+        );
+    }
+    assert_eq!(
+        stripe.lock().unwrap().cancelled,
+        [(sub.clone(), "dispute_lost".to_string())]
+    );
+    let account = billing(&app, &token).await;
+    assert_eq!(account["plan"], "free");
+    assert_eq!(account["blocked_reason"], "canceled");
+
+    // A key that cannot read disputes settles from the event's own copy.
+    stripe.lock().unwrap().disputes_forbidden = true;
+    let (token, _) = paying_account(&app, &pool, &stripe, "restricted").await;
+    assert_eq!(
+        deliver(
+            &app,
+            "charge.dispute.created",
+            dispute(
+                "dp_restricted",
+                "ch_restricted",
+                "pi_restricted",
+                "needs_response"
+            )
+        )
+        .await,
+        StatusCode::OK
+    );
+    assert_eq!(billing(&app, &token).await["blocked_reason"], "disputed");
 }

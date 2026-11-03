@@ -5,7 +5,9 @@
 //! and the whole of PCI compliance stays somebody else's problem. What we
 //! keep is a customer id and what they are entitled to.
 
-use axum::extract::State;
+use std::net::SocketAddr;
+
+use axum::extract::{ConnectInfo, State};
 use axum::http::HeaderMap;
 use axum::Json;
 use chrono::{DateTime, TimeZone, Utc};
@@ -14,10 +16,11 @@ use uuid::Uuid;
 
 use crate::auth::AuthUser;
 use crate::billing::{
-    blocked_reason, current_access, email_hash, plan_for_price, price_env_var,
-    status_grants_access, status_keeps_plan, trial_days, trial_enabled, verify_signature, Interval,
-    Plan, PAID_PLANS, TRIAL_DAYS, TRIAL_MARKER_KEY, TRIAL_MARKER_VALUE,
-    TRIAL_MAX_SCANS_PER_TARGET_PER_DAY, TRIAL_REJECTED_COMMENT,
+    blocked_reason, consent_required, current_access, email_hash, plan_for_price, price_env_var,
+    status_grants_access, status_keeps_plan, trial_days, trial_enabled, user_agent_family,
+    verify_signature, Interval, Plan, CONSENT_KEY, DISPUTE_MARK, PAID_PLANS, TERMS_VERSION,
+    TRIAL_DAYS, TRIAL_MARKER_KEY, TRIAL_MARKER_VALUE, TRIAL_MAX_SCANS_PER_TARGET_PER_DAY,
+    TRIAL_REJECTED_COMMENT,
 };
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
@@ -48,7 +51,8 @@ pub struct Subscription {
     /// `none`, `trialing`, `active` or `blocked`. Unknown values read as
     /// `none` in the dashboard.
     pub state: &'static str,
-    /// `none`, `payment_failed`, `canceled` or `trial_already_used`.
+    /// `none`, `payment_failed`, `canceled`, `trial_already_used` or
+    /// `disputed` (held while a bank looks at a disputed payment).
     pub blocked_reason: &'static str,
     pub trial_ends_at: Option<DateTime<Utc>>,
     pub cancel_at_period_end: bool,
@@ -61,6 +65,9 @@ pub struct Subscription {
     /// What Stripe will take when the trial ends: its own preview of the
     /// first invoice, coupon and tax included. Absent when unknown.
     pub first_charge: Option<Charge>,
+    /// The Terms the tick box before checkout accepts; checkout is sent it
+    /// back, so a page opened before the Terms changed is caught.
+    pub terms_version: &'static str,
 }
 
 #[derive(Serialize)]
@@ -135,6 +142,7 @@ pub async fn get_subscription(
             Some("trial_already_used") => "trial_already_used",
             Some("payment_failed") => "payment_failed",
             Some("canceled") => "canceled",
+            Some("disputed") => "disputed",
             _ => blocked_reason(status, None),
         },
         _ => "none",
@@ -182,6 +190,7 @@ pub async fn get_subscription(
             (true, Some(amount), Some(currency)) => Some(Charge { amount, currency }),
             _ => None,
         },
+        terms_version: TERMS_VERSION,
     }))
 }
 
@@ -218,6 +227,18 @@ pub struct CheckoutRequest {
     /// Absent from dashboards that predate the trial.
     #[serde(default)]
     pub start_trial: Option<bool>,
+    /// The tick box before Stripe. Absent from dashboards that predate it.
+    #[serde(default)]
+    pub consent: Option<CheckoutConsent>,
+}
+
+#[derive(Deserialize)]
+pub struct CheckoutConsent {
+    #[serde(default)]
+    pub accepted: bool,
+    /// The `terms_version` the page was given with the plan.
+    #[serde(default)]
+    pub terms_version: String,
 }
 
 #[derive(Serialize)]
@@ -237,6 +258,8 @@ pub struct CheckoutResponse {
 /// browser.
 pub async fn start_checkout(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     user: AuthUser,
     Json(body): Json<CheckoutRequest>,
 ) -> ApiResult<Json<CheckoutResponse>> {
@@ -245,6 +268,40 @@ pub async fn start_checkout(
         return Err(ApiError::BadRequest(
             "choose a paid plan to subscribe".into(),
         ));
+    }
+
+    // The tick box before Stripe (owner decisions, 3 and 4 November 2026):
+    // "I agree to the Terms and want access now, ending my 14-day right of
+    // withdrawal." With CHECKOUT_CONSENT_REQUIRED off a ticked box
+    // is recorded and a missing one still goes through, so no purchase breaks
+    // while pages roll out; with it on, no consent or consent to an older
+    // version is refused before Stripe.
+    let consent = body
+        .consent
+        .as_ref()
+        .filter(|consent| consent.accepted)
+        .map(|consent| {
+            consent
+                .terms_version
+                .trim()
+                .chars()
+                .take(32)
+                .collect::<String>()
+        });
+    if consent_required() {
+        match consent.as_deref() {
+            None => {
+                return Err(ApiError::BadRequest(
+                    "Tick the box to accept the Terms before checkout.".into(),
+                ))
+            }
+            Some(version) if version != TERMS_VERSION => {
+                return Err(ApiError::Conflict(
+                    "The Terms have changed since this page was opened. Reload it and tick the box again.".into(),
+                ))
+            }
+            Some(_) => {}
+        }
     }
 
     let interval = Interval::from_str_or_monthly(&body.interval);
@@ -401,12 +458,58 @@ pub async fn start_checkout(
         }
     }
 
-    let url = stripe_post(&secret, &stripe_url("/v1/checkout/sessions"), &form)
-        .await?
+    // The consent is written before Stripe is asked, so no session exists
+    // without its record, and is named on the session and the subscription
+    // it creates: the welcome mail reads it there, and a dispute can be
+    // answered with the row.
+    let mut consent_id = None;
+    if let Some(version) = consent.as_deref() {
+        let user_agent = headers
+            .get(axum::http::header::USER_AGENT)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("");
+        let interval_name = match interval {
+            Interval::Monthly => "monthly",
+            Interval::Yearly => "yearly",
+        };
+        let id: Uuid = sqlx::query_scalar(
+            "insert into checkout_consents (user_id, plan, terms_version, ip, user_agent_family)
+             values ($1, $2, $3, $4, $5)
+             returning id",
+        )
+        .bind(user.id)
+        .bind(format!("{}_{interval_name}", plan.as_db_str()))
+        .bind(version)
+        .bind(peer.ip().to_string())
+        .bind(user_agent_family(user_agent))
+        .fetch_one(&state.pool)
+        .await?;
+        for prefix in ["metadata", "subscription_data[metadata]"] {
+            form.push((format!("{prefix}[{CONSENT_KEY}]"), id.to_string()));
+            form.push((format!("{prefix}[terms_version]"), version.to_string()));
+        }
+        consent_id = Some(id);
+    }
+
+    let session = stripe_post(&secret, &stripe_url("/v1/checkout/sessions"), &form).await?;
+    let url = session
         .get("url")
         .and_then(|value| value.as_str())
         .map(str::to_string)
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("Stripe returned no checkout url")))?;
+    // The session exists by now, so a failure here must not cost the buyer
+    // their checkout: the row still holds the consent and the session names it.
+    if let Some(id) = consent_id {
+        if let Err(error) =
+            sqlx::query("update checkout_consents set checkout_session_id = $2 where id = $1")
+                .bind(id)
+                .bind(session.get("id").and_then(|value| value.as_str()))
+                .execute(&state.pool)
+                .await
+        {
+            tracing::warn!(%error, %id, "could not store the checkout session on its consent");
+        }
+    }
 
     Ok(Json(CheckoutResponse {
         url,
@@ -564,7 +667,9 @@ pub async fn recover_failed_checkouts(state: &AppState, now: DateTime<Utc>) -> A
     Ok(sent)
 }
 
-/// Every quarter of an hour, for as long as the API runs.
+/// Every quarter of an hour, for as long as the API runs. The same pass
+/// deletes checkout consents once they are 13 months old, as the privacy
+/// notice says.
 pub async fn recover_failed_checkouts_forever(state: AppState) {
     loop {
         if let Err(error) = recover_failed_checkouts(&state, Utc::now()).await {
@@ -572,6 +677,14 @@ pub async fn recover_failed_checkouts_forever(state: AppState) {
                 ?error,
                 "checkout recovery pass failed; the next pass retries"
             );
+        }
+        if let Err(error) = sqlx::query(
+            "delete from checkout_consents where accepted_at < now() - interval '13 months'",
+        )
+        .execute(&state.pool)
+        .await
+        {
+            tracing::warn!(%error, "could not delete old checkout consents; the next pass retries");
         }
         tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
     }
@@ -1390,6 +1503,8 @@ async fn apply(state: &AppState, event_type: &str, event: &serde_json::Value) ->
             .await
         }
 
+        "charge.dispute.created" | "charge.dispute.closed" => settle_dispute(state, object).await,
+
         // Stripe sends it three days before a trial ends, which for a
         // three-day trial is the moment it starts. Our own reminder goes out
         // a day before the end instead (orchestrator::trial_reminder).
@@ -1541,6 +1656,184 @@ async fn fetch_subscription(id: &str) -> ApiResult<Option<serde_json::Value>> {
     Ok(Some(subscription))
 }
 
+/// Written to `cancellation_details.comment` when a lost dispute ends a
+/// subscription.
+const DISPUTE_LOST_COMMENT: &str = "dispute_lost";
+
+/// Where a dispute stands, as Stripe has it now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DisputeOutcome {
+    Open,
+    Lost,
+    /// Won, an inquiry closed without a dispute, or prevented.
+    Cleared,
+}
+
+fn dispute_outcome(status: &str) -> DisputeOutcome {
+    match status {
+        "lost" => DisputeOutcome::Lost,
+        "won" | "warning_closed" | "prevented" => DisputeOutcome::Cleared,
+        _ => DisputeOutcome::Open,
+    }
+}
+
+/// A payment of one of our subscriptions is disputed (owner decision,
+/// 3 November 2026). While the bank looks at it the plan is held and
+/// collection paused, so nothing more is charged to a card that is
+/// contesting; if the payment stands everything comes back, and if it is
+/// lost the subscription ends at once. Sites and schedules are kept until
+/// then.
+///
+/// The outcome is read from Stripe's list of the charge's disputes rather
+/// than taken from the event, so `created` and `closed` arriving twice or in
+/// either order settle the same way. One that is not listed yet is an error,
+/// which Stripe answers by delivering the event again.
+///
+/// ponytail: one mark per subscription. Two payments of the same
+/// subscription disputed at once release the hold when the first is won.
+async fn settle_dispute(state: &AppState, dispute: &serde_json::Value) -> ApiResult<()> {
+    let Some(charge) = dispute.get("charge").and_then(|value| value.as_str()) else {
+        return Ok(());
+    };
+    let Some(secret) = std::env::var("STRIPE_SECRET_KEY")
+        .ok()
+        .filter(|value| !value.is_empty())
+    else {
+        tracing::warn!(charge, "no STRIPE_SECRET_KEY to settle a dispute");
+        return Ok(());
+    };
+    // Not a subscription payment, or another product's.
+    let Some(invoice) = disputed_invoice(&secret, dispute).await? else {
+        return Ok(());
+    };
+    let Some(subscription_id) = invoice_subscription(&invoice) else {
+        return Ok(());
+    };
+    if other_product(state, &invoice, &subscription_id).await? {
+        return Ok(());
+    }
+
+    with_customer_lock(state, &invoice, async {
+        let Some(subscription) = fetch_subscription(&subscription_id).await? else {
+            return Ok(());
+        };
+        let status = subscription["status"].as_str().unwrap_or("");
+        let marked = subscription["metadata"][DISPUTE_MARK]
+            .as_str()
+            .unwrap_or("");
+        let outcome = current_dispute_outcome(&secret, charge, dispute).await?;
+        let path = stripe_url(&format!("/v1/subscriptions/{subscription_id}"));
+        match outcome {
+            DisputeOutcome::Lost => {
+                if status != "canceled" {
+                    cancel_subscription(&subscription_id, DISPUTE_LOST_COMMENT).await?;
+                }
+            }
+            DisputeOutcome::Open => {
+                if marked.is_empty() && status_grants_access(status) {
+                    let form = [
+                        ("pause_collection[behavior]".to_string(), "void".to_string()),
+                        (format!("metadata[{DISPUTE_MARK}]"), charge.to_string()),
+                    ];
+                    stripe_post(&secret, &path, &form).await?;
+                }
+            }
+            DisputeOutcome::Cleared => {
+                if marked == charge {
+                    let form = [
+                        ("pause_collection".to_string(), String::new()),
+                        (format!("metadata[{DISPUTE_MARK}]"), String::new()),
+                    ];
+                    stripe_post(&secret, &path, &form).await?;
+                }
+            }
+        }
+        tracing::info!(charge, subscription = %subscription_id, ?outcome, "dispute settled");
+        match fetch_subscription(&subscription_id).await? {
+            Some(fresh) => apply_subscription(state, &fresh).await,
+            None => Ok(()),
+        }
+    })
+    .await
+}
+
+/// The invoice a disputed payment paid. Since API 2025-03-31 a dispute names
+/// only the PaymentIntent, and the invoice is found through the invoice
+/// payments that used it.
+async fn disputed_invoice(
+    secret: &str,
+    dispute: &serde_json::Value,
+) -> ApiResult<Option<serde_json::Value>> {
+    let id_of = |value: &serde_json::Value| {
+        value
+            .as_str()
+            .or_else(|| value.get("id")?.as_str())
+            .map(str::to_string)
+    };
+    let Some(intent) = id_of(&dispute["payment_intent"]) else {
+        return Ok(None);
+    };
+    let paid = stripe_get(
+        secret,
+        &stripe_url("/v1/invoice_payments"),
+        &[
+            ("payment[type]", "payment_intent"),
+            ("payment[payment_intent]", &intent),
+            ("limit", "1"),
+        ],
+    )
+    .await?;
+    let Some(invoice) = id_of(&paid["data"][0]["invoice"]) else {
+        return Ok(None);
+    };
+    Ok(Some(
+        stripe_get(secret, &stripe_url(&format!("/v1/invoices/{invoice}")), &[]).await?,
+    ))
+}
+
+/// The dispute's outcome from Stripe's list of the charge's disputes. A key
+/// without read access to disputes falls back to the event's own copy.
+async fn current_dispute_outcome(
+    secret: &str,
+    charge: &str,
+    dispute: &serde_json::Value,
+) -> ApiResult<DisputeOutcome> {
+    let response = reqwest::Client::new()
+        .get(stripe_url("/v1/disputes"))
+        .basic_auth(secret, Option::<&str>::None)
+        .query(&[("charge", charge)])
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|error| ApiError::Internal(anyhow::anyhow!("could not reach Stripe: {error}")))?;
+    if response.status() == reqwest::StatusCode::FORBIDDEN {
+        tracing::warn!(
+            charge,
+            "the Stripe key cannot read disputes; using the event's copy"
+        );
+        return Ok(dispute_outcome(dispute["status"].as_str().unwrap_or("")));
+    }
+    let status = response.status();
+    let listed: serde_json::Value = response.json().await.unwrap_or_default();
+    if !status.is_success() {
+        tracing::error!(%status, ?listed, "Stripe refused a request");
+        return Err(ApiError::Internal(anyhow::anyhow!("Stripe refused")));
+    }
+    let id = dispute["id"].as_str();
+    listed["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|row| id.is_none() || row["id"].as_str() == id)
+        .and_then(|row| row["status"].as_str())
+        .map(dispute_outcome)
+        .ok_or_else(|| {
+            ApiError::Internal(anyhow::anyhow!(
+                "the dispute is not listed yet; Stripe redelivers"
+            ))
+        })
+}
+
 async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) -> ApiResult<()> {
     let Some(customer) = subscription
         .get("customer")
@@ -1606,11 +1899,21 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     // subscription is in a state that should work. Either failing drops the
     // account to free rather than leaving whatever it had.
     let strict = trial_enabled() || three_day;
-    let plan = match (status_keeps_plan(status, strict), plan_for_price(price_id)) {
+    // A payment under dispute holds the plan for as long as the mark is on
+    // the subscription (settle_dispute), whatever event brings it here.
+    let disputed = subscription
+        .get("metadata")
+        .and_then(|value| value.get(DISPUTE_MARK))
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.is_empty());
+    let keeps_plan = status_keeps_plan(status, strict);
+    let plan = match (keeps_plan && !disputed, plan_for_price(price_id)) {
         (true, Some(plan)) => plan,
         _ => Plan::Free,
     };
-    let reason = if plan == Plan::Free && !status.is_empty() {
+    let reason = if disputed && keeps_plan {
+        "disputed"
+    } else if plan == Plan::Free && !status.is_empty() {
         blocked_reason(status, cancellation_comment)
     } else {
         "none"
@@ -1677,10 +1980,12 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         stripe_subscription_id: Option<String>,
         first_charge_amount: Option<i64>,
         first_charge_currency: Option<String>,
+        blocked_reason: Option<String>,
     }
     let previous: Option<Previous> = sqlx::query_as(
         "select e.plan, e.user_id, u.email, u.first_name, e.subscription_status,
-                e.stripe_subscription_id, e.first_charge_amount, e.first_charge_currency
+                e.stripe_subscription_id, e.first_charge_amount, e.first_charge_currency,
+                e.blocked_reason
            from entitlements e
            left join users u on u.id = e.user_id
           where e.product = 'glarion'
@@ -1839,13 +2144,25 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         .map(|row| Plan::from_db_str(&row.plan))
         .unwrap_or(Plan::Free);
     let was_paid = previous_plan.allows_scheduling();
+    // A plan given back after a dispute is not a new subscription to welcome.
+    let was_disputed = previous
+        .as_ref()
+        .is_some_and(|row| row.blocked_reason.as_deref() == Some("disputed"));
     let email = previous.as_ref().and_then(|row| row.email.clone());
     let first_name = previous
         .as_ref()
         .and_then(|row| row.first_name.clone())
         .unwrap_or_default();
 
-    if plan.allows_scheduling() && !was_paid {
+    // Whether the checkout behind it recorded the tick box before Stripe,
+    // which the welcome then repeats.
+    let consented = subscription
+        .get("metadata")
+        .and_then(|value| value.get(CONSENT_KEY))
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.is_empty());
+
+    if plan.allows_scheduling() && !was_paid && !was_disputed {
         if let Some(email) = email.as_deref() {
             if three_day && status == "trialing" {
                 // Nothing charged yet: the date, the amount and the limits.
@@ -1861,6 +2178,7 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
                     orchestrator::mailer::TrialTerms {
                         sites: crate::billing::Access { plan, trial: true }.max_targets(),
                         scans_per_site_per_day: TRIAL_MAX_SCANS_PER_TARGET_PER_DAY,
+                        consented,
                     },
                     &state.mailer.app_link("/targets"),
                 );
@@ -1872,7 +2190,7 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
                 // the welcome that names the first payment date instead of a
                 // receipt.
                 let trial_ends = (status == "trialing").then_some(trial_end).flatten();
-                send_subscription_welcome(state, email, plan, trial_ends).await;
+                send_subscription_welcome(state, email, plan, trial_ends, consented).await;
             }
         }
     }
@@ -1904,7 +2222,7 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         .fetch_optional(&state.pool)
         .await?;
         if let (Some(_), Some(email)) = (first, email.as_deref()) {
-            send_subscription_welcome(state, email, plan, None).await;
+            send_subscription_welcome(state, email, plan, None, consented).await;
         }
     }
 
@@ -1913,7 +2231,9 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     // and the first the agency knew was noticing a client site had not been
     // checked in a fortnight — on a security product, the worst thing to
     // find late.
-    if !plan.allows_scheduling() && was_paid {
+    // A plan held over a dispute has not ended: it comes back if the payment
+    // stands, and a lost dispute ends it then.
+    if !plan.allows_scheduling() && was_paid && reason != "disputed" {
         if let Some(email) = email.as_deref() {
             // Stripe says why itself when it knows. A subscription cancelled
             // after dunning gives cancellation_details.reason, which is the
@@ -1935,8 +2255,9 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
     // free — and keeps costing us the scans. A plan paused by a failed
     // payment keeps its schedules: the scheduler skips accounts without a
     // paid plan, so they resume by themselves once a retry succeeds, which is
-    // what the payment-failed email promises.
-    if !plan.allows_scheduling() && reason != "payment_failed" {
+    // what the payment-failed email promises. So does a plan held over a
+    // dispute.
+    if !plan.allows_scheduling() && reason != "payment_failed" && reason != "disputed" {
         sqlx::query(
             "update targets set scan_cadence = 'manual'
              where scan_cadence <> 'manual'
@@ -2002,6 +2323,7 @@ async fn send_subscription_welcome(
     email: &str,
     plan: Plan,
     trial_ends: Option<chrono::DateTime<Utc>>,
+    consented: bool,
 ) {
     let first_name: Option<String> =
         sqlx::query_scalar("select first_name from users where email = $1")
@@ -2017,6 +2339,7 @@ async fn send_subscription_welcome(
         plan.allows_scheduling(),
         &state.mailer.app_link(""),
         trial_ends,
+        consented,
     );
     if let Err(error) = state.mailer.send(email, &message).await {
         tracing::warn!(%error, "could not send the subscription welcome");
@@ -2471,6 +2794,23 @@ mod tests {
         assert_eq!(payload_prices(&old_invoice), ["price_old", "price_bare"]);
         assert_eq!(payload_prices(&basil_invoice), ["price_new"]);
         assert!(payload_prices(&serde_json::json!({ "id": "sub_thin" })).is_empty());
+    }
+
+    #[test]
+    fn a_dispute_is_open_until_stripe_says_how_it_ended() {
+        for status in ["won", "warning_closed", "prevented"] {
+            assert_eq!(dispute_outcome(status), DisputeOutcome::Cleared);
+        }
+        assert_eq!(dispute_outcome("lost"), DisputeOutcome::Lost);
+        for status in [
+            "warning_needs_response",
+            "warning_under_review",
+            "needs_response",
+            "under_review",
+            "",
+        ] {
+            assert_eq!(dispute_outcome(status), DisputeOutcome::Open);
+        }
     }
 
     #[test]

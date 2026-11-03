@@ -621,6 +621,9 @@ pub fn ownership_lapsing_email(
 /// nothing has been charged yet, so "your plan is active" and "Stripe sends
 /// the receipt" would both be untrue. The trial version names the day the
 /// first payment is taken instead.
+///
+/// `consented` is set when the checkout recorded the tick box before Stripe;
+/// both versions then repeat what the buyer agreed to.
 pub fn subscription_email(
     first_name: &str,
     plan_name: &str,
@@ -628,6 +631,7 @@ pub fn subscription_email(
     scheduling: bool,
     link: &str,
     trial_ends: Option<chrono::DateTime<chrono::Utc>>,
+    consented: bool,
 ) -> Message {
     let hello = greeting(first_name);
     let cadence = if scheduling {
@@ -640,6 +644,11 @@ pub fn subscription_email(
         "Weekly or monthly, your choice"
     } else {
         "Manual"
+    };
+    let consent = if consented {
+        format!(" {CONSENT_LINE}")
+    } else {
+        String::new()
     };
     if let Some(ends) = trial_ends {
         let when = ends.format("%-d %B %Y").to_string();
@@ -659,14 +668,14 @@ pub fn subscription_email(
                     rows_card(&[("Plan", plan_name), ("Sites monitored", &sites), ("Scheduled checks", schedule)], Some(("First payment", &when))),
                 ),
                 cta: Some(("Open Glarion", link)),
-                after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.")),
+                after: &note(&format!("{cadence} Nothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.{consent}")),
                 footer: "You received this email because you started a Glarion trial with this address.",
                 help: ("Billing question?", "Reply to this email from the address on the account."),
                 moment: Some((format!("{plan_name} trial"), format!("Up to {max_targets} sites"), format!("Everything on the plan until {when}. {cadence}"))),
                 tone: Tone::Brand,
             }),
             text: format!(
-                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing."
+                "{hello}\n\nYour Glarion {plan_name} trial has started. Everything on the plan is available until {when}. The first payment is taken that day unless you cancel before then, which you can do yourself from your account.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nNothing has been charged yet. To cancel before the first payment, open Pricing in Glarion and choose Manage billing.{consent}"
             ),
         };
     }
@@ -685,17 +694,22 @@ pub fn subscription_email(
                 rows_card(&[("Plan", plan_name), ("Scheduled checks", schedule)], Some(("Sites monitored", &sites))),
             ),
             cta: Some(("Open Glarion", link)),
-            after: &note("You can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."),
+            after: &note(&format!("You can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing.{consent}")),
             footer: "You received this email because a Glarion subscription on this address changed.",
             help: ("Billing question?", "Reply to this email from the address on the account."),
             moment: Some((format!("{plan_name} plan"), format!("Up to {max_targets} sites"), cadence.to_string())),
             tone: Tone::Brand,
         }),
         text: format!(
-            "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing."
+            "{hello}\n\nYour Glarion {plan_name} plan is active. Nothing else needs setting up.\n\nUp to {max_targets} sites monitored. {cadence}\n\nOpen Glarion: {link}\n\nYou can change or cancel the plan yourself at any time: open Pricing in Glarion and choose Manage billing.{consent}"
         ),
     }
 }
+
+/// What the buyer agreed to at the tick box before Stripe, repeated in the
+/// mails that confirm the subscription (the trial welcome and the first
+/// payment), so the buyer has it on a durable medium.
+pub const CONSENT_LINE: &str = "At checkout, you agreed to the Terms and asked for immediate access to this digital content, ending your 14-day right of withdrawal.";
 
 /// "€47.58", or "€39" for whole euros: an amount Stripe gave in minor units,
 /// written the way the site writes prices.
@@ -717,6 +731,9 @@ pub fn money(amount: i64, currency: &str) -> String {
 pub struct TrialTerms {
     pub sites: i32,
     pub scans_per_site_per_day: i64,
+    /// The checkout recorded the tick box before Stripe, which the mail
+    /// then repeats.
+    pub consented: bool,
 }
 
 /// "17 October 2026 at 14:05 UTC": the exact moment, because the charge
@@ -769,7 +786,12 @@ pub fn trial_started_email(
         ),
         None => format!("Then {plan_name} renews every {every} until you cancel."),
     };
-    let later = format!("Branded reports, the plan's full site allowance and up to {} full scans per site a day start with the first payment. To cancel, open Pricing in Glarion and choose Manage billing: cancel before the trial ends and nothing is charged.", crate::policy::MAX_SCANS_PER_TARGET_PER_DAY);
+    let consent = if terms.consented {
+        format!(" {CONSENT_LINE}")
+    } else {
+        String::new()
+    };
+    let later = format!("Branded reports, the plan's full site allowance and up to {} full scans per site a day start with the first payment. To cancel, open Pricing in Glarion and choose Manage billing: cancel before the trial ends and nothing is charged.{consent}", crate::policy::MAX_SCANS_PER_TARGET_PER_DAY);
     Message {
         subject: "Your 3-day Glarion trial has started".to_string(),
         html: chrome(Chrome {
@@ -1399,6 +1421,39 @@ mod tests {
     }
 
     #[test]
+    fn the_welcomes_repeat_the_consent_only_when_it_was_recorded() {
+        let link = "https://glarion.app/app";
+        let trial = Some(chrono::Utc::now());
+        for consented in [true, false] {
+            let messages = [
+                subscription_email("Ada", "Studio", 10, true, link, None, consented),
+                subscription_email("Ada", "Studio", 10, true, link, trial, consented),
+                trial_started_email(
+                    "Ada",
+                    "Studio",
+                    trial_end(),
+                    None,
+                    "month",
+                    TrialTerms {
+                        consented,
+                        ..terms()
+                    },
+                    link,
+                ),
+            ];
+            for message in messages {
+                assert_eq!(message.text.contains(CONSENT_LINE), consented);
+                assert_eq!(
+                    message
+                        .html
+                        .contains("ending your 14-day right of withdrawal"),
+                    consented
+                );
+            }
+        }
+    }
+
+    #[test]
     fn links_into_the_app_do_not_point_at_the_marketing_page() {
         let link = mailer().verification_link("abc123");
 
@@ -1623,8 +1678,15 @@ mod tests {
         // The two numbers someone checks against what they thought they were
         // buying. A welcome that does not mention them is a welcome that
         // gets a support ticket in reply.
-        let message =
-            subscription_email("Marco", "Agency", 40, true, "https://glarion.app/app", None);
+        let message = subscription_email(
+            "Marco",
+            "Agency",
+            40,
+            true,
+            "https://glarion.app/app",
+            None,
+            false,
+        );
         assert!(message.html.contains("Agency"));
         assert!(message.html.contains("re-checked on a schedule"));
         assert!(message.html.contains("Hello Marco,"));
@@ -1645,6 +1707,7 @@ mod tests {
             true,
             "https://glarion.app/app",
             Some(ends),
+            true,
         );
         assert!(message.subject.contains("trial"));
         assert!(message.text.contains("20 October 2026"));
@@ -1657,8 +1720,16 @@ mod tests {
 
     #[test]
     fn a_plan_without_scheduling_does_not_claim_it() {
-        let html =
-            subscription_email("", "Studio", 10, false, "https://glarion.app/app", None).html;
+        let html = subscription_email(
+            "",
+            "Studio",
+            10,
+            false,
+            "https://glarion.app/app",
+            None,
+            false,
+        )
+        .html;
         assert!(html.contains("Scans stay manual"));
         assert!(!html.contains("re-checked on a schedule"));
         // No name is not an error; it just loses the name.
@@ -1675,6 +1746,7 @@ mod tests {
             false,
             "https://glarion.app",
             None,
+            false,
         )
         .html;
         assert!(!html.contains("<script>"));
@@ -1689,7 +1761,15 @@ mod tests {
         let messages = [
             verification_email("Ada", "https://glarion.app/app#/verify/x"),
             welcome_email("Ada", "https://glarion.app/app#/targets"),
-            subscription_email("Ada", "Agency", 40, true, "https://glarion.app/app", None),
+            subscription_email(
+                "Ada",
+                "Agency",
+                40,
+                true,
+                "https://glarion.app/app",
+                None,
+                true,
+            ),
             subscription_email(
                 "Ada",
                 "Solo",
@@ -1697,6 +1777,7 @@ mod tests {
                 true,
                 "https://glarion.app/app",
                 Some(chrono::Utc::now()),
+                false,
             ),
             change_email(
                 "example.com",
@@ -1885,6 +1966,7 @@ mod tests {
         TrialTerms {
             sites: 3,
             scans_per_site_per_day: 2,
+            consented: false,
         }
     }
 
