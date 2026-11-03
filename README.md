@@ -197,8 +197,10 @@ deployed by hand from `master`: a clean clone, the release build from the
 `Dockerfile`, a health check, and an automatic switch back to the previous
 build if the new one does not come up. Production runs
 `DATABASE_MIGRATIONS=verify`, so a new migration is applied by hand before
-the deploy. `fly.toml` and `scripts/deploy-fly.sh` are no longer used, and a
-CI run does not deploy by itself.
+the deploy. A CI run does not deploy by itself. A scheduled workflow
+([`uptime.yml`](.github/workflows/uptime.yml)) asks https://glarion.app/health
+from outside every 15 minutes and fails, so GitHub sends an email, when it
+does not answer 200 after three tries.
 
 ### The development database
 

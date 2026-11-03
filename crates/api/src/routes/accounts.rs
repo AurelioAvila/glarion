@@ -382,7 +382,7 @@ pub async fn resend_verification(
     // or not anything was actually sent. This endpoint would otherwise be a
     // cheap way to enumerate registered addresses.
     let answer = Ok(Json(MessageResponse {
-        message: "If that address needs confirming, a new link is on its way.".into(),
+        message: "If that address still needs confirming and no link went to it in the last two minutes, a new one is on its way.".into(),
     }));
 
     let row: Option<PendingConfirmation> = sqlx::query_as(

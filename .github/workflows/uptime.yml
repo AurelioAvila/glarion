@@ -1,0 +1,35 @@
+name: Uptime
+
+# glarion.app runs on one PC behind a Cloudflare Tunnel, so nothing on that
+# PC can report that the PC itself is down. GitHub asks from outside every
+# 15 minutes: three tries 30 seconds apart, and a run that never gets a 200
+# fails, which makes GitHub email the owner. Public repository, so the
+# minutes are free. Edits to this file run it once on the pull request.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/uptime.yml
+
+permissions: {}
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: https://glarion.app/health answers 200
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://glarion.app/health || true)
+            if [ "$code" = "200" ]; then
+              echo "HTTP 200 on attempt $attempt"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP ${code:-none}"
+            if [ "$attempt" -lt 3 ]; then sleep 30; fi
+          done
+          echo "::error::https://glarion.app/health did not answer 200 after 3 tries"
+          exit 1

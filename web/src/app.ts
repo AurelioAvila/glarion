@@ -139,6 +139,29 @@ async function withPending<T>(
   }
 }
 
+/// The server sends a confirmation link at most once every two minutes per
+/// address and answers the same either way, so after a send the button waits
+/// that long, with the time left on it, rather than offer a click that would
+/// send nothing.
+const RESEND_WAIT_S = 120;
+
+function holdResend(button: HTMLButtonElement): void {
+  const label = button.textContent ?? "";
+  const until = Date.now() + RESEND_WAIT_S * 1000;
+  button.disabled = true;
+  const tick = (): void => {
+    const left = Math.ceil((until - Date.now()) / 1000);
+    if (left <= 0 || !button.isConnected) {
+      button.disabled = false;
+      button.textContent = label;
+      return;
+    }
+    button.textContent = `${label} in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    window.setTimeout(tick, 1000);
+  };
+  tick();
+}
+
 /// The placeholder shown while a view is fetching.
 ///
 /// A shape rather than the word "loading": it occupies roughly what the
@@ -235,9 +258,13 @@ function unconfirmedNotice(email: string): HTMLElement {
       try {
         const result = await api.resendVerification(email);
         wrapper.replaceChildren(notice("ok", result.message));
+        return true;
       } catch (error) {
         wrapper.replaceChildren(notice("error", describeError(error)));
+        return false;
       }
+    }).then((sent) => {
+      if (sent) holdResend(resend);
     });
   });
 
@@ -448,9 +475,13 @@ function renderCheckYourEmail(email: string, delivered: boolean): void {
       try {
         const result = await api.resendVerification(email);
         message.replaceChildren(notice("ok", result.message));
+        return true;
       } catch (error) {
         message.replaceChildren(notice("error", describeError(error)));
+        return false;
       }
+    }).then((sent) => {
+      if (sent) holdResend(resend);
     });
   });
 
@@ -498,6 +529,8 @@ function renderCheckYourEmail(email: string, delivered: boolean): void {
       ]),
     ]),
   );
+  // Signing up has just sent one.
+  if (delivered) holdResend(resend);
 }
 
 /// Landing page for the link in the confirmation email.
@@ -1444,6 +1477,13 @@ function verificationInstructions(
         "DNS usually updates within a few minutes, though some providers take up " +
         "to an hour. If the check does not find it yet, wait and try again.",
     }),
+    el("p", {
+      class: "hint",
+      text:
+        "Many DNS panels, GoDaddy and Namecheap among them, add your domain to the name by themselves. " +
+        "There, type the name without your domain at the end (for example.com, just _glarion-verify); " +
+        "otherwise the record ends up at _glarion-verify.example.com.example.com, where the check cannot find it.",
+    }),
   ]);
 
   const filePane = el("div", { class: "method-pane", hidden: true }, [
@@ -1460,8 +1500,8 @@ function verificationInstructions(
     }),
   ]);
 
-  const dnsTab = el("button", { class: "tab tab-active", type: "button", text: "DNS record" });
-  const fileTab = el("button", { class: "tab", type: "button", text: "File upload" });
+  const dnsTab = el("button", { class: "tab tab-active", type: "button", "aria-pressed": "true", text: "DNS record" });
+  const fileTab = el("button", { class: "tab", type: "button", "aria-pressed": "false", text: "File upload" });
 
   function select(next: "dns_txt" | "well_known_file"): void {
     method = next;
@@ -1470,6 +1510,8 @@ function verificationInstructions(
     filePane.hidden = isDns;
     dnsTab.className = isDns ? "tab tab-active" : "tab";
     fileTab.className = isDns ? "tab" : "tab tab-active";
+    dnsTab.setAttribute("aria-pressed", String(isDns));
+    fileTab.setAttribute("aria-pressed", String(!isDns));
     clear(message);
   }
 
