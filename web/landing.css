@@ -442,3 +442,8 @@ footer{border-top:1px solid var(--site-line);padding:2.5rem 0}
 /* Selection: controls are not text, and images take no highlight wash. Prices and copy stay selectable. */
 img::selection, svg::selection, picture::selection, video::selection { background: transparent; }
 button, summary, .purchase-switch, .purchase-action, .primary, .secondary, .nav-cta, .button, .source-actions a, .hw-strip-cta, .hw-card-cta { -webkit-user-select: none; user-select: none; }
+/* Polish pass: calmer result footer, press feedback. */
+#result .check{margin-top:2.25rem;padding-top:1.75rem;border-top:1px solid var(--site-soft)}
+#result .foot-note{display:block;margin-top:.9rem}
+#result .check-row{align-items:flex-end}
+@media (prefers-reduced-motion:no-preference){.primary,.secondary,.ghost{transition:transform .14s ease,box-shadow .14s ease,background-color .14s ease}.primary:active,.secondary:active,.ghost:active{transform:scale(.97)}}
