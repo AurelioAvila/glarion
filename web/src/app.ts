@@ -2639,7 +2639,7 @@ async function renderPlan(): Promise<void> {
   container.append(
     promoSlot,
     el("div", { style: "margin-top:1.75rem" }, [toggleRow]),
-    checkoutConsent?.element ?? null,
+    ...(checkoutConsent ? [checkoutConsent.element] : []),
     list,
     // What Stripe really offers at checkout today (Managed Payments): nothing more.
     el("p", { class: "muted", style: "margin-top:1rem", text: "Pay with card, Apple Pay, Google Pay or Link." }),
