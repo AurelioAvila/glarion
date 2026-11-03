@@ -2700,10 +2700,9 @@ type TrialOffer = { prices: PriceList; chargeOn: Date };
 
 type ConsentBox = { element: HTMLElement; confirm(): boolean };
 
-/// The tick box before Stripe: the Terms, immediate access and the end of
-/// the right of withdrawal. Glarion sells through Link, Stripe's merchant of
-/// record, so the refund clause names Link's buyer terms. `confirm` shows
-/// the error and moves focus to the box when it is not ticked.
+/// The tick box before Stripe: "I agree to the Terms." and nothing else
+/// (owner decision, 4 November 2026). `confirm` shows the error and moves
+/// focus to the box when it is not ticked.
 function consentBox(): ConsentBox {
   const input = el("input", { type: "checkbox", "aria-describedby": "checkout-consent-error" });
   const label = el("label", { class: "checkout-consent" }, [
@@ -2711,7 +2710,7 @@ function consentBox(): ConsentBox {
     el("span", {}, [
       "I agree to the ",
       el("a", { class: "inline", href: "/terms.html", target: "_blank", rel: "noopener", text: "Terms" }),
-      ". I ask for immediate access to this digital content and understand that I lose my 14-day right of withdrawal once access starts. Purchases are not refundable, except where Link’s buyer terms or the law require a refund. Subscriptions renew automatically until you cancel.",
+      ".",
     ]),
   ]);
   const error = el("p", { class: "hint hint-error checkout-consent-error", id: "checkout-consent-error", role: "alert", hidden: true, text: "Tick the box to continue." });

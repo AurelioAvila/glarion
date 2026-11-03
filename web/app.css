@@ -1056,7 +1056,7 @@ dialog.manage::backdrop { background: #2d103a59; }
    plans, violet focus like every other control, the alarm colour only when
    a checkout was tried without it. */
 .checkout-consent-wrap { margin-top: 1.25rem; }
-.checkout-consent { display: flex; align-items: flex-start; gap: .75rem; margin: 0; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--raise); color: var(--ink-2); font-size: .9rem; line-height: 1.55; cursor: pointer; }
+.checkout-consent { display: inline-flex; max-width: 100%; align-items: flex-start; gap: .75rem; margin: 0; padding: .9rem 1rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--raise); color: var(--ink-2); font-size: .9rem; line-height: 1.55; cursor: pointer; }
 .checkout-consent:hover { border-color: var(--ink-3); }
 .checkout-consent input { flex: none; width: 18px; height: 18px; min-height: 18px; margin: .15rem 0 0; padding: 0; border: 0; accent-color: var(--violet); cursor: pointer; }
 .checkout-consent input:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }

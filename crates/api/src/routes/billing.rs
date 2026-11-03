@@ -270,11 +270,11 @@ pub async fn start_checkout(
         ));
     }
 
-    // The tick box before Stripe (owner decision, 3 November 2026): the
-    // Terms, immediate access and the end of the right of withdrawal. With
-    // CHECKOUT_CONSENT_REQUIRED off a ticked box is recorded and a missing one
-    // still goes through, so no purchase breaks while pages roll out; with it
-    // on, no consent or consent to older Terms is refused before Stripe.
+    // The tick box before Stripe (owner decisions, 3 and 4 November 2026):
+    // "I agree to the Terms." With CHECKOUT_CONSENT_REQUIRED off a ticked box
+    // is recorded and a missing one still goes through, so no purchase breaks
+    // while pages roll out; with it on, no consent or consent to an older
+    // version is refused before Stripe.
     let consent = body
         .consent
         .as_ref()

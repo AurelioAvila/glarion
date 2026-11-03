@@ -255,10 +255,12 @@ pub fn trial_enabled() -> bool {
         .unwrap_or(false)
 }
 
-/// The Terms the box before Stripe accepts: the "Last updated" date of
-/// web/terms.html. The plan page reads it from `GET /api/billing` and sends
-/// it back, so a page opened before a change cannot accept the new text.
-pub const TERMS_VERSION: &str = "2026-11-03";
+/// The version of the box before Stripe that a consent row records.
+/// 2026-11-04 is "I agree to the Terms." alone (owner decision, 4 November
+/// 2026), for the Terms last updated 3 November 2026. The plan page reads it
+/// from `GET /api/billing` and sends it back, so a page opened before a
+/// change cannot accept the new text.
+pub const TERMS_VERSION: &str = "2026-11-04";
 
 /// Subscription and session metadata naming the consent row behind a
 /// checkout, and the subscription mark of an open dispute (its charge).

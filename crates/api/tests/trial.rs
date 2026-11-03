@@ -1497,7 +1497,7 @@ async fn the_tick_box_is_recorded_and_only_required_with_the_switch_on() {
         .as_str()
         .unwrap()
         .to_string();
-    assert_eq!(terms, "2026-11-03");
+    assert_eq!(terms, "2026-11-04");
 
     // Off: a page without the box still reaches Stripe, and nothing is recorded.
     let (status, body) = checkout(&app, &token, json!({ "plan": "studio" })).await;
