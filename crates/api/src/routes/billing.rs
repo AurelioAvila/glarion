@@ -278,7 +278,23 @@ pub async fn start_checkout(
 
     let secret = stripe_secret()?;
     let email = account_email(&state, user.id).await?;
-    let customer_id = existing_customer(&state, user.id).await?;
+    // The account's customer: the one stored, or, in the seconds between
+    // paying and Stripe's webhook reaching us, the one its completed checkout
+    // created. Reused either way, so a person stays one customer.
+    let customer_id = match existing_customer(&state, user.id).await? {
+        Some(id) => Some(id),
+        None => completed_checkout_customer(&secret, user.id, &email).await?,
+    };
+    // The row above says nothing yet about a payment Stripe has but the
+    // webhook has not applied: a second click then would start a second
+    // subscription and charge twice. Stripe is asked instead.
+    if let Some(customer) = customer_id.as_deref() {
+        if has_live_subscription(&secret, customer).await? {
+            return Err(ApiError::Conflict(
+                "Your payment is still being confirmed by Stripe. Your plan appears on this page as soon as it is, so there is no need to pay again.".into(),
+            ));
+        }
+    }
 
     // Which trial, if any. With the switch on the customer chooses, and a
     // trial they ask for is granted only when the account may have one;
@@ -304,14 +320,18 @@ pub async fn start_checkout(
 
     // Back to the plan page either way: it is the page that shows what
     // they now have, and after paying that is the only thing they want to
-    // see. (The old destination carried a `subscribed=1` flag nothing ever
-    // read.)
+    // see. After paying it carries the session (Stripe fills the template),
+    // so the page waits for Stripe's confirmation instead of offering the
+    // plans again while the webhook is on its way.
     let plan_page = state.mailer.app_link("/plan");
     let mut form: Vec<(String, String)> = vec![
         ("mode".into(), "subscription".into()),
         ("line_items[0][price]".into(), price_id),
         ("line_items[0][quantity]".into(), "1".into()),
-        ("success_url".into(), plan_page.clone()),
+        (
+            "success_url".into(),
+            format!("{plan_page}?checkout={{CHECKOUT_SESSION_ID}}"),
+        ),
         ("cancel_url".into(), plan_page),
         // Carried through Checkout and returned on the webhook. Matching a
         // Stripe customer back to an account by email would break the
@@ -1302,10 +1322,18 @@ async fn apply(state: &AppState, event_type: &str, event: &serde_json::Value) ->
                 .and_then(|value| Uuid::parse_str(value).ok());
             let customer = object.get("customer").and_then(|value| value.as_str());
 
+            // Never over a customer whose subscription is still live: a
+            // second checkout paid before the first reached us would move the
+            // account to the new customer and leave the first subscription
+            // out of Manage billing. The duplicate is dealt with when its
+            // subscription arrives (apply_subscription).
             if let (Some(user_id), Some(customer)) = (user_id, customer) {
                 sqlx::query(
                     "update entitlements set stripe_customer_id = $2
-                     where user_id = $1 and product = 'glarion'",
+                     where user_id = $1 and product = 'glarion'
+                       and (stripe_customer_id is null or stripe_customer_id = $2
+                            or subscription_status is null
+                            or subscription_status not in ('active', 'trialing', 'past_due'))",
                 )
                 .bind(user_id)
                 .bind(customer)
@@ -1325,6 +1353,9 @@ async fn apply(state: &AppState, event_type: &str, event: &serde_json::Value) ->
             let Some(id) = object.get("id").and_then(|value| value.as_str()) else {
                 return Ok(());
             };
+            if other_product(state, object, id).await? {
+                return Ok(());
+            }
             with_customer_lock(state, object, async {
                 match fetch_subscription(id).await? {
                     Some(fresh) => apply_subscription(state, &fresh).await,
@@ -1341,6 +1372,9 @@ async fn apply(state: &AppState, event_type: &str, event: &serde_json::Value) ->
             let Some(id) = invoice_subscription(object) else {
                 return Ok(());
             };
+            if other_product(state, object, &id).await? {
+                return Ok(());
+            }
             with_customer_lock(state, object, async {
                 match fetch_subscription(&id).await? {
                     Some(fresh) => apply_subscription(state, &fresh).await,
@@ -1436,6 +1470,53 @@ fn invoice_subscription(invoice: &serde_json::Value) -> Option<String> {
                 .and_then(|value| value.as_str())
         })
         .map(str::to_string)
+}
+
+/// The prices a subscription (`items`) or invoice (`lines`) names, in either
+/// API version's shape: `price` as an object or an id, or the newer
+/// `pricing.price_details.price` on invoice lines.
+fn payload_prices(object: &serde_json::Value) -> Vec<&str> {
+    ["items", "lines"]
+        .into_iter()
+        .filter_map(|key| object.get(key)?.get("data")?.as_array())
+        .flatten()
+        .filter_map(|line| {
+            line.get("price")
+                .and_then(|price| price.get("id").unwrap_or(price).as_str())
+                .or_else(|| {
+                    line.get("pricing")?
+                        .get("price_details")?
+                        .get("price")?
+                        .as_str()
+                })
+        })
+        .collect()
+}
+
+/// Another product's subscription on the shared Stripe account (PC Tweaker
+/// sells through it too): the event names prices, none of them Glarion's,
+/// and no account here holds the subscription. Skipped before the Stripe
+/// read-back, which would otherwise run for every one of their events. An
+/// event that names no price is not judged here, and a Glarion subscription
+/// moved onto a price no longer configured still has its account's row, so
+/// both are applied as before.
+async fn other_product(
+    state: &AppState,
+    object: &serde_json::Value,
+    subscription_id: &str,
+) -> ApiResult<bool> {
+    let prices = payload_prices(object);
+    if prices.is_empty() || prices.iter().any(|price| plan_for_price(price).is_some()) {
+        return Ok(false);
+    }
+    let ours: bool = sqlx::query_scalar(
+        "select exists (select 1 from entitlements
+                         where product = 'glarion' and stripe_subscription_id = $1)",
+    )
+    .bind(subscription_id)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(!ours)
 }
 
 /// The subscription as Stripe has it now, with its payment method expanded.
@@ -1613,6 +1694,42 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
         .as_ref()
         .is_some_and(|row| row.stripe_subscription_id.as_deref() == subscription_id);
 
+    // A second live subscription for an account that already has one: two
+    // checkouts paid before the first reached us. Applied, it would bill the
+    // account twice and move it to the newer customer, leaving the first
+    // subscription out of Manage billing. The newer one is ended instead, the
+    // account keeps the one it has, and the owner is told, since its first
+    // payment may already have been taken. The kept one is read back first:
+    // a stale row must never cost somebody their only subscription. (A
+    // second three-day trial is refused by the trial rules below.)
+    if !three_day && !same_subscription && status_grants_access(status) {
+        if let (Some(previous), Some(duplicate)) = (previous.as_ref(), subscription_id) {
+            if let (Some(kept), Some(kept_status)) = (
+                previous.stripe_subscription_id.as_deref(),
+                previous.subscription_status.as_deref(),
+            ) {
+                if status_grants_access(kept_status) && still_live(kept).await? {
+                    cancel_subscription(duplicate, DUPLICATE_COMMENT).await?;
+                    tracing::warn!(
+                        kept,
+                        duplicate,
+                        customer,
+                        "cancelled a second subscription for the same account"
+                    );
+                    let message = orchestrator::mailer::duplicate_subscription_notice_email(
+                        previous.email.as_deref().unwrap_or("unknown"),
+                        kept,
+                        duplicate,
+                    );
+                    if let Err(error) = state.mailer.send(OWNER_NOTICE_TO, &message).await {
+                        tracing::warn!(%error, "could not send the duplicate subscription notice");
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     // The three-day trial is claimed when Stripe creates it, against the
     // account, the mailbox and the card. A trial that collides is cancelled
     // before anything is charged and never grants the plan.
@@ -1639,7 +1756,7 @@ async fn apply_subscription(state: &AppState, subscription: &serde_json::Value) 
                         .subscription_status
                         .as_deref()
                         .is_some_and(status_grants_access);
-                cancel_subscription(subscription_id).await?;
+                cancel_subscription(subscription_id, TRIAL_REJECTED_COMMENT).await?;
                 tracing::info!(
                     subscription_id,
                     running_elsewhere,
@@ -1925,6 +2042,55 @@ async fn existing_customer(state: &AppState, user_id: Uuid) -> ApiResult<Option<
     .flatten())
 }
 
+/// The customer of this account's newest completed Checkout, read from
+/// Stripe. Only needed before the webhook has stored it: Checkout creates
+/// the customer when the payment goes through. Sessions are found by the
+/// email Checkout was given and kept only when they carry this account.
+async fn completed_checkout_customer(
+    secret: &str,
+    user_id: Uuid,
+    email: &str,
+) -> ApiResult<Option<String>> {
+    let sessions = stripe_get(
+        secret,
+        &stripe_url("/v1/checkout/sessions"),
+        &[
+            ("customer_details[email]", email),
+            ("status", "complete"),
+            ("limit", "10"),
+        ],
+    )
+    .await?;
+    let account = user_id.to_string();
+    Ok(sessions["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|session| session["client_reference_id"].as_str() == Some(account.as_str()))
+        .find_map(|session| session["customer"].as_str().map(str::to_string)))
+}
+
+/// Whether Stripe holds a subscription for this customer that is paid up,
+/// trialing or still being collected. Every subscription on a customer
+/// Glarion's checkout created is Glarion's.
+async fn has_live_subscription(secret: &str, customer: &str) -> ApiResult<bool> {
+    let subscriptions = stripe_get(
+        secret,
+        &stripe_url("/v1/subscriptions"),
+        &[("customer", customer), ("limit", "10")],
+    )
+    .await?;
+    Ok(subscriptions["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|subscription| {
+            subscription["status"]
+                .as_str()
+                .is_some_and(status_grants_access)
+        }))
+}
+
 /// Takes the trial for this subscription, or reports that the account, its
 /// mailbox or its card already had one. Idempotent: the same subscription
 /// claims once and is found again on every later event. A card Stripe only
@@ -1995,14 +2161,31 @@ fn card_fingerprint(subscription: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Ends a refused trial at once, before its first invoice, with the reason
-/// recorded where Stripe's dashboard shows it.
-async fn cancel_subscription(id: &str) -> ApiResult<()> {
+/// Written to `cancellation_details.comment` on a second subscription for
+/// an account that already has one.
+const DUPLICATE_COMMENT: &str = "duplicate_subscription";
+
+/// Whether Stripe still holds this subscription as paid up, trialing or
+/// being collected. Without a secret key there is nothing to ask, so the
+/// stored row is taken at its word.
+async fn still_live(id: &str) -> ApiResult<bool> {
+    Ok(match fetch_subscription(id).await? {
+        Some(fresh) => fresh
+            .get("status")
+            .and_then(|value| value.as_str())
+            .is_some_and(status_grants_access),
+        None => true,
+    })
+}
+
+/// Ends a subscription at once (a refused trial before its first invoice, or
+/// a duplicate), with the reason recorded where Stripe's dashboard shows it.
+async fn cancel_subscription(id: &str, comment: &str) -> ApiResult<()> {
     let secret = stripe_secret()?;
     let response = reqwest::Client::new()
         .delete(stripe_url(&format!("/v1/subscriptions/{id}")))
         .basic_auth(&secret, Option::<&str>::None)
-        .query(&[("cancellation_details[comment]", TRIAL_REJECTED_COMMENT)])
+        .query(&[("cancellation_details[comment]", comment)])
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
@@ -2015,7 +2198,7 @@ async fn cancel_subscription(id: &str) -> ApiResult<()> {
             }
         }
         let payload: serde_json::Value = response.json().await.unwrap_or_default();
-        tracing::error!(?payload, "Stripe refused to cancel a refused trial");
+        tracing::error!(?payload, comment, "Stripe refused to cancel a subscription");
         return Err(ApiError::Internal(anyhow::anyhow!("Stripe refused")));
     }
     Ok(())
@@ -2276,6 +2459,18 @@ mod tests {
         let limit = "é".repeat(CANCEL_COMMENT_MAX);
         assert!(clean_cancel_feedback(None, Some(&limit)).is_ok());
         assert!(clean_cancel_feedback(None, Some(&format!("{limit}x"))).is_err());
+    }
+
+    #[test]
+    fn prices_are_read_from_subscriptions_and_invoices_in_every_shape() {
+        let subscription =
+            serde_json::json!({ "items": { "data": [{ "price": { "id": "price_sub" } }] } });
+        let old_invoice = serde_json::json!({ "lines": { "data": [{ "price": { "id": "price_old" } }, { "price": "price_bare" }] } });
+        let basil_invoice = serde_json::json!({ "lines": { "data": [{ "price": null, "pricing": { "price_details": { "price": "price_new" } } }] } });
+        assert_eq!(payload_prices(&subscription), ["price_sub"]);
+        assert_eq!(payload_prices(&old_invoice), ["price_old", "price_bare"]);
+        assert_eq!(payload_prices(&basil_invoice), ["price_new"]);
+        assert!(payload_prices(&serde_json::json!({ "id": "sub_thin" })).is_empty());
     }
 
     #[test]

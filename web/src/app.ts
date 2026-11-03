@@ -52,6 +52,7 @@ import { firstChargeDate, loadPrices, longDate, priceFor, subscribeNowLine, time
 // A file of its own: browsers keep /dist modules for hours behind Cloudflare, and a new
 // export in trial.js could meet yesterday's cached copy of it. A new URL never can.
 import { trialEntry } from "./trial-entry.js";
+import { CHECKOUT_POLL_MS, CHECKOUT_POLLS, checkoutSettled, returnedFromCheckout } from "./checkout-return.js";
 import * as palette from "./palette.js";
 import { postureChart, proportionBar } from "./chart.js";
 import { siteProfile } from "./profile.js";
@@ -2397,6 +2398,10 @@ async function renderPlan(): Promise<void> {
 
   if (routeId !== currentRouteId) return;
   clear(container);
+  if (returnedFromCheckout(window.location.hash) && !checkoutSettled(subscription)) {
+    renderConfirmingCheckout(container, routeId);
+    return;
+  }
   const message = el("div");
   const trialOn = subscription.trial_enabled === true;
   const trialing = trialOn && subscription.state === "trialing" && Boolean(subscription.trial_ends_at);
@@ -2579,6 +2584,42 @@ async function renderPlan(): Promise<void> {
           "Cancel from Manage billing; full scans and scheduled checks stop at the end of the paid period. Your sites and scan history remain.",
         ]),
   );
+}
+
+/// Back from Stripe with the payment made, before Stripe's confirmation has
+/// reached us: no plan buttons, a sentence saying what is happening, and a
+/// quiet check every few seconds that shows the plan as soon as it lands.
+function renderConfirmingCheckout(container: HTMLElement, routeId: number): void {
+  const status = el("p", { class: "blurb", role: "status", text: "Payment received. Stripe is confirming your subscription, which usually takes a few seconds." });
+  append(container, el("h1", { text: "Pricing" }), status);
+  let asked = 0;
+  const ask = async (): Promise<void> => {
+    asked++;
+    let settled = false;
+    try {
+      settled = checkoutSettled(await api.subscription());
+    } catch {
+      // A failed read is just another try; the next one asks again.
+    }
+    if (routeId !== currentRouteId) return;
+    if (settled) {
+      window.location.hash = "#/plan";
+      return;
+    }
+    if (asked < CHECKOUT_POLLS) {
+      pollTimer = window.setTimeout(() => void ask(), CHECKOUT_POLL_MS);
+      return;
+    }
+    pollTimer = undefined;
+    const again = el("button", { class: "ghost", type: "button", text: "Check again" });
+    on(again, "click", () => route());
+    status.textContent =
+      "Stripe has not confirmed your payment to us yet. Please do not pay again: your plan appears here as soon as the confirmation arrives, " +
+      "which can take a few minutes. If it has not appeared within an hour, use the contact address at the foot of glarion.app.";
+    container.append(el("div", { style: "margin-top:1.5rem" }, [again]));
+  };
+  stopPolling();
+  pollTimer = window.setTimeout(() => void ask(), CHECKOUT_POLL_MS);
 }
 
 type TrialOffer = { prices: PriceList; chargeOn: Date };
