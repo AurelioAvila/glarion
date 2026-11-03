@@ -303,6 +303,9 @@ let pendingPlan = readPlanChoice();
 let promoView: PromoView | null = null;
 let promoChanged: (() => void) | null = null;
 let promoBanner: PromoBanner | null = null;
+
+/// The tick box every checkout on the plan page needs (3 November 2026).
+let checkoutConsent: ConsentBox | null = null;
 watchPromo((view) => {
   const changed = Boolean(promoView?.promo) !== Boolean(view.promo);
   promoView = view;
@@ -2514,6 +2517,10 @@ async function renderPlan(): Promise<void> {
   } else if (trialOn && !subscription.manageable && subscription.can_start_trial === false && subscription.state !== "trialing") {
     container.append(notice("info", "This account has already used its free trial, so a plan you choose starts straight away."));
   }
+  // Held while a bank looks at a disputed payment, whatever the trial switch.
+  if (subscription.blocked_reason === "disputed") {
+    container.append(notice("error", "A payment for this plan is being disputed with your bank, so full scans and scheduled checks are paused and nothing more is charged. If the payment stands, everything resumes by itself, with your sites and schedules as they were."));
+  }
 
   // The free trial, one click from the top of the page: its button takes the
   // reader to the plans, where each paid plan has its own trial checkout.
@@ -2624,10 +2631,15 @@ async function renderPlan(): Promise<void> {
   on(monthlyTab, "click", () => selectInterval("monthly"));
   on(yearlyTab, "click", () => selectInterval("yearly"));
 
+  // Changing plan goes through Stripe's portal, which has its own terms;
+  // only a first checkout asks for the box.
+  checkoutConsent = subscription.manageable ? null : consentBox();
+
   paintList();
   container.append(
     promoSlot,
     el("div", { style: "margin-top:1.75rem" }, [toggleRow]),
+    checkoutConsent?.element ?? null,
     list,
     // What Stripe really offers at checkout today (Managed Payments): nothing more.
     el("p", { class: "muted", style: "margin-top:1rem", text: "Pay with card, Apple Pay, Google Pay or Link." }),
@@ -2685,6 +2697,43 @@ function renderConfirmingCheckout(container: HTMLElement, routeId: number): void
 }
 
 type TrialOffer = { prices: PriceList; chargeOn: Date };
+
+type ConsentBox = { element: HTMLElement; confirm(): boolean };
+
+/// The tick box before Stripe: the Terms, immediate access and the end of
+/// the right of withdrawal. Glarion sells through Link, Stripe's merchant of
+/// record, so the refund clause names Link's buyer terms. `confirm` shows
+/// the error and moves focus to the box when it is not ticked.
+function consentBox(): ConsentBox {
+  const input = el("input", { type: "checkbox", "aria-describedby": "checkout-consent-error" });
+  const label = el("label", { class: "checkout-consent" }, [
+    input,
+    el("span", {}, [
+      "I agree to the ",
+      el("a", { class: "inline", href: "/terms.html", target: "_blank", rel: "noopener", text: "Terms" }),
+      ". I ask for immediate access to this digital content and understand that I lose my 14-day right of withdrawal once access starts. Purchases are not refundable, except where Link’s buyer terms or the law require a refund. Subscriptions renew automatically until you cancel.",
+    ]),
+  ]);
+  const error = el("p", { class: "hint hint-error checkout-consent-error", id: "checkout-consent-error", role: "alert", hidden: true, text: "Tick the box to continue." });
+  const invalid = (show: boolean): void => {
+    label.classList.toggle("checkout-consent-invalid", show);
+    error.hidden = !show;
+    input.setAttribute("aria-invalid", String(show));
+  };
+  on(input, "change", () => {
+    if (input.checked) invalid(false);
+  });
+  return {
+    element: el("div", { class: "checkout-consent-wrap" }, [label, error]),
+    confirm() {
+      if (input.checked) return true;
+      invalid(true);
+      label.scrollIntoView({ block: "center", behavior: "smooth" });
+      input.focus({ preventScroll: true });
+      return false;
+    },
+  };
+}
 
 /// The plan list with the Stripe prices in place of the ones written here,
 /// wherever the server published them, so a row and its trial line can never
@@ -2801,11 +2850,12 @@ function planRow(
     const go = (button: HTMLButtonElement, startTrial?: boolean): HTMLButtonElement => {
       on(button, "click", () => {
         clear(message);
+        if (!subscription.manageable && checkoutConsent && !checkoutConsent.confirm()) return;
         void withPending(button, "Opening…", async () => {
           try {
             const result = subscription.manageable
               ? await api.billingPortal()
-              : await api.checkout(offer.plan, interval, startTrial);
+              : await api.checkout(offer.plan, interval, startTrial, subscription.terms_version);
             pendingPlan = null;
             rememberPlanChoice(null);
             window.location.href = result.url;

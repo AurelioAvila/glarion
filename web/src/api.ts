@@ -54,7 +54,7 @@ export interface Subscription {
   trial_days?: number;
   /** none | trialing | active | blocked; anything else reads as none. */
   state?: string;
-  /** none | payment_failed | canceled | trial_already_used. */
+  /** none | payment_failed | canceled | trial_already_used | disputed. */
   blocked_reason?: string;
   trial_ends_at?: string | null;
   cancel_at_period_end?: boolean;
@@ -63,6 +63,8 @@ export interface Subscription {
   trial_limits?: { max_targets: number; scans_per_site_per_day: number; branded_reports: boolean } | null;
   /** What Stripe will take when the trial ends, in cents, tax and coupon included. */
   first_charge?: { amount: number; currency: string } | null;
+  /** The Terms the tick box before checkout accepts; sent back with it. */
+  terms_version?: string;
 }
 
 /** Stripe's own cancellation feedback codes. */
@@ -441,12 +443,14 @@ export const api = {
   },
 
   /// `startTrial` is sent only when the server offers the trial: true from
-  /// "Start 3-day free trial", false from "Subscribe now".
-  checkout(plan: string, interval: "monthly" | "yearly", startTrial?: boolean) {
+  /// "Start 3-day free trial", false from "Subscribe now". `termsVersion` is
+  /// the Terms the buyer ticked the box for, as the server published them.
+  checkout(plan: string, interval: "monthly" | "yearly", startTrial?: boolean, termsVersion?: string) {
     return request<{ url: string; trial?: boolean }>("POST", "/api/billing/checkout", {
       plan,
       interval,
       ...(startTrial === undefined ? {} : { start_trial: startTrial }),
+      ...(termsVersion === undefined ? {} : { consent: { accepted: true, terms_version: termsVersion } }),
     });
   },
 

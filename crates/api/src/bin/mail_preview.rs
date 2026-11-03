@@ -64,6 +64,7 @@ fn samples(site: &str) -> Vec<(&'static str, Message)> {
                 true,
                 &format!("{app}/targets"),
                 Some(Utc::now() + Duration::days(14)),
+                false,
             ),
         ),
         (
@@ -106,7 +107,15 @@ fn samples(site: &str) -> Vec<(&'static str, Message)> {
         ),
         (
             "plan-active",
-            subscription_email("Ada", "Studio", 10, true, &format!("{app}/targets"), None),
+            subscription_email(
+                "Ada",
+                "Studio",
+                10,
+                true,
+                &format!("{app}/targets"),
+                None,
+                true,
+            ),
         ),
         (
             "payment-failed",
