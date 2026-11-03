@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#faf7fb">
+<title>HSTS Checker: Is Strict-Transport-Security Set? | Glarion</title>
+<meta name="description" content="Check whether a website sends the HSTS header and for how long. Free, no account. Flags lifetimes under a year, with fixes for nginx, Apache and CDNs.">
+<link rel="canonical" href="https://glarion.app/hsts-checker.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Glarion">
+<meta property="og:title" content="HSTS Checker: Is Strict-Transport-Security Set?">
+<meta property="og:description" content="Reads the Strict-Transport-Security header from a live HTTPS response and shows the lifetime in days, flagged under one year.">
+<meta property="og:url" content="https://glarion.app/hsts-checker.html">
+<meta property="og:image" content="https://glarion.app/og-glarion-e0cd07a8dc.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Glarion sample website security report with the issues that need attention and the next actions">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HSTS Checker: Is Strict-Transport-Security Set?">
+<meta name="twitter:description" content="Is HSTS set, and for how long? Read from the live response. Free, no account.">
+<meta name="twitter:image" content="https://glarion.app/og-glarion-e0cd07a8dc.png">
+<meta name="twitter:image:alt" content="Glarion sample website security report with the issues that need attention and the next actions">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/glarion-mark-64.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebApplication","@id":"https://glarion.app/hsts-checker.html#app","name":"Glarion HSTS checker","url":"https://glarion.app/hsts-checker.html","applicationCategory":"SecurityApplication","operatingSystem":"Any operating system with a modern web browser","browserRequirements":"Requires JavaScript","isAccessibleForFree":true,"description":"Reads the Strict-Transport-Security header from a website's live HTTPS response and shows its lifetime in days, flagged when it is under one year.","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR","description":"Free public check, no account needed"},"author":{"@type":"Person","name":"Aurelio Avila"},"publisher":{"@type":"Organization","name":"Glarion","url":"https://glarion.app/","logo":"https://glarion.app/glarion-mark-512.png"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Glarion","item":"https://glarion.app/"},{"@type":"ListItem","position":2,"name":"Free website security check","item":"https://glarion.app/free-website-security-check.html"},{"@type":"ListItem","position":3,"name":"HSTS checker","item":"https://glarion.app/hsts-checker.html"}]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is an HSTS checker?","acceptedAnswer":{"@type":"Answer","text":"It requests a website over HTTPS and reads the Strict-Transport-Security response header. A site that sends it tells browsers to use HTTPS only for the stated time, so a later visit cannot be downgraded to HTTP."}},{"@type":"Question","name":"What HSTS lifetime should I use?","acceptedAnswer":{"@type":"Answer","text":"One year (max-age=31536000) is the usual target and the minimum for the browser preload list. Glarion flags anything shorter. Start with a short value while you test, then raise it."}},{"@type":"Question","name":"Does the free check read includeSubDomains and preload?","acceptedAnswer":{"@type":"Answer","text":"No. The free result shows whether the header is present and its lifetime in days. includeSubDomains and preload are directives you set yourself; check them on the response before you submit a domain to the preload list."}},{"@type":"Question","name":"Why does the check say HSTS is missing when my site redirects to HTTPS?","acceptedAnswer":{"@type":"Answer","text":"A redirect is not HSTS. The header has to be sent on the HTTPS response itself, and browsers ignore it when it arrives over plain HTTP. The check does not follow redirects, so test the exact host visitors land on."}}]}]}</script>
+<link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/prism.css?v=20261101qa">
+<link rel="stylesheet" href="/seo.css?v=20261101qa">
+<link rel="stylesheet" href="/halloween.css?v=20261011halloween"><script type="module" src="/dist/halloween-strip.js?v=20261011halloween"></script>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="/"><img src="/glarion-mark-64.png" alt="" width="32" height="32"><span>Glarion</span></a><nav class="nav"><a href="/how-it-works.html">How it works</a><a href="/pricing.html">Pricing</a><a href="/sample-report.html">Sample report</a><a href="/app/#/signin">Sign in</a></nav></div></header>
+
+<main class="wrap" id="main">
+<h1>HSTS checker: does this site tell browsers to stay on HTTPS?</h1>
+<p class="lede">Enter a domain and the free check requests its HTTPS homepage, reads the <code>Strict-Transport-Security</code> header and shows the lifetime in days. A lifetime under one year is flagged as weak.</p>
+<form class="tool-check" action="/check" method="get" aria-labelledby="tool-check-title">
+<p class="tool-check-title" id="tool-check-title">Check a site’s HSTS now</p>
+<div class="tool-check-row">
+<label class="sr-only" for="tool-domain">Website domain</label>
+<input id="tool-domain" name="d" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.com" maxlength="253" required>
+<button class="button" type="submit">Check</button>
+</div>
+<p class="tool-check-note">Free and without an account. The result opens on the next page, together with the certificate expiry, the other security headers, SPF and DMARC records and public files.</p>
+</form>
+<article>
+<section>
+<h2>What HSTS does</h2>
+<p>HTTP Strict Transport Security is a response header. Once a browser has seen it on an HTTPS page, it connects to that host over HTTPS only until the stated lifetime runs out, even if the visitor types <code>http://</code> or follows an old link. That closes the window in which a first request over plain HTTP could be intercepted or redirected.</p>
+<p>The lifetime is the <code>max-age</code> value, in seconds. The check converts it to days: <code>max-age=31536000</code> is 365 days.</p>
+</section>
+
+<section>
+<h2>What the check reads, and what it does not</h2>
+<ul>
+<li>It makes one GET request to the HTTPS homepage of the host you enter and reads the header from that response. Redirects are not followed, so check <code>www</code> and the bare domain separately if visitors can land on either.</li>
+<li>It shows the lifetime and flags anything under 31,536,000 seconds (one year). A header that cannot be parsed is shown as it is, not called weak.</li>
+<li>It does not evaluate <code>includeSubDomains</code> or <code>preload</code>. Those are choices you make; read them in the raw header before you submit a domain to the browser preload list.</li>
+<li>A header sent over plain HTTP is ignored by browsers, so a site that only redirects from HTTP to HTTPS still needs the header on the HTTPS response.</li>
+</ul>
+</section>
+
+<section>
+<h2>How to set it</h2>
+<ol>
+<li>Make sure every host you intend to cover answers over HTTPS with a valid certificate. <code>includeSubDomains</code> applies the rule to all subdomains, including ones you forgot.</li>
+<li>Start with a short lifetime such as one day (<code>max-age=86400</code>) and load the site and its subdomains. Browsers remember the rule, so a mistake lasts as long as the lifetime you sent.</li>
+<li>Raise it to one year once nothing breaks. In nginx: <code>add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;</code>. In Apache: <code>Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"</code>.</li>
+<li>On a CDN or hosting platform, use its HSTS setting if it has one, then run the check again to confirm the header reaches the visitor.</li>
+</ol>
+</section>
+
+<section>
+<h2>Common questions</h2>
+<h3>What is an HSTS checker?</h3><p>It requests a website over HTTPS and reads the Strict-Transport-Security response header. A site that sends it tells browsers to use HTTPS only for the stated time, so a later visit cannot be downgraded to HTTP.</p><h3>What HSTS lifetime should I use?</h3><p>One year (max-age=31536000) is the usual target and the minimum for the browser preload list. Glarion flags anything shorter. Start with a short value while you test, then raise it.</p><h3>Does the free check read includeSubDomains and preload?</h3><p>No. The free result shows whether the header is present and its lifetime in days. includeSubDomains and preload are directives you set yourself; check them on the response before you submit a domain to the preload list.</p><h3>Why does the check say HSTS is missing when my site redirects to HTTPS?</h3><p>A redirect is not HSTS. The header has to be sent on the HTTPS response itself, and browsers ignore it when it arrives over plain HTTP. The check does not follow redirects, so test the exact host visitors land on.</p>
+</section>
+
+<section>
+<h2>Read next</h2>
+<ul class="more">
+<li>
+<a href="/security-headers-check.html">Security headers check</a>
+<span>The six response headers and what a missing one allows.</span>
+</li>
+<li>
+<a href="/ssl-certificate-checker.html">SSL certificate checker</a>
+<span>Expiry date and days left, read over a live TLS handshake.</span>
+</li>
+<li>
+<a href="/free-website-security-check.html">What the free check includes</a>
+<span>Certificate, headers, email policies, cookie flags and public files.</span>
+</li>
+</ul>
+</section>
+<section>
+<h2>Keeping headers right on client sites</h2>
+<p>A theme update or a new CDN can drop a header that took a day to tune. A paid plan verifies each domain once, rechecks it on a schedule, emails you when results change and puts the findings in a branded report for the client.</p>
+<div class="cta">
+<a class="button" href="/sample-report.html">See a sample client report</a>
+<a class="text-link" href="/pricing.html">Plans and prices →</a>
+</div>
+</section>
+</article>
+</main>
+
+<footer><div class="wrap foot"><span>Glarion — it reads what the site already publishes.</span><nav><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/how-it-works.html">How it works</a><a href="/about-our-checks.html">About our checks</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav></div></footer>
+<script src="/cf-beacon.js" defer></script></body>
+</html>
