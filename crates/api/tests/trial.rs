@@ -44,6 +44,8 @@ struct Stripe {
     events: Vec<Value>,
     /// Checkout Sessions as listed by customer, each with its one price.
     sessions: Vec<(Value, String)>,
+    /// Every subscription read back by id, in order.
+    reads: Vec<String>,
 }
 
 type Shared = Arc<Mutex<Stripe>>;
@@ -64,18 +66,30 @@ async fn stub_events(State(stripe): State<Shared>) -> Json<Value> {
     Json(json!({ "data": stripe.lock().unwrap().events }))
 }
 
-/// Newest first, as Stripe lists them.
+/// Newest first, as Stripe lists them, with the filters Stripe applies.
 async fn stub_sessions(
     State(stripe): State<Shared>,
     Query(query): Query<HashMap<String, String>>,
 ) -> Json<Value> {
+    let matches = |param: &str, field: &Value| {
+        query
+            .get(param)
+            .is_none_or(|wanted| field.as_str() == Some(wanted.as_str()))
+    };
     let mut found: Vec<Value> = stripe
         .lock()
         .unwrap()
         .sessions
         .iter()
         .map(|(session, _)| session.clone())
-        .filter(|session| query.get("customer").map(String::as_str) == session["customer"].as_str())
+        .filter(|session| {
+            matches("customer", &session["customer"])
+                && matches(
+                    "customer_details[email]",
+                    &session["customer_details"]["email"],
+                )
+                && matches("status", &session["status"])
+        })
         .collect();
     found.sort_by_key(|session| std::cmp::Reverse(session["created"].as_i64()));
     Json(json!({ "data": found }))
@@ -96,10 +110,30 @@ async fn stub_subscription(
     State(stripe): State<Shared>,
     Path(id): Path<String>,
 ) -> (StatusCode, Json<Value>) {
-    match stripe.lock().unwrap().subscriptions.get(&id) {
+    let mut stripe = stripe.lock().unwrap();
+    stripe.reads.push(id.clone());
+    match stripe.subscriptions.get(&id) {
         Some(found) => (StatusCode::OK, Json(found.clone())),
         None => (StatusCode::NOT_FOUND, Json(json!({ "error": {} }))),
     }
+}
+
+/// A customer's subscriptions, as `GET /v1/subscriptions?customer=` lists them.
+async fn stub_subscription_list(
+    State(stripe): State<Shared>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let found: Vec<Value> = stripe
+        .lock()
+        .unwrap()
+        .subscriptions
+        .values()
+        .filter(|subscription| {
+            subscription["customer"].as_str() == query.get("customer").map(String::as_str)
+        })
+        .cloned()
+        .collect();
+    Json(json!({ "data": found }))
 }
 
 async fn stub_cancel(
@@ -143,6 +177,7 @@ async fn start_stripe() -> Shared {
         )
         .route("/v1/checkout/sessions/:id/line_items", get(stub_line_items))
         .route("/v1/events", get(stub_events))
+        .route("/v1/subscriptions", get(stub_subscription_list))
         .route(
             "/v1/subscriptions/:id",
             get(stub_subscription).delete(stub_cancel),
@@ -1101,6 +1136,237 @@ async fn a_failed_first_payment_gets_one_email_back_to_the_same_plan() {
         text.contains("#/plan?plan=studio&interval=yearly"),
         "{text}"
     );
+
+    std::fs::remove_dir_all(&sink).ok();
+    for unset in ["EMAIL_SINK", "EMAIL_SINK_DIR", "MAIL_FROM"] {
+        std::env::remove_var(unset);
+    }
+}
+
+#[tokio::test]
+async fn another_products_events_are_skipped_without_asking_stripe() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(true);
+    let app = app(pool.clone());
+    let (token, user) = signup(&app, &pool, "shared@agency.example").await;
+
+    // PC Tweaker sells through the same Stripe account: its subscription and
+    // invoice events (either API version's shape) are acknowledged and left.
+    let other = json!({
+        "id": "sub_pc_tweaker", "customer": "cus_pc_tweaker", "status": "active", "metadata": {},
+        "items": { "data": [{ "price": { "id": "price_pc_tweaker" } }] }
+    });
+    assert_eq!(
+        deliver(&app, "customer.subscription.updated", other).await,
+        StatusCode::OK
+    );
+    let invoice = json!({
+        "subscription": null, "customer": "cus_pc_tweaker",
+        "parent": { "subscription_details": { "subscription": "sub_pc_tweaker" } },
+        "lines": { "data": [{ "price": null, "pricing": { "price_details": { "price": "price_pc_tweaker" } } }] }
+    });
+    assert_eq!(deliver(&app, "invoice.paid", invoice).await, StatusCode::OK);
+    assert!(stripe.lock().unwrap().reads.is_empty(), "nothing read back");
+
+    // A Glarion price is read back and applied.
+    set_subscription(
+        &stripe,
+        subscription(
+            "sub_ours",
+            "cus_ours",
+            user,
+            "active",
+            SOLO_MONTHLY,
+            false,
+            "fp_ours",
+        ),
+    );
+    let ours = json!({
+        "id": "sub_ours", "customer": "cus_ours",
+        "items": { "data": [{ "price": { "id": SOLO_MONTHLY } }] }
+    });
+    assert_eq!(
+        deliver(&app, "customer.subscription.created", ours).await,
+        StatusCode::OK
+    );
+    assert_eq!(stripe.lock().unwrap().reads, ["sub_ours"]);
+    assert_eq!(billing(&app, &token).await["plan"], "solo");
+
+    // Ours moved onto a price no longer configured is still ours: applied,
+    // and it grants nothing, as before.
+    stripe
+        .lock()
+        .unwrap()
+        .subscriptions
+        .get_mut("sub_ours")
+        .unwrap()["items"]["data"][0]["price"]["id"] = json!("price_retired");
+    let moved = json!({
+        "id": "sub_ours", "customer": "cus_ours",
+        "items": { "data": [{ "price": { "id": "price_retired" } }] }
+    });
+    assert_eq!(
+        deliver(&app, "customer.subscription.updated", moved).await,
+        StatusCode::OK
+    );
+    assert_eq!(stripe.lock().unwrap().reads, ["sub_ours", "sub_ours"]);
+    assert_eq!(billing(&app, &token).await["plan"], "free");
+}
+
+#[tokio::test]
+async fn a_payment_still_being_confirmed_is_never_paid_twice() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let stripe = start_stripe().await;
+    switch(true);
+    let sink = std::env::temp_dir().join(format!("glarion-duplicate-sink-{}", Uuid::new_v4()));
+    std::env::set_var("EMAIL_SINK", "1");
+    std::env::set_var("EMAIL_SINK_DIR", &sink);
+    std::env::set_var("MAIL_FROM", "Glarion <noreply@glarion.app>");
+    let app = app(pool.clone());
+    let (token, user) = signup(&app, &pool, "twice@agency.example").await;
+
+    let (status, body) = checkout(
+        &app,
+        &token,
+        json!({ "plan": "studio", "start_trial": false }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let form = stripe.lock().unwrap().checkouts.last().cloned().unwrap();
+    assert!(
+        form["success_url"].ends_with("#/plan?checkout={CHECKOUT_SESSION_ID}"),
+        "{}",
+        form["success_url"]
+    );
+    assert!(form["cancel_url"].ends_with("#/plan"));
+
+    // Paid, and Stripe's webhook not here yet: a second click is refused.
+    stripe.lock().unwrap().sessions.push((
+        json!({
+            "id": "cs_first", "customer": "cus_first", "status": "complete",
+            "client_reference_id": user.to_string(),
+            "customer_details": { "email": "twice@agency.example" },
+            "created": Utc::now().timestamp()
+        }),
+        STUDIO_MONTHLY.to_string(),
+    ));
+    set_subscription(
+        &stripe,
+        subscription(
+            "sub_first",
+            "cus_first",
+            user,
+            "active",
+            STUDIO_MONTHLY,
+            false,
+            "fp_first",
+        ),
+    );
+    let (status, body) = checkout(
+        &app,
+        &token,
+        json!({ "plan": "studio", "start_trial": false }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("no need to pay again"),
+        "{body}"
+    );
+    assert_eq!(stripe.lock().unwrap().checkouts.len(), 1);
+
+    // The webhook lands.
+    deliver(
+        &app,
+        "checkout.session.completed",
+        json!({ "client_reference_id": user.to_string(), "customer": "cus_first" }),
+    )
+    .await;
+    deliver(
+        &app,
+        "customer.subscription.created",
+        json!({ "id": "sub_first" }),
+    )
+    .await;
+    assert_eq!(billing(&app, &token).await["plan"], "studio");
+
+    // A second subscription that got through anyway, on a new customer: the
+    // account keeps the first subscription and customer, the second is
+    // cancelled, and the owner is told.
+    set_subscription(
+        &stripe,
+        subscription(
+            "sub_second",
+            "cus_second",
+            user,
+            "active",
+            STUDIO_MONTHLY,
+            false,
+            "fp_second",
+        ),
+    );
+    deliver(
+        &app,
+        "checkout.session.completed",
+        json!({ "client_reference_id": user.to_string(), "customer": "cus_second" }),
+    )
+    .await;
+    assert_eq!(
+        deliver(
+            &app,
+            "customer.subscription.created",
+            json!({ "id": "sub_second" })
+        )
+        .await,
+        StatusCode::OK
+    );
+    assert!(stripe.lock().unwrap().cancelled.contains(&(
+        "sub_second".to_string(),
+        "duplicate_subscription".to_string()
+    )));
+    deliver(
+        &app,
+        "customer.subscription.deleted",
+        json!({ "id": "sub_second" }),
+    )
+    .await;
+    let (customer, subscription_id): (String, String) = sqlx::query_as(
+        "select stripe_customer_id, stripe_subscription_id from entitlements
+          where user_id = $1 and product = 'glarion'",
+    )
+    .bind(user)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (customer.as_str(), subscription_id.as_str()),
+        ("cus_first", "sub_first")
+    );
+    assert_eq!(billing(&app, &token).await["plan"], "studio");
+
+    let notices: Vec<String> = std::fs::read_dir(&sink)
+        .map(|dir| {
+            dir.flatten()
+                .filter(|f| f.path().extension().is_some_and(|e| e == "txt"))
+                .map(|f| std::fs::read_to_string(f.path()).unwrap_or_default())
+                .filter(|text| text.contains("second Glarion subscription"))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(notices.len(), 1, "one notice to the owner");
+    assert!(
+        notices[0].contains("Cancelled: sub_second"),
+        "{}",
+        notices[0]
+    );
+    assert!(notices[0].contains("Kept: sub_first"), "{}", notices[0]);
 
     std::fs::remove_dir_all(&sink).ok();
     for unset in ["EMAIL_SINK", "EMAIL_SINK_DIR", "MAIL_FROM"] {

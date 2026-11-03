@@ -1115,6 +1115,41 @@ pub fn cancellation_notice_email(notice: &CancellationNotice<'_>) -> Message {
     }
 }
 
+/// To the owner when a second subscription for one account was cancelled
+/// automatically. Its first payment may have been taken, and whether to
+/// refund it is a person's decision, so the message says where to look.
+pub fn duplicate_subscription_notice_email(email: &str, kept: &str, cancelled: &str) -> Message {
+    let lead = "A customer paid for a second Glarion subscription before the first was confirmed. The second was cancelled at once; the account keeps the first. Check the cancelled subscription's first payment in Stripe.";
+    let rows = [
+        ("Customer", email),
+        ("Kept", kept),
+        ("Cancelled", cancelled),
+    ];
+    let html_rows: String = rows
+        .iter()
+        .map(|(label, value)| {
+            format!(
+                r#"<tr><td style="padding:4px 16px 4px 0;font-family:{FONT};font-size:14px;color:#63656f;vertical-align:top">{}</td><td style="padding:4px 0;font-family:{FONT};font-size:14px;color:#1d1e24">{}</td></tr>"#,
+                escape(label),
+                escape(value)
+            )
+        })
+        .collect();
+    Message {
+        subject: format!("Duplicate subscription cancelled · Glarion · {cancelled}"),
+        html: format!(
+            r#"<!doctype html><html lang="en"><body style="margin:0;padding:24px;background:#ffffff"><p style="margin:0 0 16px;font-family:{FONT};font-size:16px;font-weight:700;color:#1d1e24">{lead}</p><table role="presentation" cellpadding="0" cellspacing="0" border="0">{html_rows}</table></body></html>"#
+        ),
+        text: format!(
+            "{lead}\n\n{}",
+            rows.iter()
+                .map(|(label, value)| format!("{label}: {value}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+    }
+}
+
 /// The message sent when a monitored site changes.
 ///
 /// Deliberately short and specific. This is the only email an agency gets
