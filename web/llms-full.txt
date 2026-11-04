@@ -36,6 +36,7 @@ Prices exclude VAT. Yearly billing is cheaper; the pricing page shows the yearly
 - [About the Glarion Crawler — What Our Checks Do](https://glarion.app/about-our-checks.html)
 - [Privacy Policy — Glarion](https://glarion.app/privacy.html)
 - [Terms of Service — Glarion](https://glarion.app/terms.html)
+- [Website Security Report Template for Clients | Glarion](https://glarion.app/website-security-report-template.html)
 - [WordPress Agency Security Reports | Glarion](https://glarion.app/wordpress-agency-security-reports.html)
 
 ## Contact and policies
